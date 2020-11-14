@@ -1,0 +1,6 @@
+module type TREE = sig
+  type 'a tree = Node of 'a * 'a tree * 'a tree | Leaf
+  val insert_ordered : 'a -> 'a tree -> 'a tree
+  val make_ordered_binary_tree : 'a list -> 'a tree
+  val mem : 'a -> 'a tree -> bool
+end
