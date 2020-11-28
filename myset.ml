@@ -18,6 +18,13 @@ module type SET = sig
   val equals : 'a set -> 'a set -> bool
   val cardinality : 'a set -> int
   val set_of_list : 'a list -> 'a set
+  val root : 'a set -> 'a option
+  val take_min: 'a set -> 'a option * 'a set
+  val render_right: (int * int) -> unit
+  val render_left:  (int * int) -> unit
+  val render_root:  (int * int) -> unit
+  val gorender : bool -> int -> int -> int set -> unit
+  val render : int set -> unit
 end
 
 module BSTSet : SET = struct
@@ -51,30 +58,87 @@ module BSTSet : SET = struct
           member aval left;;
 
   (*
-   * Recursive equals
-   * FIXME: Not Balanced so in some cases this will be off (Root Node shifted)
-   * FIXME: e.g BSTSet.set_of_list [1;2;3;4;5;6;] != BSTSet.set_of_list [6;5;4;3;2;1;]
+   * Thanks to Oliver Friedmann
+   *)
+  let rec take_min = function
+    | Empty -> (None, Empty)
+    | Node(Empty, v, r) -> (Some v, r)
+    | Node(l, v, r) -> let (el, rest) = take_min l in
+                       (el, Node(rest, v, r))
+
+  (*
+   * Equals takes the minimum value of a BSTSet on each iteration and compares
+   * the remaining subtrees
    *)
   let rec equals oset = function
     | Empty -> oset = Empty         (* Equal if other set is Empty *)
-    | Node(x, v, y) -> 
-        match oset with
-        | Node(a, b, c) ->          (* Match on the Root Node *)
-            if v = b then           (* If Root nodes are equal *)
-              if equals c y then    (* Recursively check right tree *)
-                equals x a          (* Recursively check left node  *)
+    | n -> match (take_min oset, take_min n) with
+      | ((Some(v), o), (Some(x),y)) -> 
+          if v = x then
+            equals o y
+          else
+            false
+      | ((None, o), (None, v)) ->
+          equals o v
+      | _ -> false
+  ;;
+
+  let root = function
+    | Empty ->  None
+    | Node(_, v, _) -> Some(v)
+  ;;
+
+  let render_right = function
+    | (depth, value) ->
+        Format.print_string (String.make depth '\t');
+        Format.printf "---( %d )\n" value;
+        Format.print_string (String.make depth '\t');
+        Format.printf "|\n";
+  ;;
+
+  let render_left = function
+    | (depth, value) ->
+        Format.print_string (String.make depth '\t');
+        Format.printf("|\n");
+        Format.print_string (String.make depth '\t');
+        Format.printf "---( %d )\n" value
+  ;;
+
+  let render_root = function
+    | (depth, value) ->
+        Format.print_string (String.make depth '\t');
+        Format.printf "[( %d )]" value
+  ;;
+
+  let rec gorender wasRight depth rootval = function
+    | Empty -> ()
+    | Node(l, v, r) ->
+        gorender true (depth+1) rootval r;
+        (match v = rootval with
+          | true ->
+              render_root (depth, v)
+          | false ->
+              (if wasRight then
+                render_right (depth, v)
               else
-                false               (* Fail otherwise with a False  *)
-            else
-              false
-        | _ -> false;;              (* False when Root nodes not equal *)
+                render_left (depth, v)
+              )
+        );
+        gorender false (depth+1) rootval l
+  ;;
+
+  let render = function
+    | Empty -> ()
+    | n ->
+        match root n with
+          | Some(p) -> gorender false 0 p n
+          | None -> ()
 
   let rec set_of_list = function
     | [] -> Empty
-    (*| hd :: tail -> add hd set_of_list tail;; --- Why doesn't this work ??*)
     | hd :: tail -> add hd (set_of_list tail);;
 
   let rec cardinality = function
-  | Empty -> 0
+    | Empty -> 0
   | Node(x,_,y) -> 1 + cardinality x + cardinality y;; (* Sum Left and Right subtrees *)
 end
