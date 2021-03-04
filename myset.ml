@@ -55,7 +55,8 @@ module BSTSet : SET = struct
         else if aval > v then
           member aval right
         else 
-          member aval left;;
+          member aval left
+  ;;
 
   (*
    * Thanks to Oliver Friedmann
@@ -65,6 +66,7 @@ module BSTSet : SET = struct
     | Node(Empty, v, r) -> (Some v, r)
     | Node(l, v, r) -> let (el, rest) = take_min l in
                        (el, Node(rest, v, r))
+  ;;
 
   (*
    * Equals takes the minimum value of a BSTSet on each iteration and compares
@@ -133,12 +135,15 @@ module BSTSet : SET = struct
         match root n with
           | Some(p) -> gorender false 0 p n
           | None -> ()
+  ;;
 
   let rec set_of_list = function
     | [] -> Empty
-    | hd :: tail -> add hd (set_of_list tail);;
+    | hd :: tail -> add hd (set_of_list tail)
+  ;;
 
   let rec cardinality = function
     | Empty -> 0
-  | Node(x,_,y) -> 1 + cardinality x + cardinality y;; (* Sum Left and Right subtrees *)
+    | Node(x,_,y) -> 1 + cardinality x + cardinality y
+  ;; (* Sum Left and Right subtrees *)
 end
