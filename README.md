@@ -1,6 +1,6 @@
 ## An O-Caml Set implementation
 
-This is a dune project with an Implementation of A Set and Tree as self-exercise
+This is a dune project with an Implementation of A Set, Tree and Graph as self-exercise
 when learning ocaml.
 
 ### Instructions
@@ -18,6 +18,7 @@ open Libset;;
 
 Libset.Mytree.MyTree.(* Tree operation *)
 Libset.Myset.MySet.(* Set operation *)
+Libset.Mygraph.MakeGraph (* Graph functor *)
 
 ```
 

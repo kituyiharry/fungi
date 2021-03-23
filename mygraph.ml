@@ -39,28 +39,77 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
           (*Update with incoming*)
           NodeMap.add nodeTo ((AdjSet.add nodeFrom toIncoming), toOutgoing, label) finMap
 
-  (*Feels too complex for small inputs*)
+  (*
+   * I realized since a node can be in the incoming or outgoing (or both),
+   * then a function over the union of both sets while removing in both
+   * still works and is simple enough
+   *
+   * This way i don't have to do an O(n) on both nodes
+   *)
   let delete_node delnode nodeMap =
-    let (incoming, _outgoing, _label) = NodeMap.find delnode nodeMap in
-    (* Cascade all incoming nodes and delete node from each *)
-    finalMap = AdjSet.fold(
+    let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
+      NodeMap.remove delnode (
+        AdjSet.fold(
+          (fun anode updatemap ->
+            let (deepinc, deepout, olabel) = (NodeMap.find anode updatemap) in
+            NodeMap.add anode (
+              (* Might be in either *)
+              (* Can i add more context to make this efficient ? *)
+              (AdjSet.remove delnode deepinc), 
+              (AdjSet.remove delnode deepout), 
+              olabel) updatemap
+          )
+        ) (AdjSet.union incoming outgoing) nodeMap
+      )
+      (* Have i been doing math this whole time ? *)
+
+
+    (***
+       Why doesn't this work (some references aren't deleted!!)
+  let delete_node delnode nodeMap =
+    (* Remove the deleted node by *)
+    NodeMap.remove delnode 
+    (
+      let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
+      (* Cascade all nodes related and delete node from each *)
+      (
+        let ofinMap = 
+        (AdjSet.fold(
         (* Using an "accumulative map" to update where removed *)
-        fun incomenode prevMap  ->
+        fun outnode oprevMap  ->
           (* Find the incoming and outgoing of the node *)
-          let (i_inc, i_outgoing, label) = NodeMap.find incomenode prevMap in
-            (* Update with necessary data *)
-            NodeMap.add incomenode (i_inc, (AdjSet.remove delnode i_outgoing), label) prevMap
-     ) incoming nodeMap (* Error happens here!! *)
+          let (o_inc, o_outgoing, olabel) = NodeMap.find outnode oprevMap in
+    (* Update with necessary data *)
+     NodeMap.add outnode (o_inc, (AdjSet.remove delnode o_outgoing), olabel) oprevMap
+            ) outgoing nodeMap
+        ) in
+    (AdjSet.fold(
+    (* Using an "accumulative map" to update where removed *)
+    fun incomenode prevMap  ->
+      (* Find the incoming and outgoing of the node *)
+      let (i_inc, i_outgoing, ilabel) = NodeMap.find incomenode prevMap in
+    (* Update with necessary data *)
+    NodeMap.add incomenode (i_inc, (AdjSet.remove delnode i_outgoing),
+              ilabel) prevMap
+            ) incoming ofinMap
+        )
+        )
+      )
+  **)
 
-    (* Do the same for outgoing *)
-    (*...*)
+  (* Get adjacency list of a node *)
+  let adj_list_of node nodeMap =
+    let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
+      AdjSet.fold(
+        fun anode alist ->
+          anode :: alist
+      ) (AdjSet.union incoming outgoing) []
 
-    (* NodeMap.filter_map (fun entry (edges, label) ->
-      if entry = node then
-        None
-    else (
-      Some ((AdjSet.remove node edges), label )
-         )
-       ) nodeMap
-    *)
+  (* Print the graph as an adjacency list *)
+  let render nodeMap =
+    NodeMap.fold (
+      fun key _value acc  ->
+        (adj_list_of key nodeMap) :: acc
+    ) nodeMap []
+
 end;;
