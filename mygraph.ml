@@ -18,9 +18,7 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
 
   type node = NodeType
 
-  (*type 'a t = (node list * 'a) Map.Make(NodeType).t*)
-  (*type 'a t      = ( Set.Make(NodeType).t * 'a ) Map.Make(NodeType).t*)
-  type 'a t    = ( Set.Make(NodeType).t * bool * 'a ) Map.Make(NodeType).t
+  type 'a t      = ( Set.Make(NodeType).t * Set.Make(NodeType).t * 'a ) Map.Make(NodeType).t
 
   module NodeMap = Map.Make (NodeType)
   (*Hold adjacency list in a set structure*)
@@ -28,25 +26,40 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
 
   let empty = NodeMap.empty
 
-  let add_node node label nodeMap = NodeMap.add node ( AdjSet.empty , true , label) nodeMap
+  let add_node node label nodeMap = NodeMap.add node ( AdjSet.empty, AdjSet.empty, label) nodeMap
 
-  (* Error Handling if node isn't there *)
+  (*   (tail) -----> (head)  *)
   let add_edge nodeFrom nodeTo nodeMap =
-    let (edges, active, label) = NodeMap.find nodeFrom nodeMap in
-    NodeMap.add nodeFrom ( (AdjSet.add nodeTo edges), active, label) nodeMap
+    (*Find the tail of the directed edge*)
+    let (fromIncoming, fromOutgoing, label) = NodeMap.find nodeFrom nodeMap in
+      (*Update with outgoing*)
+      let finMap = (NodeMap.add nodeFrom (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label) nodeMap) in
+        (*Find the head of the directed edge*)
+        let (toIncoming, toOutgoing, label) = NodeMap.find nodeTo nodeMap in
+          (*Update with incoming*)
+          NodeMap.add nodeTo ((AdjSet.add nodeFrom toIncoming), toOutgoing, label) finMap
 
+  (*Feels too complex for small inputs*)
   let delete_node delnode nodeMap =
-    (*set active flag to false*)
-    (*NodeMap.update node (fun _nodeoption ->  None) nodeMap*)
-    (*NodeMap.add node ( edges, false, label) nodeMap*)
-    let (edges, _active, label) = NodeMap.find delnode nodeMap in
-    NodeMap.add delnode (edges, false , label) nodeMap
+    let (incoming, _outgoing, _label) = NodeMap.find delnode nodeMap in
+    (* Cascade all incoming nodes and delete node from each *)
+    finalMap = AdjSet.fold(
+        (* Using an "accumulative map" to update where removed *)
+        fun incomenode prevMap  ->
+          (* Find the incoming and outgoing of the node *)
+          let (i_inc, i_outgoing, label) = NodeMap.find incomenode prevMap in
+            (* Update with necessary data *)
+            NodeMap.add incomenode (i_inc, (AdjSet.remove delnode i_outgoing), label) prevMap
+     ) incoming nodeMap (* Error happens here!! *)
+
+    (* Do the same for outgoing *)
+    (*...*)
 
     (* NodeMap.filter_map (fun entry (edges, label) ->
-         if entry = node then
-           None
-         else (
-           Some ((AdjSet.remove node edges), label )
+      if entry = node then
+        None
+    else (
+      Some ((AdjSet.remove node edges), label )
          )
        ) nodeMap
     *)
