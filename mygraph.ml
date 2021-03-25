@@ -109,7 +109,7 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
   let render nodeMap =
     NodeMap.fold (
       fun key _value acc  ->
-        (adj_list_of key nodeMap) :: acc
+        (key, (adj_list_of key nodeMap)) :: acc
     ) nodeMap []
 
 end;;
