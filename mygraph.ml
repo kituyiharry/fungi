@@ -63,40 +63,6 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
       )
       (* Have i been doing math this whole time ? *)
 
-
-    (***
-       Why doesn't this work (some references aren't deleted!!)
-  let delete_node delnode nodeMap =
-    (* Remove the deleted node by *)
-    NodeMap.remove delnode 
-    (
-      let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
-      (* Cascade all nodes related and delete node from each *)
-      (
-        let ofinMap = 
-        (AdjSet.fold(
-        (* Using an "accumulative map" to update where removed *)
-        fun outnode oprevMap  ->
-          (* Find the incoming and outgoing of the node *)
-          let (o_inc, o_outgoing, olabel) = NodeMap.find outnode oprevMap in
-    (* Update with necessary data *)
-     NodeMap.add outnode (o_inc, (AdjSet.remove delnode o_outgoing), olabel) oprevMap
-            ) outgoing nodeMap
-        ) in
-    (AdjSet.fold(
-    (* Using an "accumulative map" to update where removed *)
-    fun incomenode prevMap  ->
-      (* Find the incoming and outgoing of the node *)
-      let (i_inc, i_outgoing, ilabel) = NodeMap.find incomenode prevMap in
-    (* Update with necessary data *)
-    NodeMap.add incomenode (i_inc, (AdjSet.remove delnode i_outgoing),
-              ilabel) prevMap
-            ) incoming ofinMap
-        )
-        )
-      )
-  **)
-
   (* Get adjacency list of a node *)
   let adj_list_of node nodeMap =
     let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
