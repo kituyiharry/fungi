@@ -18,7 +18,9 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
 
   type node = NodeType
 
-  type 'a t      = ( Set.Make(NodeType).t * Set.Make(NodeType).t * 'a ) Map.Make(NodeType).t
+  type 'a t = (
+    Set.Make(NodeType).t * Set.Make(NodeType).t * 'a 
+  ) Map.Make(NodeType).t
 
   module NodeMap = Map.Make (NodeType)
   (*Hold adjacency list in a set structure*)
