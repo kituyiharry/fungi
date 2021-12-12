@@ -2,7 +2,7 @@
  * Author: Harry K
  * Date  : 2021-02-19
 
- Graph Implementation 
+ Graph Implementation
 
 
  https://www.lri.fr/~filliatr/ftp/publis/ocamlgraph-tfp-8.pdf
@@ -19,8 +19,9 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
   type node = NodeType
 
   type 'a t = (
-    Set.Make(NodeType).t * Set.Make(NodeType).t * 'a 
+    Set.Make(NodeType).t * Set.Make(NodeType).t * 'a
   ) Map.Make(NodeType).t
+
 
   module NodeMap = Map.Make (NodeType)
   (*Hold adjacency list in a set structure*)
@@ -57,8 +58,8 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
             NodeMap.add anode (
               (* Might be in either *)
               (* Can i add more context to make this efficient ? *)
-              (AdjSet.remove delnode deepinc), 
-              (AdjSet.remove delnode deepout), 
+              (AdjSet.remove delnode deepinc),
+              (AdjSet.remove delnode deepout),
               olabel) updatemap
           )
         ) (AdjSet.union incoming outgoing) nodeMap
@@ -68,7 +69,7 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
   (* Get adjacency list of a node *)
   let adj_list_of node nodeMap =
     let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
-      AdjSet.fold(
+      AdjSet.fold (
         fun anode alist ->
           anode :: alist
       ) (AdjSet.union incoming outgoing) []
