@@ -1,5 +1,5 @@
 (library
   (name libset)
   (public_name libset)
-  (modules myset mytree mygraph)
-  (libraries base stdlib))
+  (modules myset mytree mygraph paritygame)
+  (libraries base stdlib core))

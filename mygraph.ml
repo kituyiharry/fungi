@@ -2,7 +2,7 @@
  * Author: Harry K
  * Date  : 2021-02-19
 
- Graph Implementation
+ Simplest Graph Implementation (Adjacency list)
 
 
  https://www.lri.fr/~filliatr/ftp/publis/ocamlgraph-tfp-8.pdf
@@ -10,7 +10,6 @@
  https://gist.github.com/theawesomestllama/7d1c0961a2c4446ef40b
 
 ************************)
-
 (*
  * Functor to produce a graph from an ordinal type
  *)
@@ -19,16 +18,20 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
   type node = NodeType
 
   type 'a t = (
-    Set.Make(NodeType).t * Set.Make(NodeType).t * 'a
+    (* Incoming nodes      Outgoing nodes         label *)
+    Set.Make(NodeType).t * Set.Make(NodeType).t * NodeType.t
+    (* Map from NNodeType.t to (incoming outgoing label) *)
   ) Map.Make(NodeType).t
 
 
+  (*Map a nodetype to its adjacency list*)
   module NodeMap = Map.Make (NodeType)
   (*Hold adjacency list in a set structure*)
   module AdjSet  = Set.Make (NodeType)
 
   let empty = NodeMap.empty
 
+  (* Add a node with its printable label *)
   let add_node node label nodeMap = NodeMap.add node ( AdjSet.empty, AdjSet.empty, label) nodeMap
 
   (*   (tail) -----> (head)  *)
@@ -75,10 +78,15 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
       ) (AdjSet.union incoming outgoing) []
 
   (* Print the graph as an adjacency list *)
+  (* [
+      ....
+      (key * label * [ adjacency list ])
+      ....
+      ] *)
   let render nodeMap =
     NodeMap.fold (
-      fun key _value acc  ->
-        (key, (adj_list_of key nodeMap)) :: acc
+      fun key (_, _, label) acc  ->
+        (key, label, (adj_list_of key nodeMap)) :: acc
     ) nodeMap []
 
 end;;

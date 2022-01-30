@@ -22,7 +22,7 @@ module MyTree = struct
         else
           node;;
 
-  (* Make a binary search tree aka ordered or sorted binary tree *) 
+  (* Make a binary search tree aka ordered or sorted binary tree *)
   let rec make_ordered_binary_tree = function l ->
     let empty = Leaf in
     match l with
@@ -34,5 +34,11 @@ module MyTree = struct
     Leaf -> false
     | Node (y, left, right) ->
         x = y || (x < y && mem x left) || (x > y && mem y right);;
+
+  let rec inorder stack = function
+    | Leaf -> stack
+    | Node (a, Leaf, Leaf) ->  a :: stack
+    | Node (_, x, y) ->
+        inorder (inorder stack x) y
 
 end

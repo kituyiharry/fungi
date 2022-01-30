@@ -5,7 +5,7 @@
  * Author: Harry K
  *  Date : Aug 24, 2020 *
 ************************)
-open Printf
+open Printf;;
 
 (*********************************
 *  Defined for questions below  *

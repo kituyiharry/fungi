@@ -4,7 +4,7 @@
  * Based on upenn lectures: (Interface only)
    https://www.seas.upenn.edu/~cis120/archive/16sp/lectures/lec10.pdf
 
-  Usage: 
+  Usage:
     let f = BSTSet.empty ;;  (* Empty Set *)
     let f = BSTSet.set_of_list [1;2;3;4;5;6;7;...;];;  (* Set from a List *)
 
@@ -25,6 +25,10 @@ module type SET = sig
   val render_root:  (int * int) -> unit
   val gorender : bool -> int -> int -> int set -> unit
   val render : int set -> unit
+  val invert : 'a set-> 'a set
+  val inorder: 'a list -> 'a set -> 'a list
+  val preorder: 'a list -> 'a set -> 'a list
+  val postorder: 'a list -> 'a set -> 'a list
 end
 
 module BSTSet : SET = struct
@@ -37,7 +41,7 @@ module BSTSet : SET = struct
 
   let empty : 'a set = Empty
 
-  let rec add aval = function 
+  let rec add aval = function
     | Empty -> Node(Empty, aval, Empty)
     | Node(left, v, right) ->
         if aval < v then
@@ -46,7 +50,7 @@ module BSTSet : SET = struct
           Node (left, v, add aval right)
         else
           Node(left, v, right);; (* What do i do here, they are equal *)
-  
+
   let rec member aval = function
     | Empty -> false                (* Maybe they searched for Empty ?*)
     | Node(left, v, right) ->       (* Recursively find the node *)
@@ -54,7 +58,7 @@ module BSTSet : SET = struct
           true
         else if aval > v then
           member aval right
-        else 
+        else
           member aval left
   ;;
 
@@ -75,7 +79,7 @@ module BSTSet : SET = struct
   let rec equals oset = function
     | Empty -> oset = Empty         (* Equal if other set is Empty *)
     | n -> match (take_min oset, take_min n) with
-      | ((Some(v), o), (Some(x),y)) -> 
+      | ((Some(v), o), (Some(x),y)) ->
           if v = x then
             equals o y
           else
@@ -146,4 +150,32 @@ module BSTSet : SET = struct
     | Empty -> 0
     | Node(x,_,y) -> 1 + cardinality x + cardinality y
   ;; (* Sum Left and Right subtrees *)
+
+  let rec invert = function
+    | Node(x, a, y) -> Node(invert y, a, invert x)
+    | e -> e
+  ;;
+
+  let rec inorder stack = function
+    | Empty -> stack
+    | Node (Empty, a, Empty) ->  stack @ [a]
+    | Node (x, a, y) ->
+        inorder ((inorder stack x) @ [a]) y
+  ;; (* Inorder traversal - Left - Root - Right *)
+
+
+  let rec preorder stack = function
+    | Empty -> stack
+    | Node (Empty, a, Empty) ->  stack @ [a]
+    | Node (x, a, y) ->
+       preorder (preorder (stack @ [a]) x) y
+  ;; (* Preorder traversal - Root - left - Right*)
+
+  let rec postorder stack = function
+    | Empty -> stack
+    | Node (Empty, a, Empty) ->  stack @ [a]
+    | Node (x, a, y) ->
+        (postorder (postorder stack x) y) @ [a]
+  ;; (* Postorder traversal  Left - Right - Root *)
+
 end
