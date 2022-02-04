@@ -10,29 +10,35 @@
  https://gist.github.com/theawesomestllama/7d1c0961a2c4446ef40b
 
 ************************)
+
 (*
  * Functor to produce a graph from an ordinal type
+ * The functor takes a
  *)
-module MakeGraph (NodeType : Map.OrderedType) = struct
+module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
 
-  type node = NodeType
+  type node  = Node
+  type label = Label
 
   type 'a t = (
     (* Incoming nodes      Outgoing nodes         label *)
-    Set.Make(NodeType).t * Set.Make(NodeType).t * NodeType.t
-    (* Map from NNodeType.t to (incoming outgoing label) *)
-  ) Map.Make(NodeType).t
+    Set.Make(Label).t * Set.Make(Label).t * Node.t
+    (* Map from NodeType.t to (incoming outgoing label) *)
+  ) Map.Make(Label).t
 
+  (*Module for manipulating the Set structure holding the Adjacency list*)
+  module AdjSet  = Set.Make (Label)
 
-  (*Map a nodetype to its adjacency list*)
-  module NodeMap = Map.Make (NodeType)
-  (*Hold adjacency list in a set structure*)
-  module AdjSet  = Set.Make (NodeType)
+  (*Module for manipulating the Map (int -> (set * set * NodeType.t))*)
+  module NodeMap = Map.Make (Label)
 
   let empty = NodeMap.empty
 
-  (* Add a node with its printable label *)
-  let add_node node label nodeMap = NodeMap.add node ( AdjSet.empty, AdjSet.empty, label) nodeMap
+  (* Add a node with its label *)
+  let add_node nodekey nodedata nodeMap =
+    NodeMap.add nodekey
+      (AdjSet.empty, AdjSet.empty, nodedata) nodeMap
+  ;;
 
   (*   (tail) -----> (head)  *)
   let add_edge nodeFrom nodeTo nodeMap =
@@ -44,6 +50,7 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
         let (toIncoming, toOutgoing, label) = NodeMap.find nodeTo nodeMap in
           (*Update with incoming*)
           NodeMap.add nodeTo ((AdjSet.add nodeFrom toIncoming), toOutgoing, label) finMap
+  ;;
 
   (*
    * I realized since a node can be in the incoming or outgoing (or both),
@@ -67,7 +74,7 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
           )
         ) (AdjSet.union incoming outgoing) nodeMap
       )
-      (* Have i been doing math this whole time ? *)
+  ;;
 
   (* Get adjacency list of a node *)
   let adj_list_of node nodeMap =
@@ -76,6 +83,7 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
         fun anode alist ->
           anode :: alist
       ) (AdjSet.union incoming outgoing) []
+  ;;
 
   (* Print the graph as an adjacency list *)
   (* [
@@ -88,5 +96,6 @@ module MakeGraph (NodeType : Map.OrderedType) = struct
       fun key (_, _, label) acc  ->
         (key, label, (adj_list_of key nodeMap)) :: acc
     ) nodeMap []
+  ;;
 
 end;;
