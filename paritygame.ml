@@ -53,10 +53,10 @@ module PGame = struct
 
  (* Get the checked node outgoing set *)
  (* what if it points to same player but opposing team *)
-  let hassafeoutgoing matchnode currentnode visited game =
+  let hassafeoutgoing currentnode visited game =
     let outgoing = (outgoingof currentnode game) in
-      let leaver = AdjSet.filter (diffplayer matchnode) outgoing in
-            AdjSet.subset leaver visited
+        AdjSet.subset outgoing visited
+      (*let _leaver = AdjSet.filter (diffplayer matchnode) outgoing in*)
   ;;
 
   (*
@@ -66,7 +66,7 @@ module PGame = struct
   let attractive visited basenode game agivennode =
     (sameplayer basenode agivennode)
       ||
-    (hassafeoutgoing basenode agivennode visited game)
+    (hassafeoutgoing agivennode visited game)
   ;;
 
   (*Push incoming nodes from each*)
