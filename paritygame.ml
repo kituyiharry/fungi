@@ -28,24 +28,15 @@ module PGame = struct
   type identity =
     | Label of (player * RAND.t)
 
-  (* Interface fullfilment comparison *)
-  let compareprio (Priority l) (Priority r) =
-    Int.compare l r
-  ;;
-
-  let compareiden (Label (_,l)) (Label (_,r)) =
-    Int.compare (RAND.to_int_exn l) (RAND.to_int_exn r)
-  ;;
-
-  (* Graph: label -> (incominglabels * outgoinglabels * (player, priority)), ... ] *)
+  (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] *)
   module Graph  = Mygraph.MakeGraph
   (struct
     type t      = priority      (* The type of the internal data *)
-    let compare = compareprio
+    let compare = fun (Priority l) (Priority r) -> Int.compare l r
   end)
   (struct
     type t      = identity      (* The type to uniquely identify a node *)
-    let compare = compareiden
+    let compare = fun (Label (_,l)) (Label (_,r)) -> Int.compare (RAND.to_int_exn l) (RAND.to_int_exn r)
   end)
 
   module AdjSet = Graph.AdjSet
@@ -55,10 +46,10 @@ module PGame = struct
   (* Empty Game is just an empty Graph *)
   let empty = Graph.empty
 
-  (* What game size does the collision probability equal or > 50% *)
   let uniqlabel _ = RAND.create();;
 
-  (* Adds a node as a mapping from a uniqlabel to a triple of incoming, outgoing
+  (* Adds a node as a mapping from a uniqlabel to a triple of incoming,
+     outgoing
     and priority. Player information is contained in the label *)
   let add_node player priority game =
     let
@@ -78,12 +69,18 @@ module PGame = struct
   (* Outgoing set of nodes *)
   let outgoingof node game = let (_, out, _) = Nodes.find node game in out
 
+  let sameplayer labela (Label (labelb, _)) =
+    labela = labelb
+
+  let diffplayer labela (Label (labelb, _)) =
+    labela != labelb
+
  (* Get the checked node outgoing set *)
- (* what if it points to same player but opposing team *)
-  let hassafeoutgoing currentnode visited game =
+ (* Checks if that set has leavers that aren't controlled by forplayer *)
+  let hassafeoutgoing forplayer visited game currentnode =
     let outgoing = (outgoingof currentnode game) in
-        AdjSet.subset outgoing visited
-      (*let _leaver = AdjSet.filter (diffplayer matchnode) outgoing in*)
+        let leaver = AdjSet.filter (diffplayer forplayer) outgoing in
+          AdjSet.subset leaver visited
   ;;
 
   (*
@@ -91,10 +88,10 @@ module PGame = struct
     i.e attractive in relation to the basenode
    *)
   let attractive visited forplayer game agivennode =
-    let Label (thisplayer, _thislabel) = agivennode in
+    let Label (thisplayer, _) = agivennode in
     (forplayer = thisplayer)
       ||
-    (hassafeoutgoing agivennode visited game)
+    (hassafeoutgoing forplayer visited game agivennode )
   ;;
 
   (*Push incoming nodes from each*)
@@ -120,22 +117,20 @@ module PGame = struct
          Concatenate the attractive non-visited incoming neighbours
          while ensuring they aren't treachorous
        *)
-      let morework = (
+      let morenodes = (
         (AdjSet.elements
           (attract accumulator (incomingof node game) player game)
         ) @ tail) in
           (* Recursively build the attractor set in the accumulator *)
-          attractor morework player game (AdjSet.add node accumulator)
+          attractor morenodes player game (AdjSet.add node accumulator)
     | [] -> accumulator
   ;;
 
-  (*
-  Convenience functions for printing in the REPl
-   *)
+  (* Convenience functions for printing in the REPl *)
 
   let asplayerprio game node =
     let
-      (_,_, Priority value) = Graph.NodeMap.find node game
+      (_,_, value) = Graph.NodeMap.find node game
         and
       Label (player, _rand) = node
     in
@@ -145,7 +140,6 @@ module PGame = struct
   let buildattractor node player game =
     (* Convenience method to make it printable in the REPL *)
     List.map (asplayerprio game) (AdjSet.elements
-      (* Kick off the main attractor generator *)
       (attractor [node] player game (AdjSet.add node AdjSet.empty))
     )
   ;;
@@ -153,44 +147,38 @@ module PGame = struct
 end
 
 
-  let p = PGame.empty;;
+let p = PGame.empty;;
 
-  (* I also assume there are no same priority nodes to make life easy *)
-  let (l_2, p) = PGame.add_node Even 2 p;;
-  let (l_4, p) = PGame.add_node Even 4 p;;
-  let (l_6, p) = PGame.add_node Even 6 p;;
-  let (l_8, p) = PGame.add_node Even 8 p;;
-  let (l_3, p) = PGame.add_node Odd 3 p;;
-  let (l_5, p) = PGame.add_node Odd 5 p;;
-  let (l_7, p) = PGame.add_node Odd 7 p;;
-  let (l_9, p) = PGame.add_node Odd 9 p;;
-  (**
-    A non-empty Parity game will always have a Even labeled node 2 or
-    an Odd labeled node 3
-  **)
-  let p = PGame.add_edge l_2 l_4 p;; (* 2 connects to even and 1 attractive odd *)
-  let p = PGame.add_edge l_4 l_2 p;;
-  let p = PGame.add_edge l_6 l_3 p;; (* 3 connects only to even nodes *)
-  let p = PGame.add_edge l_3 l_2 p;;
-  let p = PGame.add_edge l_3 l_4 p;;
-  let p = PGame.add_edge l_4 l_8 p;;
-  let p = PGame.add_edge l_4 l_6 p;;
-  let p = PGame.add_edge l_2 l_8 p;;
-  let p = PGame.add_edge l_6 l_5 p;; (* 6 connects only to odd nodes *)
-  let p = PGame.add_edge l_6 l_7 p;;
-  let p = PGame.add_edge l_6 l_9 p;;
-  let p = PGame.add_edge l_9 l_3 p;;
-  let p = PGame.add_edge l_8 l_7 p;;
-  let p = PGame.add_edge l_8 l_5 p;;
-  let p = PGame.add_edge l_5 l_5 p;; (* 5 connects only to odd supportive nodes *)
-  let p = PGame.add_edge l_5 l_7 p;;
-  let p = PGame.add_edge l_5 l_9 p;;
-  let p = PGame.add_edge l_7 l_7 p;; (* 7 self references *)
-  let p = PGame.add_edge l_9 l_5 p;;
-  let p = PGame.add_edge l_8 l_2 p;;
-  (*self referencing graph*)
-  (*let p = PGame.add_edge 33 33 p;;*)
-
-  (*p = PGame.add_edge 101 303 p;;*)
-
-  (*PGame.to_list p;;*)
+(* I also assume there are no same priority nodes to make life easy *)
+let (l_2, p) = PGame.add_node Even 2 p;;
+let (l_4, p) = PGame.add_node Even 4 p;;
+let (l_6, p) = PGame.add_node Even 6 p;;
+let (l_8, p) = PGame.add_node Even 8 p;;
+let (l_3, p) = PGame.add_node Odd  3 p;;
+let (l_5, p) = PGame.add_node Odd  5 p;;
+let (l_7, p) = PGame.add_node Odd  7 p;;
+let (l_9, p) = PGame.add_node Odd  9 p;;
+(**
+  A non-empty Parity game will always have a Even labeled node 2 or
+  an Odd labeled node 3
+**)
+let p = PGame.add_edge l_2 l_4 p;; (* 2 connects to even and 1 attractive odd *)
+let p = PGame.add_edge l_4 l_2 p;;
+let p = PGame.add_edge l_6 l_3 p;; (* 3 connects only to even nodes *)
+let p = PGame.add_edge l_3 l_2 p;;
+let p = PGame.add_edge l_3 l_4 p;;
+let p = PGame.add_edge l_4 l_8 p;;
+let p = PGame.add_edge l_4 l_6 p;; (* 6 has 1 incoming odd node *)
+let p = PGame.add_edge l_2 l_8 p;;
+let p = PGame.add_edge l_6 l_5 p;; (* 6 connects only to odd nodes *)
+let p = PGame.add_edge l_6 l_7 p;;
+let p = PGame.add_edge l_6 l_9 p;;
+let p = PGame.add_edge l_9 l_3 p;;
+let p = PGame.add_edge l_8 l_7 p;;
+let p = PGame.add_edge l_8 l_5 p;;
+let p = PGame.add_edge l_5 l_5 p;; (* 5 connects only to odd nodes *)
+let p = PGame.add_edge l_5 l_7 p;;
+let p = PGame.add_edge l_5 l_9 p;;
+let p = PGame.add_edge l_7 l_7 p;; (* 7 self references *)
+let p = PGame.add_edge l_9 l_5 p;;
+let p = PGame.add_edge l_8 l_2 p;;
