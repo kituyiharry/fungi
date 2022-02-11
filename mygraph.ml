@@ -36,8 +36,7 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
 
   (* Add a node with its label *)
   let add_node nodekey nodedata nodeMap =
-    NodeMap.add nodekey
-      (AdjSet.empty, AdjSet.empty, nodedata) nodeMap
+    NodeMap.add nodekey (AdjSet.empty, AdjSet.empty, nodedata) nodeMap
   ;;
 
   (*   (tail) -----> (head)  *)
@@ -70,7 +69,8 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
               (* Can i add more context to make this efficient ? *)
               (AdjSet.remove delnode deepinc),
               (AdjSet.remove delnode deepout),
-              olabel) updatemap
+              olabel
+            ) updatemap
           )
         ) (AdjSet.union incoming outgoing) nodeMap
       )
