@@ -27,14 +27,14 @@ module PGame = struct
 
   (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] *)
   module Graph  = Mygraph.MakeGraph
-  (struct
-    type t      = priority      (* The type of the internal data *)
-    let compare = fun (Priority l) (Priority r) -> Int.compare l r
-  end)
-  (struct
-    type t      = identity      (* The type to uniquely identify a node *)
-    let compare = fun (Label (_,l)) (Label (_,r)) -> Int.compare (RAND.to_int_exn l) (RAND.to_int_exn r)
-  end)
+    (struct
+      type t      = priority      (* The type of the internal data *)
+      let compare = fun (Priority l) (Priority r) -> Int.compare l r
+    end)
+    (struct
+      type t      = identity      (* The type to uniquely identify a node *)
+      let compare = fun (Label (_,l)) (Label (_,r)) -> Int.compare (RAND.to_int_exn l) (RAND.to_int_exn r)
+    end)
 
   module AdjSet = Graph.AdjSet
 

@@ -17,6 +17,7 @@ module type SET = sig
   val member : 'a -> 'a set -> bool
   val equals : 'a set -> 'a set -> bool
   val cardinality : 'a set -> int
+  val tailcardinality : 'a set -> int
   val set_of_list : 'a list -> 'a set
   val root : 'a set -> 'a option
   val take_min: 'a set -> 'a option * 'a set
@@ -151,6 +152,16 @@ module BSTSet : SET = struct
     | Node(x,_,y) -> 1 + cardinality x + cardinality y
   ;; (* Sum Left and Right subtrees *)
 
+  (*((+) (cardinality x)) @@ ((+) (cardinality y)) @@ 1*)
+  let tailcardinality = function
+    | sometree ->
+        let rec cardrec tree sum = match take_min tree with
+          | (Some _value, more) -> cardrec more (sum + 1)
+          | (None, _) -> sum
+        in
+          cardrec sometree 0
+  ;; (* Tail recursive cardinality :-) but still slow :-( *)
+
   let rec invert = function
     | Node(x, a, y) -> Node(invert y, a, invert x)
     | e -> e
@@ -176,6 +187,6 @@ module BSTSet : SET = struct
     | Node (Empty, a, Empty) ->  stack @ [a]
     | Node (x, a, y) ->
         (postorder (postorder stack x) y) @ [a]
-  ;; (* Postorder traversal  Left - Right - Root *)
+  ;; (* Postorder traversal Left - Right - Root *)
 
 end
