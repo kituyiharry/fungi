@@ -97,12 +97,12 @@ module PGame = struct
        If its already visited in the accumulator then no need to check it
        If its in the incomingset and same player then there is a path so add
        If its outgoing nodes are also attractive then there is a path so add it
-
        It is OK to add it in the accumulator now so that later checks don't miss
        it!
     *)
     let oktoadd =
-      AdjSet.diff incomingset visited |> AdjSet.filter (attractive visited player game)
+      AdjSet.diff incomingset visited
+      |> AdjSet.filter (attractive visited player game)
     in
       (oktoadd, AdjSet.union oktoadd visited)
   ;;
@@ -110,6 +110,7 @@ module PGame = struct
 
   (* Attractor *)
   (* Get the attractor of a set of nodes *)
+  (* Try separating visited and accumulator!! *)
   let rec attractor player game accumulator nodelist =
     match nodelist with
     | node :: tail ->
@@ -145,7 +146,7 @@ module PGame = struct
     (* Convenience method to make it printable in the REPL *)
     List.map (asplayerprio game)
     @@ AdjSet.elements
-    @@ attractor player game AdjSet.empty
+    @@ attractor player game (AdjSet.add node AdjSet.empty)
     @@ [node]
   ;;
 
