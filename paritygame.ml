@@ -68,30 +68,30 @@ module PGame = struct
 
   let sameplayer labela (Label (labelb, _)) = labela = labelb
 
-  let diffplayer labela (Label (labelb, _)) = labela != labelb
+  let diffplayer labela (Label (labelb, _)) = labela <> labelb
 
  (* Get the checked node outgoing set *)
  (* Checks if that set has leavers that aren't controlled by forplayer *)
-  let hassafeoutgoing visited game currentnode =
+  let hassafeoutgoing attractorset game currentnode =
       (* Add 'sure' nodes early into the accumulator so this doesn't spook *)
-      AdjSet.subset  (outgoingof currentnode game) visited
+      AdjSet.subset  (outgoingof currentnode game) attractorset
   ;;
 
   (*
     attractive if same player or outgoing nodes are attractive
     i.e attractive in relation to the basenode
    *)
-  let attractive visited forplayer game agivennode =
+  let attractive attractorset forplayer game agivennode =
       (* Controlled by the player and can reach the predecessor node *)
       (sameplayer forplayer agivennode)
         ||
       (* all outgoing members are in the accumulator *)
-      (hassafeoutgoing visited game agivennode)
+      (hassafeoutgoing attractorset game agivennode)
   ;;
 
   (*Push incoming nodes from each*)
   (*Is an node part of its own attractor ??*)
-  let attract visited incomingset player game =
+  let attract attractorset incomingset player game =
     (*
     Check for attractiveness:
        If its already visited in the accumulator then no need to check it
@@ -101,17 +101,17 @@ module PGame = struct
        it!
     *)
     let oktoadd =
-      AdjSet.diff incomingset visited
-      |> AdjSet.filter (attractive visited player game)
+      AdjSet.diff incomingset attractorset
+      |> AdjSet.filter (attractive attractorset player game)
     in
-      (oktoadd, AdjSet.union oktoadd visited)
+      (oktoadd, AdjSet.union oktoadd attractorset)
   ;;
 
 
   (* Attractor *)
   (* Get the attractor of a set of nodes *)
   (* Try separating visited and accumulator!! *)
-  let rec attractor player game accumulator nodelist =
+  let rec attractor player game attractorset nodelist =
     match nodelist with
     | node :: tail ->
         (*
@@ -119,7 +119,7 @@ module PGame = struct
          while ensuring they aren't treachorous
         *)
         let (newels, newaccumulator) =
-          (attract accumulator (incomingof node game) player game)
+          (attract attractorset (incomingof node game) player game)
         in
         newels
         |> AdjSet.elements
@@ -127,7 +127,7 @@ module PGame = struct
         |> attractor player game (AdjSet.add node newaccumulator)
         (* NB: The information in the accumulator needs to be as recent as
            possible *)
-    | [] -> accumulator
+    | [] -> attractorset
   ;;
 
   (* Convenience functions for printing in the REPl *)

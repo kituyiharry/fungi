@@ -42,6 +42,7 @@ module BSTSet : SET = struct
 
   let empty : 'a set = Empty
 
+  (** [add 'a 'a set] Adds a node 'a to a given set *)
   let rec add aval = function
     | Empty -> Node(Empty, aval, Empty)
     | Node(left, v, right) ->
@@ -52,6 +53,7 @@ module BSTSet : SET = struct
         else
           Node(left, v, right);; (* What do i do here, they are equal *)
 
+  (** [member 'a 'a set] Checks whether 'a is a member of the set *)
   let rec member aval = function
     | Empty -> false                (* Maybe they searched for Empty ?*)
     | Node(left, v, right) ->       (* Recursively find the node *)
@@ -66,6 +68,9 @@ module BSTSet : SET = struct
   (*
    * Thanks to Oliver Friedmann
    *)
+  (** [take_min 'a set]
+      Returns a pair of some minimum element in the set and the remaining set
+   *)
   let rec take_min = function
     | Empty -> (None, Empty)
     | Node(Empty, v, r) -> (Some v, r)
@@ -73,7 +78,8 @@ module BSTSet : SET = struct
                        (el, Node(rest, v, r))
   ;;
 
-  (*
+  (**
+     [equals 'a set 'a set] Structural equality of sets
    * Equals takes the minimum value of a BSTSet on each iteration and compares
    * the remaining subtrees
    *)
@@ -90,11 +96,13 @@ module BSTSet : SET = struct
       | _ -> false
   ;;
 
+  (** [root 'a set] Root element of the Set *)
   let root = function
     | Empty ->  None
     | Node(_, v, _) -> Some(v)
   ;;
 
+  (** Rendering function *)
   let render_right = function
     | (depth, value) ->
         Format.print_string (String.make depth '\t');
@@ -103,6 +111,7 @@ module BSTSet : SET = struct
         Format.printf "|\n";
   ;;
 
+  (** Rendering function *)
   let render_left = function
     | (depth, value) ->
         Format.print_string (String.make depth '\t');
@@ -111,12 +120,14 @@ module BSTSet : SET = struct
         Format.printf "---( %d )\n" value
   ;;
 
+  (** Rendering function *)
   let render_root = function
     | (depth, value) ->
         Format.print_string (String.make depth '\t');
         Format.printf "[( %d )]" value
   ;;
 
+  (** Rendering function *)
   let rec gorender wasRight depth rootval = function
     | Empty -> ()
     | Node(l, v, r) ->
@@ -134,6 +145,7 @@ module BSTSet : SET = struct
         gorender false (depth+1) rootval l
   ;;
 
+  (** Rendering function *)
   let render = function
     | Empty -> ()
     | n ->
@@ -142,17 +154,19 @@ module BSTSet : SET = struct
           | None -> ()
   ;;
 
+  (** [set_of_list 'a list] Build a Set from a list *)
   let rec set_of_list = function
     | [] -> Empty
     | hd :: tail -> add hd (set_of_list tail)
   ;;
 
+  (** [cardinality 'a set] number of elements in the set (recursive) *)
   let rec cardinality = function
     | Empty -> 0
     | Node(x,_,y) -> 1 + cardinality x + cardinality y
   ;; (* Sum Left and Right subtrees *)
 
-  (*((+) (cardinality x)) @@ ((+) (cardinality y)) @@ 1*)
+  (** [cardinality 'a set] number of elements in the set (tail recursive) *)
   let tailcardinality = function
     | sometree ->
         let rec cardrec tree sum = match take_min tree with
@@ -162,11 +176,13 @@ module BSTSet : SET = struct
           cardrec sometree 0
   ;; (* Tail recursive cardinality :-) but still slow :-( *)
 
+  (** [invert 'a set] Invert the BST holding the set *)
   let rec invert = function
     | Node(x, a, y) -> Node(invert y, a, invert x)
     | e -> e
   ;;
 
+  (** [inorder 'a set] Inorder walk on the set *)
   let rec inorder stack = function
     | Empty -> stack
     | Node (Empty, a, Empty) ->  stack @ [a]
@@ -175,6 +191,7 @@ module BSTSet : SET = struct
   ;; (* Inorder traversal - Left - Root - Right *)
 
 
+  (** [preorder 'a set] Preorder walk on the set *)
   let rec preorder stack = function
     | Empty -> stack
     | Node (Empty, a, Empty) ->  stack @ [a]
@@ -182,6 +199,7 @@ module BSTSet : SET = struct
        preorder (preorder (stack @ [a]) x) y
   ;; (* Preorder traversal - Root - left - Right*)
 
+  (** [postorder 'a set] Postorder walk on the set *)
   let rec postorder stack = function
     | Empty -> stack
     | Node (Empty, a, Empty) ->  stack @ [a]

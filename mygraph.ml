@@ -1,9 +1,8 @@
 (************************
- * Author: Harry K
- * Date  : 2021-02-19
+ * @author Harry K kituyiharry@github.com
+ * @date   2021-02-19
 
  Simplest Graph Implementation (Adjacency list)
-
 
  https://www.lri.fr/~filliatr/ftp/publis/ocamlgraph-tfp-8.pdf
  https://bryangarza.github.io/basic-graph-traversal-in-ocaml.html
@@ -11,42 +10,45 @@
 
 ************************)
 
-(*
+(**
  * Functor to produce a graph from an ordinal type
- * The functor takes a
- *)
+ **)
 module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
 
   type node  = Node
   type label = Label
 
+  (** Adjacency list graph definition **)
   type 'a t = (
     (* Incoming nodes      Outgoing nodes         label *)
     Set.Make(Label).t * Set.Make(Label).t * Node.t
     (* Map from NodeType.t to (incoming outgoing label) *)
   ) Map.Make(Label).t
 
-  (*Module for manipulating the Set structure holding the Adjacency list*)
+  (** Module for manipulating the Set structure holding the Adjacency list *)
   module AdjSet  = Set.Make (Label)
 
-  (*Module for manipulating the Map (int -> (set * set * NodeType.t))*)
+  (** Module for manipulating the Map (Node -> (set , set , label)) *)
   module NodeMap = Map.Make (Label)
 
   let empty = NodeMap.empty
 
-  (* Add a node with its label *)
+  (** Add a new node with its label -> ( ... , nodedata) *)
   let add_node nodekey nodedata nodeMap =
     NodeMap.add nodekey (AdjSet.empty, AdjSet.empty, nodedata) nodeMap
   ;;
 
-  (*   (tail) -----> (head)  *)
+  (**
+      Add a directed edge [(tail)] --> [(head)] such that the tails outgoing
+      set points to the heads incoming set
+  *)
   let add_edge nodeFrom nodeTo nodeMap =
     (*Find the tail of the directed edge*)
     let (fromIncoming, fromOutgoing, label) = NodeMap.find nodeFrom nodeMap in
       (*Update with outgoing*)
       let finMap = (NodeMap.add nodeFrom (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label) nodeMap) in
         (*Find the head of the directed edge*)
-        let (toIncoming, toOutgoing, label) = NodeMap.find nodeTo nodeMap in
+        let (toIncoming, toOutgoing, label) = NodeMap.find nodeTo finMap in
           (*Update with incoming*)
           NodeMap.add nodeTo ((AdjSet.add nodeFrom toIncoming), toOutgoing, label) finMap
   ;;
