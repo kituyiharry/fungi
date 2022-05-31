@@ -86,7 +86,7 @@ module BSTSet : SET = struct
   let rec equals oset = function
     | Empty -> oset = Empty         (* Equal if other set is Empty *)
     | n -> match (take_min oset, take_min n) with
-      | ((Some(v), o), (Some(x),y)) ->
+      | ((Some(v), o), (Some(x), y)) ->
           if v = x then
             equals o y
           else

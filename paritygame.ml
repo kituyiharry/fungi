@@ -8,7 +8,7 @@
     https://ocaml.janestreet.com/ocaml-core/109.55.00/tmp/core_kernel/Unique_id.Int.html
     i hear its thread safe
  *)
-module RAND: Core_kernel.Unique_id.Id = Core_kernel.Unique_id.Int63 ()
+module RAND: Core.Unique_id.Id = Core.Unique_id.Int63 ()
 
 module PGame = struct
 
@@ -50,7 +50,7 @@ module PGame = struct
     and priority. Player information is contained in the label *)
   let add_node player priority game =
     let
-      label     = Label (player, (uniqlabel ()))
+      label     = Label (player, RAND.create())
         and
       nodedata  = Priority priority
     in
@@ -66,9 +66,17 @@ module PGame = struct
   (* Outgoing set of nodes *)
   let outgoingof node game = let (_, out, _) = Nodes.find node game in out
 
-  let sameplayer labela (Label (labelb, _)) = labela = labelb
+  let sameplayer player_a (Label (player_b, _)) = player_a = player_b
 
-  let diffplayer labela (Label (labelb, _)) = labela <> labelb
+  let diffplayer player_a (Label (player_b, _)) = player_a <> player_b
+
+  let playerof (Label (curplayer, _)) = curplayer
+
+  (** Destructure an element from a set *)
+  let pluck fromset =
+    match AdjSet.choose_opt fromset with
+    | Some(node) -> Some (node, (AdjSet.remove node fromset))
+    | _ -> None
 
  (* Get the checked node outgoing set *)
  (* Checks if that set has leavers that aren't controlled by forplayer *)
@@ -85,7 +93,7 @@ module PGame = struct
       (* Controlled by the player and can reach the predecessor node *)
       (sameplayer forplayer agivennode)
         ||
-      (* all outgoing members are in the accumulator *)
+      (* all outgoing members lead into the accumulator *)
       (hassafeoutgoing attractorset game agivennode)
   ;;
 
@@ -111,23 +119,18 @@ module PGame = struct
   (* Attractor *)
   (* Get the attractor of a set of nodes *)
   (* Try separating visited and accumulator!! *)
-  let rec attractor player game attractorset nodelist =
-    match nodelist with
-    | node :: tail ->
+  let rec attractor player game attractorset nodeset =
+    match (pluck nodeset) with
+    | Some(node, rest) ->
         (*
          Concatenate the attractive non-visited incoming neighbours
          while ensuring they aren't treachorous
         *)
         let (newels, newaccumulator) =
-          (attract attractorset (incomingof node game) player game)
+          attract attractorset (incomingof node game) player game
         in
-        newels
-        |> AdjSet.elements
-        |> (@) tail
-        |> attractor player game (AdjSet.add node newaccumulator)
-        (* NB: The information in the accumulator needs to be as recent as
-           possible *)
-    | [] -> attractorset
+          attractor player game (AdjSet.add node newaccumulator) (AdjSet.union newels rest)
+    | _ -> attractorset
   ;;
 
   (* Convenience functions for printing in the REPl *)
@@ -144,10 +147,53 @@ module PGame = struct
   (* A node is part of its own attractor *)
   let buildattractor node player game =
     (* Convenience method to make it printable in the REPL *)
-    List.map (asplayerprio game)
-    @@ AdjSet.elements
-    @@ attractor player game (AdjSet.add node AdjSet.empty)
-    @@ [node]
+    let startset = (AdjSet.add node AdjSet.empty) in
+      (*List.map (asplayerprio game)*)
+      (*@@ AdjSet.elements*)
+      (*@@ *)
+      attractor player game startset startset
+  ;;
+
+  (*
+    Game G -> (W1, W2)
+      1. Find highest priority node
+      2. Find a way to go through the node infinitely often so that it wins            |
+      3. Compute attractor of the node:                                                |
+        - Going through the attractor infinitely often -> also wins!                   |
+      4. Carve out the attractor                                                       |
+        - Remove all nodes in the attractor                                            |
+      5. Smaller Game                                                                  |
+        - Recursive dive into smaller game (point 1)-----------------------------------+
+        - Case 1 -> Winning set remaining of 1 is empty -> W0 wins and done
+        - Case 2 -> What if our highest priority node goes into a W1 set?
+          - W1 therefore has to have a winning set
+          - because player 1 at this point can't have nodes into player 0
+          ...  To be continued
+  *)
+
+  (**
+    Removes nodes from a game
+  *)
+  let carve game nodeset =
+    AdjSet.fold (
+      fun node curgame ->
+        Graph.delete_node node curgame
+    ) nodeset game
+  ;;
+
+  (**
+     Recursive algorithm
+  *)
+  let zielonka game =
+    (* Get highest priority node *)
+    match Nodes.max_binding_opt game with
+    | Some (ident, _ ) ->
+        (* Build its attractor set *)
+      let nodeattractor = buildattractor ident (playerof ident) game in
+        let upgame = (carve game nodeattractor) in
+          (* Go Recursive?? *)
+          (nodeattractor, upgame)
+    | _ -> raise Not_found
   ;;
 
 end
