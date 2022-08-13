@@ -11,12 +11,10 @@
 ************************)
 
 (**
- * Functor to produce a graph from an ordinal type
+ * Functor to produce a graph from any ordinal type
+ * using Node as the data and labels as key for identifying the node
  **)
 module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
-
-  type node  = Node
-  type label = Label
 
   (** Adjacency list graph definition **)
   type 'a t = (
@@ -25,12 +23,14 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
     (* Map from NodeType.t to (incoming outgoing label) *)
   ) Map.Make(Label).t
 
-  (** Module for manipulating the Set structure holding the Adjacency list *)
+  (** Module for manipulating the Set structure holding the Adjacency list
+      holding Label.t *)
   module AdjSet  = Set.Make (Label)
 
   (** Module for manipulating the Map (Node -> (set , set , label)) *)
   module NodeMap = Map.Make (Label)
 
+  (** An empty graph **)
   let empty = NodeMap.empty
 
   (** Add a new node with its label -> ( ... , nodedata) *)
@@ -40,7 +40,7 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
 
   (**
       Add a directed edge [(tail)] --> [(head)] such that the tails outgoing
-      set points to the heads incoming set
+      set points to the heads incoming set.
   *)
   let add_edge nodeFrom nodeTo nodeMap =
     (*Find the tail of the directed edge*)
@@ -54,6 +54,8 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
   ;;
 
   (*
+   * Removes a node from the graph
+   *
    * I realized since a node can be in the incoming or outgoing (or both),
    * then a function over the union of both sets while removing in both
    * still works and is simple enough
@@ -64,14 +66,12 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
     let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
       NodeMap.remove delnode (
         AdjSet.fold(
-          (fun anode updatemap ->
-            let (deepinc, deepout, olabel) = (NodeMap.find anode updatemap) in
-            NodeMap.add anode (
-              (* Might be in either *)
-              (* Can i add more context to make this efficient ? *)
+          (fun nodelabel updatemap ->
+            let (deepinc, deepout, deeplabel) = (NodeMap.find nodelabel updatemap) in
+            NodeMap.add nodelabel (
               (AdjSet.remove delnode deepinc),
               (AdjSet.remove delnode deepout),
-              olabel
+              deeplabel
             ) updatemap
           )
         ) (AdjSet.union incoming outgoing) nodeMap
@@ -92,7 +92,7 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
       ....
       (key * label * [ adjacency list ])
       ....
-      ] *)
+  ] *)
   let render nodeMap =
     NodeMap.fold (
       fun key (_, _, label) acc  ->

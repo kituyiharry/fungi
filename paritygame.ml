@@ -21,7 +21,8 @@ module PGame = struct
   type priority =
     | Priority of int
 
-  (* Each node is given a unique label for identification purposes *)
+  (* Each node is given a unique label for identification purposes consisting of
+   the player type and identifier *)
   type identity =
     | Label of (player * RAND.t)
 
@@ -46,13 +47,14 @@ module PGame = struct
   let uniqlabel _ = RAND.create();;
 
   (* Adds a node as a mapping from a uniqlabel to a triple of incoming,
-     outgoing
-    and priority. Player information is contained in the label *)
+     outgoing and priority. Player information is contained in the label
+     this uses the underlying graph  while handling the setup boilerplate
+     return (label id * internal graph)*)
   let add_node player priority game =
     let
-      label     = Label (player, RAND.create())
+      label    = Label (player, RAND.create())
         and
-      nodedata  = Priority priority
+      nodedata = Priority priority
     in
       (label, Graph.add_node label nodedata game)
   ;;
@@ -66,10 +68,13 @@ module PGame = struct
   (* Outgoing set of nodes *)
   let outgoingof node game = let (_, out, _) = Nodes.find node game in out
 
+  (* Structural equality i.e Odd = Odd or Even = Even *)
   let sameplayer player_a (Label (player_b, _)) = player_a = player_b
 
+  (* Structural difference i.e Odd = Even or Even = Odd *)
   let diffplayer player_a (Label (player_b, _)) = player_a <> player_b
 
+  (* Destructure the player from a label and its unique component *)
   let playerof (Label (curplayer, _)) = curplayer
 
   (** Destructure an element from a set *)
@@ -135,6 +140,7 @@ module PGame = struct
 
   (* Convenience functions for printing in the REPl *)
 
+  (* show parity game as a property graph without the random generated ids *)
   let asplayerprio game node =
     let
       (_,_, value) = Graph.NodeMap.find node game
@@ -186,14 +192,13 @@ module PGame = struct
   *)
   let zielonka game =
     (* Get highest priority node *)
-    match Nodes.max_binding_opt game with
-    | Some (ident, _ ) ->
-        (* Build its attractor set *)
-      let nodeattractor = buildattractor ident (playerof ident) game in
-        let upgame = (carve game nodeattractor) in
-          (* Go Recursive?? *)
-          (nodeattractor, upgame)
-    | _ -> raise Not_found
+    if Nodes.is_empty game then
+      (AdjSet.empty, game)
+    else
+      let (playerident, _edges) = Nodes.max_binding game in
+      let nodeattractor = buildattractor playerident (playerof playerident) game in
+      let gamerem = (carve game nodeattractor) in
+      (nodeattractor, gamerem)
   ;;
 
 end
@@ -202,15 +207,15 @@ end
 let p = PGame.empty;;
 
 (* I also assume there are no same priority nodes to make life easy *)
-let (l_2, p)  = PGame.add_node  Even 2 p;;
-let (l_4, p)  = PGame.add_node  Even 4 p;;
-let (l_6, p)  = PGame.add_node  Even 6 p;;
-let (l_8, p)  = PGame.add_node  Even 8 p;;
+let (l_2, p)  = PGame.add_node  Even 2  p;;
+let (l_4, p)  = PGame.add_node  Even 4  p;;
+let (l_6, p)  = PGame.add_node  Even 6  p;;
+let (l_8, p)  = PGame.add_node  Even 8  p;;
 let (l_10, p) = PGame.add_node  Even 10 p;;
-let (l_3, p)  = PGame.add_node  Odd  3 p;;
-let (l_5, p)  = PGame.add_node  Odd  5 p;;
-let (l_7, p)  = PGame.add_node  Odd  7 p;;
-let (l_9, p)  = PGame.add_node  Odd  9 p;;
+let (l_3, p)  = PGame.add_node  Odd  3  p;;
+let (l_5, p)  = PGame.add_node  Odd  5  p;;
+let (l_7, p)  = PGame.add_node  Odd  7  p;;
+let (l_9, p)  = PGame.add_node  Odd  9  p;;
 let (l_11,p)  = PGame.add_node  Odd  11 p;;
 let (l_13,p)  = PGame.add_node  Odd  13 p;;
 let (l_15,p)  = PGame.add_node  Odd  15 p;;
