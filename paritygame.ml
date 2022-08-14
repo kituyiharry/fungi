@@ -74,6 +74,11 @@ module PGame = struct
   (* Structural difference i.e Odd != Even or Even != Odd *)
   let diffplayer player_a (Label (player_b, _)) = player_a <> player_b
 
+  (* Invert player switches between player players *)
+  let invertplayer (Label (someplayer, _)) = match someplayer with
+  | Odd  -> Even
+  | Even -> Odd
+
   (* Destructure the player from a label and its unique component *)
   let playerof (Label (curplayer, _)) = curplayer
 
@@ -147,31 +152,13 @@ module PGame = struct
 
   (* A node is part of its own attractor
      To print the game as a adjacency list graph in a REPL use
-      List.map (asplayerprio game)
-      @@ AdjSet.elements
+      List.map (asplayerprio game) @@ AdjSet.elements
       @@ ...
    *)
   let buildattractor node player game =
     let startset = (AdjSet.add node AdjSet.empty) in
       attractor player game startset startset
   ;;
-
-  (*
-    Game G -> (W1, W2)
-      1. Find highest priority node
-      2. Find a way to go through the node infinitely often so that it wins            |
-      3. Compute attractor of the node:                                                |
-        - Going through the attractor infinitely often -> also wins!                   |
-      4. Carve out the attractor                                                       |
-        - Remove all nodes in the attractor                                            |
-      5. Smaller Game                                                                  |
-        - Recursive dive into smaller game (point 1)-----------------------------------+
-        - Case 1 -> Winning set remaining of 1 is empty -> W0 wins and done
-        - Case 2 -> What if our highest priority node goes into a W1 set?
-          - W1 therefore has to have a winning set
-          - because player 1 at this point can't have nodes into player 0
-          ...  To be continued
-  *)
 
   (**
     Removes nodes from a game
@@ -185,16 +172,23 @@ module PGame = struct
 
   (**
     Recursive algorithm
+    https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
   *)
-  let zielonka game =
-    (* Get highest priority node *)
+  let rec zielonka game =
     if Nodes.is_empty game then
-      (AdjSet.empty, game)
+      (AdjSet.empty, AdjSet.empty)
     else
-      let (playerident, _edges) = Nodes.max_binding game in
-      let nodeattractor = buildattractor playerident (playerof playerident) game in
-      let gamerem = (carve game nodeattractor) in
-      (nodeattractor, gamerem)
+      let (playerident, _) = Nodes.max_binding game in
+      let myattractor      = buildattractor playerident (playerof playerident) game in
+      let subgame          = (carve game myattractor) in
+      let (_, w1)          = zielonka subgame in
+      if AdjSet.is_empty w1 then
+        (myattractor, w1)
+      else
+        let oppatrractor   = buildattractor playerident (invertplayer playerident) game in
+        let invsubgame     = (carve game oppatrractor) in
+        let (w0, w1_ii)    = zielonka invsubgame in
+        (w0, (AdjSet.union w1_ii oppatrractor))
   ;;
 
 end
