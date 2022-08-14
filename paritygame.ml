@@ -44,8 +44,6 @@ module PGame = struct
   (* Empty Game is just an empty Graph *)
   let empty = Graph.empty
 
-  let uniqlabel _ = RAND.create();;
-
   (* Adds a node as a mapping from a uniqlabel to a triple of incoming,
      outgoing and priority. Player information is contained in the label
      this uses the underlying graph  while handling the setup boilerplate
@@ -75,9 +73,9 @@ module PGame = struct
   let diffplayer player_a (Label (player_b, _)) = player_a <> player_b
 
   (* Invert player switches between player players *)
-  let invertplayer (Label (someplayer, _)) = match someplayer with
-  | Odd  -> Even
-  | Even -> Odd
+  let invertplayer (Label (someplayer, itsuniqness)) = match someplayer with
+  | Odd  -> Label(Even, itsuniqness)
+  | Even -> Label(Odd, itsuniqness)
 
   (* Destructure the player from a label and its unique component *)
   let playerof (Label (curplayer, _)) = curplayer
@@ -185,7 +183,7 @@ module PGame = struct
       if AdjSet.is_empty w1 then
         (myattractor, w1)
       else
-        let oppatrractor   = buildattractor playerident (invertplayer playerident) game in
+        let oppatrractor   = buildattractor playerident  (playerof (invertplayer playerident)) game in
         let invsubgame     = (carve game oppatrractor) in
         let (w0, w1_ii)    = zielonka invsubgame in
         (w0, (AdjSet.union w1_ii oppatrractor))
