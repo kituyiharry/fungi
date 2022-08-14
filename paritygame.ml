@@ -2,11 +2,11 @@
  *  Start a Paritygame from our graph impl
  **********************************************)
 
-(* Why ocaml, why?? https://stackoverflow.com/questions/6518436/where-how-to-declare-the-unique-key-of-variables-in-a-compiler-written-in-ocaml *)
-(* God bless Jane Street :D
+(* Why ocaml, why??
+   https://stackoverflow.com/questions/6518436/where-how-to-declare-the-unique-key-of-variables-in-a-compiler-written-in-ocaml *)
+(*
     https://github.com/janestreet/core_kernel/search?q=Unique_Id
     https://ocaml.janestreet.com/ocaml-core/109.55.00/tmp/core_kernel/Unique_id.Int.html
-    i hear its thread safe
  *)
 module RAND: Core.Unique_id.Id = Core.Unique_id.Int63 ()
 
@@ -44,7 +44,8 @@ module PGame = struct
   (* Empty Game is just an empty Graph *)
   let empty = Graph.empty
 
-  (* Adds a node as a mapping from a uniqlabel to a triple of incoming,
+  (** [ add_node player int PGame.t]
+     Adds a node as a mapping from a uniqlabel to a triple of incoming,
      outgoing and priority. Player information is contained in the label
      this uses the underlying graph  while handling the setup boilerplate
      return (label id * internal graph)*)
@@ -57,42 +58,50 @@ module PGame = struct
       (label, Graph.add_node label nodedata game)
   ;;
 
-  (* Add an Edge between nodes *)
+  (** [ add_edge identity identity (PGame.t)  (AdjSet.t AdjSet.t priority) Nodes.t]
+     Add an Edge between nodes *)
   let add_edge = Graph.add_edge;;
 
-  (* Incoming set of nodes *)
+  (** [ incomingof identity (PGame.t) AdjSet.t]
+  Incoming set of nodes *)
   let incomingof node game = let (inc, _, _) = Nodes.find node game in inc
 
-  (* Outgoing set of nodes *)
+  (** [ incomingof identity (PGame.t) AdjSet.t]
+  Outgoing set of nodes *)
   let outgoingof node game = let (_, out, _) = Nodes.find node game in out
 
   (* Structural equality i.e Odd = Odd or Even = Even *)
   let sameplayer player_a (Label (player_b, _)) = player_a = player_b
 
-  (* Structural difference i.e Odd != Even or Even != Odd *)
+  (** [diffplayer player identity bool]
+  Structural difference i.e Odd != Even or Even != Odd *)
   let diffplayer player_a (Label (player_b, _)) = player_a <> player_b
 
-  (* Invert player switches between player players *)
+  (** [invertplayer identity identity]
+  Invert player switches between players but maintains structure *)
   let invertplayer (Label (someplayer, itsuniqness)) = match someplayer with
   | Odd  -> Label(Even, itsuniqness)
   | Even -> Label(Odd, itsuniqness)
 
-  (* Destructure the player from a label and its unique component *)
+  (** [playerof identity player]
+  Destructure the player from a label and its unique component *)
   let playerof (Label (curplayer, _)) = curplayer
 
-  (** Destructure an element from a set *)
+  (** [pluck AdjSet.t (identity option)]
+  Destructure an element from a set *)
   let pluck fromset =
     match AdjSet.choose_opt fromset with
     | Some(node) -> Some (node, (AdjSet.remove node fromset))
     | _ -> None
 
- (* Get the checked node outgoing set *)
- (* Checks if that set has leavers that aren't controlled by current player *)
+  (** [hassafeoutgoing AdjSet.t PGame.t identity]
+  Get the checked node outgoing set
+  Checks if that set has leavers that aren't controlled by current player *)
   let hassafeoutgoing attractorset game currentnode =
       AdjSet.subset  (outgoingof currentnode game) attractorset
   ;;
 
-  (*
+  (** [attractive AdjSet.t player PGame.t identity]
     attractive if same player or outgoing nodes are attractive
     i.e attractive in relation to the basenode
    *)
@@ -104,7 +113,7 @@ module PGame = struct
       (hassafeoutgoing attractorset game agivennode)
   ;;
 
-  (*
+  (** [attract AdjSet.t AdjSet.t player PGame.t identity (AdjSet.t * AdjSet.t)]
     Check for attractiveness:
      If its already visited in the accumulated attractor then no need to check it
      If its in the incomingset and same player then its reachable so add
@@ -121,7 +130,8 @@ module PGame = struct
   ;;
 
 
-  (* Get the attractor nodes of a player from a node *)
+  (** [attractor player PGame.t AdjSet.t AdjSet.t AdjSet.t]
+  Get the attractor nodes of a player from a node *)
   let rec attractor player game attractorset nodeset =
     match (pluck nodeset) with
     | Some(node, rest) ->
@@ -138,7 +148,8 @@ module PGame = struct
 
   (* Convenience functions for printing in the REPl *)
 
-  (* helper to show parity game as a graph without the random generated ids *)
+  (** [asplayerprio PGame.t (identity * priority)]
+  helper to show parity game as a graph without the random generated ids *)
   let asplayerprio game node =
     let
       (_,_, value) = Graph.NodeMap.find node game
@@ -148,17 +159,18 @@ module PGame = struct
       (player, value)
   ;;
 
-  (* A node is part of its own attractor
-     To print the game as a adjacency list graph in a REPL use
-      List.map (asplayerprio game) @@ AdjSet.elements
-      @@ ...
+  (** [buildattractor identity player PGame.t AdjSet.t]
+    A node is part of its own attractor
+    To print the game as a adjacency list graph in a REPL use
+     List.map (asplayerprio game) @@ AdjSet.elements
+     @@ ...
    *)
   let buildattractor node player game =
     let startset = (AdjSet.add node AdjSet.empty) in
       attractor player game startset startset
   ;;
 
-  (**
+  (** [carve PGame.t AdjSet.t PGame.t]
     Removes nodes from a game
   *)
   let carve game nodeset =
@@ -168,8 +180,8 @@ module PGame = struct
     ) nodeset game
   ;;
 
-  (**
-    Recursive algorithm
+  (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
+    Recursive algorithm which produces winning sets of the game
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
   *)
   let rec zielonka game =

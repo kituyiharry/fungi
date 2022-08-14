@@ -23,10 +23,8 @@ module MyTree = struct
           node;;
 
   (* Make a binary search tree aka ordered or sorted binary tree *)
-  let rec make_ordered_binary_tree = function l ->
-    let empty = Leaf in
-    match l with
-      [] -> empty
+  let rec make_ordered_binary_tree = function
+    [] -> Leaf
     | x :: xs -> insert_ordered x (make_ordered_binary_tree xs);;
 
   (* Use recursion to find if x is an element of a binary tree *)
