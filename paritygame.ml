@@ -26,7 +26,7 @@ module PGame = struct
   type identity =
     | Label of (player * RAND.t)
 
-  (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] *)
+  (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] .. *)
   module Graph  = Mygraph.MakeGraph
     (struct
       type t      = priority      (* The type of the internal data *)
@@ -71,7 +71,7 @@ module PGame = struct
   (* Structural equality i.e Odd = Odd or Even = Even *)
   let sameplayer player_a (Label (player_b, _)) = player_a = player_b
 
-  (* Structural difference i.e Odd = Even or Even = Odd *)
+  (* Structural difference i.e Odd != Even or Even != Odd *)
   let diffplayer player_a (Label (player_b, _)) = player_a <> player_b
 
   (* Destructure the player from a label and its unique component *)
@@ -84,9 +84,8 @@ module PGame = struct
     | _ -> None
 
  (* Get the checked node outgoing set *)
- (* Checks if that set has leavers that aren't controlled by forplayer *)
+ (* Checks if that set has leavers that aren't controlled by current player *)
   let hassafeoutgoing attractorset game currentnode =
-      (* Add 'sure' nodes early into the accumulator so this doesn't spook *)
       AdjSet.subset  (outgoingof currentnode game) attractorset
   ;;
 
@@ -98,32 +97,28 @@ module PGame = struct
       (* Controlled by the player and can reach the predecessor node *)
       (sameplayer forplayer agivennode)
         ||
-      (* all outgoing members lead into the accumulator *)
+      (* all outgoing members lead into the accumulator which is also an attractor *)
       (hassafeoutgoing attractorset game agivennode)
   ;;
 
-  (*Push incoming nodes from each*)
-  (*Is an node part of its own attractor ??*)
-  let attract attractorset incomingset player game =
-    (*
+  (*
     Check for attractiveness:
-       If its already visited in the accumulator then no need to check it
-       If its in the incomingset and same player then there is a path so add
-       If its outgoing nodes are also attractive then there is a path so add it
-       It is OK to add it in the accumulator now so that later checks don't miss
-       it!
-    *)
+     If its already visited in the accumulated attractor then no need to check it
+     If its in the incomingset and same player then its reachable so add
+     If its outgoing nodes are also attractive then its reachable so add it
+     It is OK to add it in the accumulator now so that later checks don't miss it!
+     - Returns a pair of newly found attractive nodes and a union of that set
+     with the previously accumulated attractor
+  *)
+  let attract attractorset incomingset player game =
     let oktoadd =
-      AdjSet.diff incomingset attractorset
-      |> AdjSet.filter (attractive attractorset player game)
+      AdjSet.diff incomingset attractorset |> AdjSet.filter (attractive attractorset player game)
     in
       (oktoadd, AdjSet.union oktoadd attractorset)
   ;;
 
 
-  (* Attractor *)
-  (* Get the attractor of a set of nodes *)
-  (* Try separating visited and accumulator!! *)
+  (* Get the attractor nodes of a player from a node *)
   let rec attractor player game attractorset nodeset =
     match (pluck nodeset) with
     | Some(node, rest) ->
@@ -140,7 +135,7 @@ module PGame = struct
 
   (* Convenience functions for printing in the REPl *)
 
-  (* show parity game as a property graph without the random generated ids *)
+  (* helper to show parity game as a graph without the random generated ids *)
   let asplayerprio game node =
     let
       (_,_, value) = Graph.NodeMap.find node game
@@ -150,13 +145,14 @@ module PGame = struct
       (player, value)
   ;;
 
-  (* A node is part of its own attractor *)
+  (* A node is part of its own attractor
+     To print the game as a adjacency list graph in a REPL use
+      List.map (asplayerprio game)
+      @@ AdjSet.elements
+      @@ ...
+   *)
   let buildattractor node player game =
-    (* Convenience method to make it printable in the REPL *)
     let startset = (AdjSet.add node AdjSet.empty) in
-      (*List.map (asplayerprio game)*)
-      (*@@ AdjSet.elements*)
-      (*@@ *)
       attractor player game startset startset
   ;;
 
@@ -188,7 +184,7 @@ module PGame = struct
   ;;
 
   (**
-     Recursive algorithm
+    Recursive algorithm
   *)
   let zielonka game =
     (* Get highest priority node *)
