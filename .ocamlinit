@@ -1,0 +1,168 @@
+#directory "/Users/harrykwakuloba/.opam/default/lib/base";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/base/base_internalhash_types";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/base/caml";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/base/md5";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/base/shadow_stdlib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/base_bigstring";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/base_quickcheck";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/base_quickcheck/ppx_quickcheck/runtime";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/bin_prot";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/bin_prot/shape";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/core";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/core/base_for_tests";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/core/validate";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/fieldslib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/int_repr";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/jane-street-headers";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/parsexp";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_assert/runtime-lib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_bench/runtime-lib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_compare/runtime-lib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_enumerate/runtime-lib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_expect/collector";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_expect/common";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_expect/config";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_expect/config_types";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_hash/runtime-lib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_here/runtime-lib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_inline_test/config";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_inline_test/runtime-lib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_log/types";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_module_timer/runtime";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/ppx_sexp_conv/runtime-lib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/sexplib";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/sexplib0";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/splittable_random";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/stdio";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/time_now";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/typerep";;
+#directory "/Users/harrykwakuloba/.opam/default/lib/variantslib";;
+#directory "/Users/harrykwakuloba/Developer/Ocaml/libset/_build/default/.libset.objs/byte";;
+#load "/Users/harrykwakuloba/.opam/default/lib/base/base_internalhash_types/base_internalhash_types.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/base/caml/caml.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/sexplib0/sexplib0.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/base/shadow_stdlib/shadow_stdlib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/base/base.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_sexp_conv/runtime-lib/ppx_sexp_conv_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_compare/runtime-lib/ppx_compare_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_enumerate/runtime-lib/ppx_enumerate_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_hash/runtime-lib/ppx_hash_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_here/runtime-lib/ppx_here_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_assert/runtime-lib/ppx_assert_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_bench/runtime-lib/ppx_bench_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/base/md5/md5_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ocaml/unix.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ocaml/bigarray.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/fieldslib/fieldslib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/variantslib/variantslib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/bin_prot/shape/bin_shape_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/bin_prot/bin_prot.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_inline_test/config/inline_test_config.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/jane-street-headers/jane_street_headers.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/time_now/time_now.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_inline_test/runtime-lib/ppx_inline_test_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/stdio/stdio.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_module_timer/runtime/ppx_module_timer_runtime.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/typerep/typerep_lib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_expect/common/expect_test_common.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_expect/config_types/expect_test_config_types.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_expect/collector/expect_test_collector.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_expect/config/expect_test_config.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/parsexp/parsexp.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/sexplib/sexplib.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/ppx_log/types/ppx_log_types.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/splittable_random/splittable_random.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/base_quickcheck/base_quickcheck.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/base_quickcheck/ppx_quickcheck/runtime/ppx_quickcheck_runtime.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/int_repr/int_repr.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/base_bigstring/base_bigstring.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/core/base_for_tests/base_for_tests.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/core/validate/validate.cma";;
+#load "/Users/harrykwakuloba/.opam/default/lib/core/core.cma";;
+#load "/Users/harrykwakuloba/Developer/Ocaml/libset/_build/default/libset.cma";;
+
+open Libset;;
+open Libset.Paritygame;;
+open Libset.Paritygame.PGame;;
+
+let p = PGame.empty;;
+
+(* I also assume there are no same priority nodes to make life easy *)
+let (l_2, p)  = PGame.add_node  Even 2  p;;
+let (l_4, p)  = PGame.add_node  Even 4  p;;
+let (l_6, p)  = PGame.add_node  Even 6  p;;
+let (l_8, p)  = PGame.add_node  Even 8  p;;
+let (l_10, p) = PGame.add_node  Even 10 p;;
+let (l_3, p)  = PGame.add_node  Odd  3  p;;
+let (l_5, p)  = PGame.add_node  Odd  5  p;;
+let (l_7, p)  = PGame.add_node  Odd  7  p;;
+let (l_9, p)  = PGame.add_node  Odd  9  p;;
+let (l_11,p)  = PGame.add_node  Odd  11 p;;
+let (l_13,p)  = PGame.add_node  Odd  13 p;;
+let (l_15,p)  = PGame.add_node  Odd  15 p;;
+(**
+  A non-empty Parity game will always have a Even labeled node 2 or
+  an Odd labeled node 3
+**)
+let p = PGame.add_edge l_2  l_4   p;; (* 2 connects to even and 1 attractive odd *)
+let p = PGame.add_edge l_2  l_11  p;;
+let p = PGame.add_edge l_4  l_2   p;;
+let p = PGame.add_edge l_4  l_8   p;;
+let p = PGame.add_edge l_4  l_6   p;; (* 6 has 1 incoming odd node *)
+let p = PGame.add_edge l_6  l_3   p;; (* 3 connects only to even nodes *)
+let p = PGame.add_edge l_6  l_5   p;; (* 6 connects only to odd nodes *)
+let p = PGame.add_edge l_6  l_7   p;;
+let p = PGame.add_edge l_6  l_9   p;;
+let p = PGame.add_edge l_8  l_7   p;;
+let p = PGame.add_edge l_8  l_5   p;;
+let p = PGame.add_edge l_8  l_2   p;;
+let p = PGame.add_edge l_10 l_13  p;;
+let p = PGame.add_edge l_10 l_15  p;;
+let p = PGame.add_edge l_3  l_2   p;;
+let p = PGame.add_edge l_3  l_4   p;;
+let p = PGame.add_edge l_5  l_5   p;; (* 5 connects only to odd nodes *)
+let p = PGame.add_edge l_5  l_7   p;;
+let p = PGame.add_edge l_5  l_9   p;;
+let p = PGame.add_edge l_7  l_7   p;; (* 7 self references *)
+let p = PGame.add_edge l_7  l_10  p;;
+let p = PGame.add_edge l_9  l_5   p;;
+let p = PGame.add_edge l_9  l_10  p;;
+let p = PGame.add_edge l_9  l_3   p;;
+let p = PGame.add_edge l_11 l_8   p;;
+let p = PGame.add_edge l_13 l_15  p;;
+let p = PGame.add_edge l_15 l_13  p;;
+
+
+let print_player_prio (pplayer, PGame.Priority value)  = match pplayer with
+| PGame.Even -> Format.printf " (Even %d) " value
+| PGame.Odd  -> Format.printf " (Odd  %d) " value
+;;
+
+let cherrypicknode = function
+  | (node, _edges) -> node
+;;
+
+let pp_parity_game:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit = fun game ->
+   List.iter (print_player_prio)
+   (
+    List.map (PGame.asplayerprio game) @@
+    List.map (cherrypicknode) @@
+    List.rev @@ (PGame.Nodes.bindings game)
+  )
+;;
+
+let pp_adjset set =
+  Format.printf "{";
+  if PGame.AdjSet.is_empty set then
+  Format.printf " ∅ "
+      else
+  List.iter (print_player_prio)
+  (
+    List.map (PGame.asplayerprio p) @@ PGame.AdjSet.elements set
+  );
+  Format.printf "} "
+;;
+
+
+#install_printer pp_parity_game;;
+#install_printer pp_adjset;;

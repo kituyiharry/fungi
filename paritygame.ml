@@ -37,6 +37,8 @@ module PGame = struct
       let compare = fun (Label (_,l)) (Label (_,r)) -> Int.compare (RAND.to_int_exn l) (RAND.to_int_exn r)
     end)
 
+  type t = Graph.t
+
   module AdjSet = Graph.AdjSet
 
   module Nodes  = Graph.NodeMap
@@ -90,7 +92,7 @@ module PGame = struct
   (** [pluck AdjSet.t (identity option)]
   Destructure an element from a set *)
   let pluck fromset =
-    match AdjSet.choose_opt fromset with
+    match AdjSet.max_elt_opt fromset with
     | Some(node) -> Some (node, (AdjSet.remove node fromset))
     | _ -> None
 
@@ -184,7 +186,7 @@ module PGame = struct
     Recursive algorithm which produces winning sets of the game
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
   *)
-  let rec zielonka game =
+  let rec zielonka: (AdjSet.t * AdjSet.t * priority) Nodes.t -> (AdjSet.t * AdjSet.t) = fun game ->
     if Nodes.is_empty game then
       (AdjSet.empty, AdjSet.empty)
     else
@@ -202,55 +204,3 @@ module PGame = struct
   ;;
 
 end
-
-
-let p = PGame.empty;;
-
-(* I also assume there are no same priority nodes to make life easy *)
-let (l_2, p)  = PGame.add_node  Even 2  p;;
-let (l_4, p)  = PGame.add_node  Even 4  p;;
-let (l_6, p)  = PGame.add_node  Even 6  p;;
-let (l_8, p)  = PGame.add_node  Even 8  p;;
-let (l_10, p) = PGame.add_node  Even 10 p;;
-let (l_3, p)  = PGame.add_node  Odd  3  p;;
-let (l_5, p)  = PGame.add_node  Odd  5  p;;
-let (l_7, p)  = PGame.add_node  Odd  7  p;;
-let (l_9, p)  = PGame.add_node  Odd  9  p;;
-let (l_11,p)  = PGame.add_node  Odd  11 p;;
-let (l_13,p)  = PGame.add_node  Odd  13 p;;
-let (l_15,p)  = PGame.add_node  Odd  15 p;;
-(**
-  A non-empty Parity game will always have a Even labeled node 2 or
-  an Odd labeled node 3
-**)
-let p = PGame.add_edge l_2  l_4   p;; (* 2 connects to even and 1 attractive odd *)
-let p = PGame.add_edge l_2  l_11  p;;
-let p = PGame.add_edge l_4  l_2   p;;
-let p = PGame.add_edge l_4  l_8   p;;
-let p = PGame.add_edge l_4  l_6   p;; (* 6 has 1 incoming odd node *)
-let p = PGame.add_edge l_6  l_3   p;; (* 3 connects only to even nodes *)
-let p = PGame.add_edge l_6  l_5   p;; (* 6 connects only to odd nodes *)
-let p = PGame.add_edge l_6  l_7   p;;
-let p = PGame.add_edge l_6  l_9   p;;
-let p = PGame.add_edge l_8  l_7   p;;
-let p = PGame.add_edge l_8  l_5   p;;
-let p = PGame.add_edge l_8  l_2   p;;
-let p = PGame.add_edge l_10 l_13  p;;
-let p = PGame.add_edge l_10 l_15  p;;
-let p = PGame.add_edge l_3  l_2   p;;
-let p = PGame.add_edge l_3  l_4   p;;
-let p = PGame.add_edge l_5  l_5   p;; (* 5 connects only to odd nodes *)
-let p = PGame.add_edge l_5  l_7   p;;
-let p = PGame.add_edge l_5  l_9   p;;
-let p = PGame.add_edge l_7  l_7   p;; (* 7 self references *)
-let p = PGame.add_edge l_7  l_10  p;;
-let p = PGame.add_edge l_9  l_5   p;;
-let p = PGame.add_edge l_9  l_10  p;;
-let p = PGame.add_edge l_9  l_3   p;;
-let p = PGame.add_edge l_11 l_8   p;;
-let p = PGame.add_edge l_13 l_15  p;;
-let p = PGame.add_edge l_15 l_13  p;;
-
-
-(*let p = PGame.add_edge l_2 l_8 p;;*)
-(*let p = PGame.add_edge l_15 l_2 p;;*)

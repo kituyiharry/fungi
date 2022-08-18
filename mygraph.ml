@@ -17,7 +17,7 @@
 module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
 
   (** Adjacency list graph definition **)
-  type 'a t = (
+  type t = (
     (* Incoming nodes      Outgoing nodes         label *)
     Set.Make(Label).t * Set.Make(Label).t * Node.t
     (* Map from NodeType.t to (incoming outgoing label) *)
