@@ -101,6 +101,8 @@ let (l_9, p)  = PGame.add_node  PGame.Odd  9  p;;
 let (l_11,p)  = PGame.add_node  PGame.Odd  11 p;;
 let (l_13,p)  = PGame.add_node  PGame.Odd  13 p;;
 let (l_15,p)  = PGame.add_node  PGame.Odd  15 p;;
+let (l_31,p)  = PGame.add_node  PGame.Odd  31 p;;
+let (e_31,p)  = PGame.add_node  PGame.Even 31 p;;
 (**
   A non-empty Parity game will always have a Even labeled node 2 or
   an Odd labeled node 3
@@ -132,6 +134,13 @@ let p = PGame.add_edge l_9  l_3   p;;
 let p = PGame.add_edge l_11 l_8   p;;
 let p = PGame.add_edge l_13 l_15  p;;
 let p = PGame.add_edge l_15 l_13  p;;
+let p = PGame.add_edge l_15 l_13  p;;
+let p = PGame.add_edge l_15 l_31  p;;
+let p = PGame.add_edge l_31 l_15  p;;
+let p = PGame.add_edge e_31 l_15  p;;
+let p = PGame.add_edge e_31 l_31  p;;
+let p = PGame.add_edge l_31 e_31  p;;
+let p = PGame.add_edge e_31 l_2   p;;
 
 
 (* Convenience functions for printing in the REPl *)
@@ -146,7 +155,7 @@ let asplayerprio game node =
     (player, value)
 ;;
 
-let print_player_prio (pplayer, PGame.Priority value)  = match pplayer with
+let print_player_prio (pplayer, (PGame.Priority (value, _)))  = match pplayer with
 | PGame.Even -> Format.printf " (Even %d) " value
 | PGame.Odd  -> Format.printf " (Odd  %d) " value
 ;;
@@ -181,3 +190,5 @@ let pp_adjset set =
 
 #install_printer pp_parity_game;;
 #install_printer pp_adjset;;
+
+#trace PGame.zielonka;;

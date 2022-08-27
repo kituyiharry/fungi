@@ -16,11 +16,11 @@ module Utils = struct
     in
       recmaker [] 0
 
-  let rec makerandlisrec size =
+  let rec makerandlistrec size =
     if size = 0 then
       []
     else
-      Random.bits() :: (makerandlisrec (size - 1))
+      Random.bits() :: (makerandlistrec (size - 1))
 
   (**
     Poor mans benchmarking

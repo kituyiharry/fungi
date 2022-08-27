@@ -17,25 +17,27 @@ module PGame = struct
     | Even
     | Odd
 
+  let compareplayer l r = if l = r then 0 else -1
+
   (* Each node in a parity game has an Integer priority *)
   type priority =
-    | Priority of int
+    | Priority of (int * player)
 
   (* Each node is given a unique label for identification purposes consisting of
    the player type and identifier *)
   type identity =
-    | Label of (player * priority * RAND.t )
+    | Label of (player * priority * RAND.t)
 
   (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] .. *)
   (* Noted: there is duplication of priority type -> doesn't help at all *)
   module Graph  = Mygraph.MakeGraph
     (struct
-      type t      =  priority   (* The type of the internal data *)
-      let compare =  fun (Priority l) (Priority r) -> Int.compare l r
+      type t      = priority   (* The type of the internal data *)
+      let compare = fun (Priority (l, l_plyr)) (Priority (r, r_plyr)) -> ((Int.compare l r) + (compareplayer l_plyr r_plyr))
     end)
     (struct
       type t      = identity      (* The type to uniquely identify a node *)
-      let compare = fun (Label (_, Priority l,_)) (Label (_,Priority r,_)) -> Int.compare l r
+      let compare = fun (Label (_, _, l)) (Label (_ , _, r)) -> (Int.compare (RAND.to_int_exn l) (RAND.to_int_exn r))
     end)
 
   module AdjSet = Graph.AdjSet
@@ -54,9 +56,9 @@ module PGame = struct
      return (label id * internal graph)*)
   let add_node player priority game =
     let
-      label    = Label (player, Priority priority, RAND.create())
+      label    = Label (player, (Priority (priority, player)), RAND.create())
         and
-      nodedata = Priority priority
+      nodedata = (Priority (priority, player))
     in
       (label, Graph.add_node label nodedata game)
   ;;
@@ -149,15 +151,14 @@ module PGame = struct
     | _ -> attractorset
   ;;
 
-  (** [buildattractor identity player PGame.t AdjSet.t]
+  (** [buildattractor ?set:(AdjSet.t) identity player PGame.t AdjSet.t]
     A node is part of its own attractor
     To print the game as a adjacency list graph in a REPL use
      List.map (asplayerprio game) @@ AdjSet.elements
      @@ ...
    *)
-  let buildattractor node player game =
-    let startset = (AdjSet.add node AdjSet.empty) in
-      attractor player game startset startset
+  let buildattractor node player ?set:(startset=(AdjSet.add node AdjSet.empty)) game =
+    attractor player game startset startset
   ;;
 
   (** [carve PGame.t AdjSet.t PGame.t]
@@ -169,12 +170,20 @@ module PGame = struct
 
   (* Parity based on priority integer *)
   let parity ofprio =
-    if ofprio mod 2 == 0 then Even
-    else Odd
+    if ofprio mod 2 == 0 then Even else Odd
 
-  let assignregion plyr (p, q) = match plyr with
+  (* Why does this even work ?? *)
+  let assignregion: (player -> (AdjSet.t * AdjSet.t) -> (AdjSet.t * AdjSet.t)) =
+    fun plyr (p, q) -> match plyr with
   | Even -> (p, q)
   | Odd  -> (q, p)
+
+  (* Cluster max priority nodes *)
+  let cluster (Label (_, (Priority (l, _)),_)) game =
+    AdjSet.of_list
+    (List.map (fun (x, _) -> x)
+    (Nodes.bindings
+    (Nodes.filter (fun (Label (_, (Priority (p, _)), _)) _  -> (p = l)) game)))
 
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
@@ -186,20 +195,20 @@ module PGame = struct
     if Nodes.is_empty game then
       (AdjSet.empty, AdjSet.empty)
     else
-      let (Label(_, Priority p, _ ) as node, _) = Nodes.max_binding game in
-      let plyr             = parity p in
-      let i_attractor      = buildattractor node plyr game in
+      let (Label(_, (Priority (p, _)), _ ) as node, _) = Nodes.max_binding game in
+      let u                = cluster node game in
+      let i_attractor      = buildattractor node (parity p) ?set:(Some u) game in
       let subgame          = carve game i_attractor in
-      let (w0_p, w1_p)     = zielonka subgame in
-      let (w0, w1) =(match plyr with | Even -> (w0_p, w1_p) | Odd  -> (w1_p, w0_p)) in
+      let winsets          = zielonka subgame in
+      let (w0, w1)         = assignregion (parity p) winsets in
       if AdjSet.is_empty w1 then
-        (w0, w1)
+        (AdjSet.union w0 i_attractor , w1)
       else
-        let oppatrractor   = buildattractor node (invertplayer (plyr)) game in
+        let oppatrractor   = buildattractor node (invertplayer (parity p)) ?set:(Some w1) game in
         let invsubgame     = carve game oppatrractor in
-        let (w0_p, w1_p)    = zielonka invsubgame in
-        let (w0, w1) =(match plyr with | Even -> (w0_p, w1_p) | Odd  -> (w1_p, w0_p)) in
-        (w0, (AdjSet.union w1 oppatrractor))
+        let invwinsets     = zielonka invsubgame in
+        let (w00, w11) = assignregion (invertplayer (parity p)) invwinsets in
+        (w00, (AdjSet.union w11 oppatrractor))
   ;;
 
 end
