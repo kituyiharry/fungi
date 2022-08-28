@@ -42,6 +42,23 @@ module Utils = struct
     let t = Unix.gettimeofday () in
       let _res = f () in
         Printf.printf "Execution time: %f secondsn" (Unix.gettimeofday () -. t)
+
+  let take n somelist =
+    let rec takerec state count alist =
+      if count >= n then
+        state
+      else
+        match alist with
+      | [] -> state
+      | hd :: rest -> takerec (hd :: state) (count + 1) rest in
+    takerec []  0 somelist
+
+  let take_arr n somearray =
+    if n > Array.length somearray then
+      somearray
+    else
+      Array.sub somearray 0 n
+
 ;;
 
 end
