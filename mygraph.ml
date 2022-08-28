@@ -100,4 +100,16 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
     ) nodeMap []
   ;;
 
+  let bindings nodeMap =
+    (List.rev
+      @@ List.sort (fun (_, lnode) (_, rnode) -> Node.compare lnode rnode)
+      @@ NodeMap.bindings
+      @@ NodeMap.map(fun (_ , _, label) -> label)
+    nodeMap)
+
+  (* Max element of the Map but using its internal elements and not keys *)
+  let max_elt nodeMap =
+    List.hd (bindings nodeMap)
+  ;;
+
 end;;

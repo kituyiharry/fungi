@@ -17,8 +17,6 @@ module PGame = struct
     | Even
     | Odd
 
-  let compareplayer l r = if l = r then 0 else -1
-
   (* Each node in a parity game has an Integer priority *)
   type priority =
     | Priority of (int * player)
@@ -26,18 +24,24 @@ module PGame = struct
   (* Each node is given a unique label for identification purposes consisting of
    the player type and identifier *)
   type identity =
-    | Label of (player * priority * RAND.t)
+    | Label of (priority * RAND.t)
+
+  let cmpplayers l r = if l = r then 0 else -2
+
+  let cmprands  (Label(_, l)) (Label(_, r)) = Int.compare (RAND.to_int_exn l)  (RAND.to_int_exn r)
+
+  let cmpprio (Priority lp) (Priority rp) = (compare lp rp)
 
   (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] .. *)
   (* Noted: there is duplication of priority type -> doesn't help at all *)
   module Graph  = Mygraph.MakeGraph
     (struct
       type t      = priority   (* The type of the internal data *)
-      let compare = fun (Priority (l, l_plyr)) (Priority (r, r_plyr)) -> ((Int.compare l r) + (compareplayer l_plyr r_plyr))
+      let compare = cmpprio
     end)
     (struct
-      type t      = identity      (* The type to uniquely identify a node *)
-      let compare = fun (Label (_, _, l)) (Label (_ , _, r)) -> (Int.compare (RAND.to_int_exn l) (RAND.to_int_exn r))
+      type t      = identity   (* The type to uniquely identify a node *)
+      let compare = cmprands
     end)
 
   module AdjSet = Graph.AdjSet
@@ -56,7 +60,7 @@ module PGame = struct
      return (label id * internal graph)*)
   let add_node player priority game =
     let
-      label    = Label (player, (Priority (priority, player)), RAND.create())
+      label    = Label((Priority (priority, player)), RAND.create())
         and
       nodedata = (Priority (priority, player))
     in
@@ -67,6 +71,10 @@ module PGame = struct
      Add an Edge between nodes *)
   let add_edge = Graph.add_edge;;
 
+  (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
+    Largest priority node in the game *)
+  let max_priority_node = Graph.max_elt
+
   (** [ incomingof identity (PGame.t) AdjSet.t]
   Incoming set of nodes *)
   let incomingof node game = let (inc, _, _) = Nodes.find node game in inc
@@ -76,21 +84,22 @@ module PGame = struct
   let outgoingof node game = let (_, out, _) = Nodes.find node game in out
 
   (* Structural equality i.e Odd = Odd or Even = Even *)
-  let sameplayer player_a (Label (player_b, _, _)) = player_a = player_b
+  (* Which player do we consider!!! *)
+  let sameplayer player_a (Label (Priority (_, player_b), _)) = player_a = player_b
 
   (** [diffplayer player identity bool]
   Structural difference i.e Odd != Even or Even != Odd *)
-  let diffplayer player_a (Label (player_b, _, _)) = player_a <> player_b
+  let diffplayer player_a (Label (Priority (_, player_b), _)) = player_a <> player_b
 
   (** [invertplayer identity identity]
   Invert player switches between players but maintains structure *)
-  let invertplayer = function
+  let invert = function
   | Odd  -> Even
   | Even -> Odd
 
   (** [playerof identity player]
   Destructure the player from a label and its unique component *)
-  let playerof (Label (curplayer, _, _)) = curplayer
+  let playerof (Priority (_, curplayer)) = curplayer
 
   (** [pluck AdjSet.t (identity option)]
   Destructure an element from a set *)
@@ -157,8 +166,8 @@ module PGame = struct
      List.map (asplayerprio game) @@ AdjSet.elements
      @@ ...
    *)
-  let buildattractor node player ?set:(startset=(AdjSet.add node AdjSet.empty)) game =
-    attractor player game startset startset
+  let buildattractor node player ?set:(startset=(AdjSet.empty)) game =
+    let istart = AdjSet.add node startset in attractor player game istart istart
   ;;
 
   (** [carve PGame.t AdjSet.t PGame.t]
@@ -168,46 +177,54 @@ module PGame = struct
     AdjSet.fold (Graph.delete_node) nodeset game
   ;;
 
-  (* Parity based on priority integer *)
-  let parity ofprio =
+  let omega (Priority (ofprio, _)) =
     if ofprio mod 2 == 0 then Even else Odd
 
+  (* Parity based on priority integer *)
+  let parity ofprio =
+      if (playerof ofprio) = (omega ofprio) then
+       (playerof ofprio)
+      else
+        invert (playerof ofprio)
+
   (* Why does this even work ?? *)
-  let assignregion: (player -> (AdjSet.t * AdjSet.t) -> (AdjSet.t * AdjSet.t)) =
-    fun plyr (p, q) -> match plyr with
-  | Even -> (p, q)
-  | Odd  -> (q, p)
+  let assignregion: (priority -> (AdjSet.t * AdjSet.t) -> (AdjSet.t * AdjSet.t)) =
+    fun prio (wi, wii) -> match parity prio with
+  | Even -> (wi, wii)
+  | Odd  -> (wii, wi)
 
   (* Cluster max priority nodes *)
-  let cluster (Label (_, (Priority (l, _)),_)) game =
+  let cluster (Label ((Priority (l, _)),_)) game =
     AdjSet.of_list
-    (List.map (fun (x, _) -> x)
-    (Nodes.bindings
-    (Nodes.filter (fun (Label (_, (Priority (p, _)), _)) _  -> (p = l)) game)))
+    @@ List.map (fun (key, _) -> key)
+    @@ Nodes.bindings
+    @@ Nodes.filter (fun (Label ((Priority (p, _)), _)) _  -> (p = l)) game
+  ;;
 
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
   *)
-  let rec zielonka
-    :(AdjSet.t * AdjSet.t * priority ) Nodes.t -> (AdjSet.t * AdjSet.t) = fun
-      game ->
-    if Nodes.is_empty game then
-      (AdjSet.empty, AdjSet.empty)
-    else
-      let (Label(_, (Priority (p, _)), _ ) as node, _) = Nodes.max_binding game in
-      let u                = cluster node game in
-      let i_attractor      = buildattractor node (parity p) ?set:(Some u) game in
-      let subgame          = carve game i_attractor in
-      let winsets          = zielonka subgame in
-      let (w0, w1)         = assignregion (parity p) winsets in
-      if AdjSet.is_empty w1 then
-        (AdjSet.union w0 i_attractor , w1)
+  let rec zielonka :(AdjSet.t * AdjSet.t * priority ) Nodes.t -> (AdjSet.t * AdjSet.t) =
+    fun game ->
+      if Nodes.is_empty game then
+        (AdjSet.empty, AdjSet.empty)
       else
-        let oppatrractor   = buildattractor node (invertplayer (parity p)) ?set:(Some w1) game in
+        let node, prio     = max_priority_node game in
+        let u              = cluster node game in
+        let i              = omega prio in
+        let i_attractor    = buildattractor node i ?set:(Some u) game in
+        let subgame        = carve game i_attractor in
+        let winsets        = zielonka subgame in
+        let (w0, w1)       = assignregion prio winsets in
+          if AdjSet.is_empty w1 then
+           (AdjSet.union w0 i_attractor , w1)
+           else
+        let ii             = invert i in
+        let oppatrractor   = buildattractor node ii ?set:(Some w1) game in
         let invsubgame     = carve game oppatrractor in
         let invwinsets     = zielonka invsubgame in
-        let (w00, w11) = assignregion (invertplayer (parity p)) invwinsets in
+        let (w00, w11)     = assignregion prio invwinsets in
         (w00, (AdjSet.union w11 oppatrractor))
   ;;
 
