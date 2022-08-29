@@ -186,12 +186,7 @@ module PGame = struct
        (playerof ofprio)
       else
         invert (playerof ofprio)
-
-  (* Why does this even work ?? *)
-  let assignregion: (priority -> (AdjSet.t * AdjSet.t) -> (AdjSet.t * AdjSet.t)) =
-    fun prio (wi, wii) -> match parity prio with
-  | Even -> (wi, wii)
-  | Odd  -> (wii, wi)
+  ;;
 
   (* Cluster max priority nodes *)
   let cluster (Label ((Priority (l, _)),_)) game =
@@ -200,6 +195,20 @@ module PGame = struct
     @@ Nodes.bindings
     @@ Nodes.filter (fun (Label ((Priority (p, _)), _)) _  -> (p = l)) game
   ;;
+
+  let assignregion (fprio, attr, (wi, wii)) =
+    (if AdjSet.subset wi attr then
+      match omega fprio with
+      | Even -> ((AdjSet.union wi attr), wii)
+      | Odd ->  (wii, (AdjSet.union wi attr))
+      else
+      match omega fprio with
+      | Even -> ((AdjSet.union wii attr), wi)
+      | Odd ->  (wi, (AdjSet.union wii attr))
+    )
+  ;;
+
+  (*let empty_opponent node attractor (w0, w1)*)
 
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
@@ -216,16 +225,16 @@ module PGame = struct
         let i_attractor    = buildattractor node i ?set:(Some u) game in
         let subgame        = carve game i_attractor in
         let winsets        = zielonka subgame in
-        let (w0, w1)       = assignregion prio winsets in
-          if AdjSet.is_empty w1 then
-           (AdjSet.union w0 i_attractor , w1)
-           else
+        let (w0, w1)       = assignregion (prio, i_attractor, winsets) in
+          if AdjSet.is_empty (AdjSet.diff i_attractor w1) then
+            (w0, w1)
+          else
         let ii             = invert i in
         let oppatrractor   = buildattractor node ii ?set:(Some w1) game in
         let invsubgame     = carve game oppatrractor in
         let invwinsets     = zielonka invsubgame in
-        let (w00, w11)     = assignregion prio invwinsets in
-        (w00, (AdjSet.union w11 oppatrractor))
+        let (w00, w11)     = assignregion (prio, oppatrractor, invwinsets) in
+            (w00, w11)
   ;;
 
 end

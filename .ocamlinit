@@ -186,12 +186,12 @@ let pp_adjset set =
   Format.printf "} "
 ;;
 
-let terseness = 9
+let terseness = 10
 
 
 let pp_parity_game_terse:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit = fun game ->
   let card = PGame.Nodes.cardinal game in
-  if  card < terseness then
+  if  card <= terseness then
     pp_parity_game game
   else
     (Format.printf "{";
@@ -205,7 +205,7 @@ let pp_parity_game_terse:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGam
 
 let pp_adjset_terse set =
   let card = PGame.AdjSet.cardinal set in
-  if  card < terseness then
+  if  card <= terseness then
     pp_adjset set
   else
   (Format.printf "{";
@@ -221,7 +221,20 @@ let pp_adjset_terse set =
   Format.printf " ... } ")
 ;;
 
+let pp_prio (PGame.Priority (value, pplayer)) = match pplayer with
+  | PGame.Even -> Format.printf " (Even %d) " value
+  | PGame.Odd  -> Format.printf " (Odd  %d) " value
+;;
+
+let pp_node (PGame.Label (prio, _rand )) =
+  pp_prio prio
+;;
+
 #install_printer pp_parity_game_terse;;
 #install_printer pp_adjset_terse;;
+#install_printer pp_prio;;
+#install_printer pp_node;;
 
+#trace PGame.assignregion;;
+#trace PGame.AdjSet.is_empty;;
 #trace PGame.zielonka;;
