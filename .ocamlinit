@@ -237,5 +237,6 @@ let pp_node (PGame.Label (prio, _rand )) =
 
 #trace PGame.assignregion;;
 #trace PGame.AdjSet.is_empty;;
+#trace PGame.AdjSet.inter;;
 #trace PGame.zielonka;;
 #trace PGame.invert;;

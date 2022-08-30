@@ -239,7 +239,7 @@ module PGame = struct
         let invwinsets     = zielonka invsubgame in
         let overlap        = (AdjSet.inter i_attractor oppatrractor) in
         let (w00, w11)     = assignregion (prio, overlap, invwinsets) in
-          (w0, AdjSet.union w00 w11)
+          ((AdjSet.union w0 w00), w11)
   ;;
 
 end
