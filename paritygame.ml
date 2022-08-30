@@ -197,7 +197,7 @@ module PGame = struct
   ;;
 
   let assignregion (fprio, attr, (wi, wii)) =
-    (if AdjSet.subset wi attr then
+    (if AdjSet.subset attr wi then
       match omega fprio with
       | Even -> ((AdjSet.union wi attr), wii)
       | Odd ->  (wii, (AdjSet.union wi attr))
@@ -208,7 +208,10 @@ module PGame = struct
     )
   ;;
 
-  (*let empty_opponent node attractor (w0, w1)*)
+  let oppose prio (we, wo) =
+    match omega prio with
+    | Even -> wo
+    | Odd  -> we
 
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
@@ -226,15 +229,17 @@ module PGame = struct
         let subgame        = carve game i_attractor in
         let winsets        = zielonka subgame in
         let (w0, w1)       = assignregion (prio, i_attractor, winsets) in
-          if AdjSet.is_empty (AdjSet.diff i_attractor w1) then
+        let opposition     = (oppose prio (w0, w1)) in
+          if AdjSet.is_empty opposition then
             (w0, w1)
           else
         let ii             = invert i in
-        let oppatrractor   = buildattractor node ii ?set:(Some w1) game in
+        let oppatrractor   = buildattractor node ii ?set:(Some opposition) game in
         let invsubgame     = carve game oppatrractor in
         let invwinsets     = zielonka invsubgame in
-        let (w00, w11)     = assignregion (prio, oppatrractor, invwinsets) in
-            (w00, w11)
+        let overlap        = (AdjSet.inter i_attractor oppatrractor) in
+        let (w00, w11)     = assignregion (prio, overlap, invwinsets) in
+          (w0, AdjSet.union w00 w11)
   ;;
 
 end
