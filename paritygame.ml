@@ -26,8 +26,6 @@ module PGame = struct
   type identity =
     | Label of (priority * RAND.t)
 
-  let cmpplayers l r = if l = r then 0 else -2
-
   let cmprands  (Label(_, l)) (Label(_, r)) = Int.compare (RAND.to_int_exn l)  (RAND.to_int_exn r)
 
   let cmpprio (Priority lp) (Priority rp) = (compare lp rp)
@@ -166,7 +164,7 @@ module PGame = struct
      List.map (asplayerprio game) @@ AdjSet.elements
      @@ ...
    *)
-  let buildattractor node player ?set:(startset=(AdjSet.empty)) game =
+  let buildattractor node player ?set:(startset=AdjSet.empty) game =
     let istart = AdjSet.add node startset in attractor player game istart istart
   ;;
 
@@ -196,22 +194,35 @@ module PGame = struct
     @@ Nodes.filter (fun (Label ((Priority (p, _)), _)) _  -> (p = l)) game
   ;;
 
-  let assignregion (fprio, attr, (wi, wii)) =
-    (if AdjSet.subset attr wi then
-      match omega fprio with
-      | Even -> ((AdjSet.union wi attr), wii)
-      | Odd ->  (wii, (AdjSet.union wi attr))
-      else
-      match omega fprio with
-      | Even -> ((AdjSet.union wii attr), wi)
-      | Odd ->  (wi, (AdjSet.union wii attr))
-    )
+  let collective game =
+    Nodes.fold
+      (fun node _ neighbours ->
+        AdjSet.add node neighbours)
+    game AdjSet.empty
+
+  let assignregion (attr, (wi, wii), neighbours) =
+    if AdjSet.is_empty (AdjSet.inter (AdjSet.union wi attr) neighbours) then
+      ((AdjSet.union attr wi), wii)
+    else
+      (wi ,(AdjSet.union attr wii))
   ;;
 
-  let oppose prio (we, wo) =
-    match omega prio with
-    | Even -> wo
-    | Odd  -> we
+  let opposer node (we, wo) =
+    if AdjSet.mem node we then
+      wo
+    else we
+  ;;
+
+  let benefactor node (we, wo) =
+    if AdjSet.mem node we then
+      we
+    else wo
+  ;;
+
+  let void (attr, node, (w0, w1), region) =
+    let opposition = (opposer node (w0, w1)) in
+      not (AdjSet.is_empty (AdjSet.inter (AdjSet.union opposition attr) region))
+  ;;
 
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
@@ -228,18 +239,17 @@ module PGame = struct
         let i_attractor    = buildattractor node i ?set:(Some u) game in
         let subgame        = carve game i_attractor in
         let winsets        = zielonka subgame in
-        let (w0, w1)       = assignregion (prio, i_attractor, winsets) in
-        let opposition     = (oppose prio (w0, w1)) in
-          if AdjSet.is_empty opposition then
-            (w0, w1)
+        let (w', w'')      = assignregion (i_attractor, winsets, (collective subgame)) in
+          if void (i_attractor, node, (w', w''), (collective game)) then
+            (w', w'')
           else
+        let () = Format.printf("Inverting \n") in
         let ii             = invert i in
-        let oppatrractor   = buildattractor node ii ?set:(Some opposition) game in
+        let oppatrractor   = buildattractor node ii ?set:(Some (opposer node (w',w''))) game in
         let invsubgame     = carve game oppatrractor in
         let invwinsets     = zielonka invsubgame in
-        let overlap        = (AdjSet.inter i_attractor oppatrractor) in
-        let (w00, w11)     = assignregion (prio, overlap, invwinsets) in
-          ((AdjSet.union w0 w00), w11)
+        let (w0, w1)       = assignregion (oppatrractor, invwinsets, (collective invsubgame)) in
+          (w0, w1)
   ;;
 
 end

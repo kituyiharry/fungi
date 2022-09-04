@@ -236,6 +236,5 @@ let pp_node (PGame.Label (prio, _rand )) =
 #install_printer pp_node;;
 
 #trace PGame.assignregion;;
-#trace PGame.AdjSet.is_empty;;
 #trace PGame.zielonka;;
-#trace PGame.invert;;
+#trace PGame.void;;

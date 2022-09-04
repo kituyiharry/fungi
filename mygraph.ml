@@ -87,6 +87,12 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
       ) (AdjSet.union incoming outgoing) []
   ;;
 
+  (* Get adjacency list of a node *)
+  let adj_set_of node nodeMap =
+    let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
+      (AdjSet.union incoming outgoing)
+  ;;
+
   (* Print the graph as an adjacency list *)
   (* [
       ....
