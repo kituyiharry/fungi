@@ -199,9 +199,17 @@ module PGame = struct
       (fun node _ neighbours ->
         AdjSet.add node neighbours)
     game AdjSet.empty
+  ;;
 
   let assignregion (attr, (wi, wii), neighbours) =
     if AdjSet.is_empty (AdjSet.inter (AdjSet.union wi attr) neighbours) then
+      ((AdjSet.union attr wi), wii)
+    else
+      (wi ,(AdjSet.union attr wii))
+  ;;
+
+  let assignregion2 (attr, (wi, wii), _region) =
+    if AdjSet.is_empty (AdjSet.inter wii attr) then
       ((AdjSet.union attr wi), wii)
     else
       (wi ,(AdjSet.union attr wii))
@@ -221,7 +229,11 @@ module PGame = struct
 
   let void (attr, node, (w0, w1), region) =
     let opposition = (opposer node (w0, w1)) in
-      not (AdjSet.is_empty (AdjSet.inter (AdjSet.union opposition attr) region))
+      (AdjSet.is_empty (AdjSet.inter (AdjSet.union opposition attr) region))
+  ;;
+
+  let voidintersection (attr, (w0, w1)) =
+    (AdjSet.is_empty (AdjSet.inter w0 attr)) && (AdjSet.is_empty (AdjSet.inter w1 attr))
   ;;
 
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
@@ -235,20 +247,18 @@ module PGame = struct
       else
         let node, prio     = max_priority_node game in
         let u              = cluster node game in
-        let i              = omega prio in
-        let i_attractor    = buildattractor node i ?set:(Some u) game in
-        let subgame        = carve game i_attractor in
+        let i_attr         = buildattractor node (omega prio) ?set:(Some u) game in
+        let subgame        = carve game i_attr in
         let winsets        = zielonka subgame in
-        let (w', w'')      = assignregion (i_attractor, winsets, (collective subgame)) in
-          if void (i_attractor, node, (w', w''), (collective game)) then
+        let (w', w'')      = assignregion (i_attr, winsets, (collective subgame)) in
+          (*if AdjSet.is_empty (opposer node (w', w'')) then*)
+          if voidintersection (i_attr, winsets) then
             (w', w'')
           else
-        let () = Format.printf("Inverting \n") in
-        let ii             = invert i in
-        let oppatrractor   = buildattractor node ii ?set:(Some (opposer node (w',w''))) game in
-        let invsubgame     = carve game oppatrractor in
+        let opp_atrr       = buildattractor node (invert (omega prio)) ?set:(Some (opposer node (w',w''))) game in
+        let invsubgame     = carve game opp_atrr in
         let invwinsets     = zielonka invsubgame in
-        let (w0, w1)       = assignregion (oppatrractor, invwinsets, (collective invsubgame)) in
+        let (w0, w1)       = assignregion (opp_atrr, invwinsets, (collective invsubgame)) in
           (w0, w1)
   ;;
 

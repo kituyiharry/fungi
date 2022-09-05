@@ -158,7 +158,7 @@ let asplayerprio game node =
 
 let print_player_prio (_, (PGame.Priority (value, pplayer)))  = match pplayer with
 | PGame.Even -> Format.printf " (Even %d) " value
-| PGame.Odd  -> Format.printf " (Odd  %d) " value
+| PGame.Odd  -> Format.printf " (Odd %d) " value
 ;;
 
 let cherrypick = function
@@ -236,5 +236,7 @@ let pp_node (PGame.Label (prio, _rand )) =
 #install_printer pp_node;;
 
 #trace PGame.assignregion;;
+#trace PGame.assignregion2;;
+#trace PGame.buildattractor;;
 #trace PGame.zielonka;;
 #trace PGame.void;;
