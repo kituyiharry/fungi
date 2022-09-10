@@ -230,13 +230,11 @@ let pp_node (PGame.Label (prio, _rand )) =
   pp_prio prio
 ;;
 
-#install_printer pp_parity_game_terse;;
-#install_printer pp_adjset_terse;;
+#install_printer pp_parity_game;;
+#install_printer pp_adjset;;
 #install_printer pp_prio;;
 #install_printer pp_node;;
 
-#trace PGame.assignregion;;
-#trace PGame.assignregion2;;
-#trace PGame.buildattractor;;
+#trace PGame.opposer;;
+#trace PGame.benefactor;;
 #trace PGame.zielonka;;
-#trace PGame.void;;

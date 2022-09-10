@@ -69,10 +69,6 @@ module PGame = struct
      Add an Edge between nodes *)
   let add_edge = Graph.add_edge;;
 
-  (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
-    Largest priority node in the game *)
-  let max_priority_node = Graph.max_elt
-
   (** [ incomingof identity (PGame.t) AdjSet.t]
   Incoming set of nodes *)
   let incomingof node game = let (inc, _, _) = Nodes.find node game in inc
@@ -194,72 +190,72 @@ module PGame = struct
     @@ Nodes.filter (fun (Label ((Priority (p, _)), _)) _  -> (p = l)) game
   ;;
 
-  let collective game =
+  let collective plyr game =
     Nodes.fold
       (fun node _ neighbours ->
         AdjSet.add node neighbours)
-    game AdjSet.empty
+    (Nodes.filter (fun (Label (p, _)) _ ->  (omega p) = plyr) game)
+    AdjSet.empty
   ;;
 
-  let assignregion (attr, (wi, wii), neighbours) =
-    if AdjSet.is_empty (AdjSet.inter (AdjSet.union wi attr) neighbours) then
-      ((AdjSet.union attr wi), wii)
-    else
-      (wi ,(AdjSet.union attr wii))
+  (* 1-i behaviour *)
+  let opposer (plyr, (wf, wo)) =
+    match (AdjSet.max_elt_opt wf, AdjSet.max_elt_opt wo) with
+    | Some Label (wfprio, _), _ ->
+        if omega wfprio == plyr then
+          wo
+        else
+          wf
+    | _, Some Label (woprio, _) ->
+        if omega woprio == plyr then
+          wf
+        else
+          wo
+    | _ -> AdjSet.empty
   ;;
 
-  let assignregion2 (attr, (wi, wii), _region) =
-    if AdjSet.is_empty (AdjSet.inter wii attr) then
-      ((AdjSet.union attr wi), wii)
-    else
-      (wi ,(AdjSet.union attr wii))
+  (* i behaviour *)
+  let benefactor (plyr, (wf, wo)) =
+    match (AdjSet.max_elt_opt wf, AdjSet.max_elt_opt wo) with
+    | Some Label (wfprio, _), _ ->
+        if omega wfprio = plyr then
+          wf
+        else
+          wo
+    | _, Some Label (woprio, _) ->
+        if omega woprio = plyr then
+          wo
+        else
+          wf
+    | _ -> AdjSet.empty
   ;;
 
-  let opposer node (we, wo) =
-    if AdjSet.mem node we then
-      wo
-    else we
-  ;;
-
-  let benefactor node (we, wo) =
-    if AdjSet.mem node we then
-      we
-    else wo
-  ;;
-
-  let void (attr, node, (w0, w1), region) =
-    let opposition = (opposer node (w0, w1)) in
-      (AdjSet.is_empty (AdjSet.inter (AdjSet.union opposition attr) region))
-  ;;
-
-  let voidintersection (attr, (w0, w1)) =
-    (AdjSet.is_empty (AdjSet.inter w0 attr)) && (AdjSet.is_empty (AdjSet.inter w1 attr))
-  ;;
+  (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
+    Largest priority node in the game *)
+  let max_priority_node = Graph.max_elt
 
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
   *)
-  let rec zielonka :(AdjSet.t * AdjSet.t * priority ) Nodes.t -> (AdjSet.t * AdjSet.t) =
+  let rec zielonka :(AdjSet.t * AdjSet.t * priority) Nodes.t -> (AdjSet.t * AdjSet.t) =
     fun game ->
       if Nodes.is_empty game then
         (AdjSet.empty, AdjSet.empty)
       else
         let node, prio     = max_priority_node game in
         let u              = cluster node game in
-        let i_attr         = buildattractor node (omega prio) ?set:(Some u) game in
-        let subgame        = carve game i_attr in
-        let winsets        = zielonka subgame in
-        let (w', w'')      = assignregion (i_attr, winsets, (collective subgame)) in
-          (*if AdjSet.is_empty (opposer node (w', w'')) then*)
-          if voidintersection (i_attr, winsets) then
-            (w', w'')
+        let i              = omega prio in
+        let a              = buildattractor node i ?set:(Some u) game in
+        let winsets        = zielonka (carve game a) in
+        let w'_1           = opposer (i, winsets) in
+          if AdjSet.is_empty w'_1 then
+            (collective i game, w'_1)
           else
-        let opp_atrr       = buildattractor node (invert (omega prio)) ?set:(Some (opposer node (w',w''))) game in
-        let invsubgame     = carve game opp_atrr in
-        let invwinsets     = zielonka invsubgame in
-        let (w0, w1)       = assignregion (opp_atrr, invwinsets, (collective invsubgame)) in
-          (w0, w1)
+        let b              = buildattractor node (invert i) ?set:(Some w'_1) game in
+        let (w''_0, w''_1) = zielonka (carve game b) in
+        let w'''_1         = AdjSet.union b @@ opposer (i, (w''_0, w''_1)) in
+         (w''_0, w'''_1)
   ;;
 
 end
