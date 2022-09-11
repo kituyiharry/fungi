@@ -190,12 +190,13 @@ module PGame = struct
     @@ Nodes.filter (fun (Label ((Priority (p, _)), _)) _  -> (p = l)) game
   ;;
 
-  let collective plyr game =
-    Nodes.fold
+  let collective: (player * (AdjSet.t * AdjSet.t * priority) Nodes.t) ->
+    AdjSet.t = fun (plyr, game) ->
+      Nodes.fold
       (fun node _ neighbours ->
         AdjSet.add node neighbours)
-    (Nodes.filter (fun (Label (p, _)) _ ->  (omega p) = plyr) game)
-    AdjSet.empty
+      (Nodes.filter (fun (Label (p, _)) _ ->  (omega p) = plyr) game)
+      AdjSet.empty
   ;;
 
   (* 1-i behaviour *)
@@ -211,7 +212,7 @@ module PGame = struct
           wf
         else
           wo
-    | _ -> AdjSet.empty
+    | _ -> wf
   ;;
 
   (* i behaviour *)
@@ -227,7 +228,7 @@ module PGame = struct
           wo
         else
           wf
-    | _ -> AdjSet.empty
+    | _ -> wo
   ;;
 
   (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
@@ -250,12 +251,13 @@ module PGame = struct
         let winsets        = zielonka (carve game a) in
         let w'_1           = opposer (i, winsets) in
           if AdjSet.is_empty w'_1 then
-            (collective i game, w'_1)
+            (collective (i, game), w'_1)
           else
         let b              = buildattractor node (invert i) ?set:(Some w'_1) game in
-        let (w''_0, w''_1) = zielonka (carve game b) in
-        let w'''_1         = AdjSet.union b @@ opposer (i, (w''_0, w''_1)) in
-         (w''_0, w'''_1)
+        let invwinset      = zielonka (carve game b) in
+        let w'''_0         = benefactor (i, invwinset) in
+        let w'''_1         = AdjSet.union b @@ opposer (i, invwinset) in
+         (w'''_0, w'''_1)
   ;;
 
 end

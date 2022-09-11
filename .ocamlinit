@@ -237,4 +237,5 @@ let pp_node (PGame.Label (prio, _rand )) =
 
 #trace PGame.opposer;;
 #trace PGame.benefactor;;
+#trace PGame.collective;;
 #trace PGame.zielonka;;
