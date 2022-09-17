@@ -235,7 +235,5 @@ let pp_node (PGame.Label (prio, _rand )) =
 #install_printer pp_prio;;
 #install_printer pp_node;;
 
-#trace PGame.opposer;;
-#trace PGame.benefactor;;
-#trace PGame.collective;;
 #trace PGame.zielonka;;
+#trace PGame.assign;;

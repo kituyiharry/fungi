@@ -183,81 +183,56 @@ module PGame = struct
   ;;
 
   (* Cluster max priority nodes *)
-  let cluster (Label ((Priority (l, _)),_)) game =
+  let cluster (Label ((Priority (l, pl)),_)) game =
     AdjSet.of_list
     @@ List.map (fun (key, _) -> key)
     @@ Nodes.bindings
-    @@ Nodes.filter (fun (Label ((Priority (p, _)), _)) _  -> (p = l)) game
+    @@ Nodes.filter (fun (Label ((Priority (r, pr)), _)) _  -> ((r = l) && (pl = pr))) game
   ;;
 
-  let collective: (player * (AdjSet.t * AdjSet.t * priority) Nodes.t) ->
-    AdjSet.t = fun (plyr, game) ->
-      Nodes.fold
-      (fun node _ neighbours ->
-        AdjSet.add node neighbours)
-      (Nodes.filter (fun (Label (p, _)) _ ->  (omega p) = plyr) game)
+  let collective: ((AdjSet.t * AdjSet.t * priority) Nodes.t) ->
+    AdjSet.t = fun (game) ->
+      (Nodes.fold
+        (fun node _ neighbours ->
+          AdjSet.add node neighbours)
+        game)
       AdjSet.empty
-  ;;
-
-  (* 1-i behaviour *)
-  let opposer (plyr, (wf, wo)) =
-    match (AdjSet.max_elt_opt wf, AdjSet.max_elt_opt wo) with
-    | Some Label (wfprio, _), _ ->
-        if omega wfprio == plyr then
-          wo
-        else
-          wf
-    | _, Some Label (woprio, _) ->
-        if omega woprio == plyr then
-          wf
-        else
-          wo
-    | _ -> wf
-  ;;
-
-  (* i behaviour *)
-  let benefactor (plyr, (wf, wo)) =
-    match (AdjSet.max_elt_opt wf, AdjSet.max_elt_opt wo) with
-    | Some Label (wfprio, _), _ ->
-        if omega wfprio = plyr then
-          wf
-        else
-          wo
-    | _, Some Label (woprio, _) ->
-        if omega woprio = plyr then
-          wo
-        else
-          wf
-    | _ -> wo
   ;;
 
   (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
     Largest priority node in the game *)
   let max_priority_node = Graph.max_elt
 
+  let assign (maxnode, maxnodeattr, fullgame, (winset0, winset1)) =
+    let (_, out, _ ) = Nodes.find maxnode fullgame in
+      if AdjSet.subset out winset0 then
+        (AdjSet.union maxnodeattr winset0, winset1, AdjSet.empty)
+      else if AdjSet.subset out winset1 then
+        (AdjSet.union maxnodeattr winset1, winset0, AdjSet.empty)
+      else
+          (winset0, winset1, maxnodeattr)
+  ;;
+
+
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
   *)
-  let rec zielonka :(AdjSet.t * AdjSet.t * priority) Nodes.t -> (AdjSet.t * AdjSet.t) =
+  let rec zielonka:(AdjSet.t * AdjSet.t * priority) Nodes.t -> (AdjSet.t * AdjSet.t) =
     fun game ->
-      if Nodes.is_empty game then
-        (AdjSet.empty, AdjSet.empty)
+    if Nodes.is_empty game then
+      (AdjSet.empty, AdjSet.empty)
+    else
+    let node, prio = max_priority_node game in
+    let u          = cluster node game in
+    let i          = omega prio in
+    let a          = buildattractor node i ?set:(Some u) game in
+    let subgame    = carve game a in
+    let (w', w'', w1_i)  = assign (node, a, game, (zielonka subgame)) in
+      if AdjSet.is_empty w1_i then
+        (w', w'')
       else
-        let node, prio     = max_priority_node game in
-        let u              = cluster node game in
-        let i              = omega prio in
-        let a              = buildattractor node i ?set:(Some u) game in
-        let winsets        = zielonka (carve game a) in
-        let w'_1           = opposer (i, winsets) in
-          if AdjSet.is_empty w'_1 then
-            (collective (i, game), w'_1)
-          else
-        let b              = buildattractor node (invert i) ?set:(Some w'_1) game in
-        let invwinset      = zielonka (carve game b) in
-        let w'''_0         = benefactor (i, invwinset) in
-        let w'''_1         = AdjSet.union b @@ opposer (i, invwinset) in
-         (w'''_0, w'''_1)
+        (w', w1_i)
   ;;
 
 end
