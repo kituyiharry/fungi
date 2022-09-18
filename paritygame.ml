@@ -203,16 +203,22 @@ module PGame = struct
     Largest priority node in the game *)
   let max_priority_node = Graph.max_elt
 
-  let assign (maxnode, maxnodeattr, fullgame, (winset0, winset1)) =
+  let assign:
+    (identity * player * AdjSet.t *  (AdjSet.t * AdjSet.t * priority) Nodes.t * (AdjSet.t * AdjSet.t)) ->
+      (AdjSet.t * AdjSet.t * AdjSet.t) =
+  fun (maxnode, _iattr, maxnodeattr, fullgame, (winset0, winset1)) ->
     let (_, out, _ ) = Nodes.find maxnode fullgame in
       if AdjSet.subset out winset0 then
-        (AdjSet.union maxnodeattr winset0, winset1, AdjSet.empty)
+        (AdjSet.union maxnodeattr winset0, winset1, winset1)
       else if AdjSet.subset out winset1 then
-        (AdjSet.union maxnodeattr winset1, winset0, AdjSet.empty)
+        (winset0, AdjSet.union maxnodeattr winset1, winset0)
       else
-          (winset0, winset1, maxnodeattr)
+        (winset0, winset1, maxnodeattr)
   ;;
 
+  let anynonempty (w0, w1) =
+    if AdjSet.is_empty w0 then w1 else w0
+  ;;
 
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
@@ -228,11 +234,11 @@ module PGame = struct
     let i          = omega prio in
     let a          = buildattractor node i ?set:(Some u) game in
     let subgame    = carve game a in
-    let (w', w'', w1_i)  = assign (node, a, game, (zielonka subgame)) in
+    let (w', w'', w1_i) = assign (node, i, a, game, (zielonka subgame)) in
       if AdjSet.is_empty w1_i then
         (w', w'')
       else
-        (w', w1_i)
+        (anynonempty (w', w''), w1_i)
   ;;
 
 end

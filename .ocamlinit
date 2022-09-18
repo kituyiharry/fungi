@@ -102,8 +102,16 @@ let (l_9, p)  = PGame.add_node  PGame.Odd  9  p;;
 let (l_11,p)  = PGame.add_node  PGame.Odd  11 p;;
 let (l_13,p)  = PGame.add_node  PGame.Odd  13 p;;
 let (l_15,p)  = PGame.add_node  PGame.Odd  15 p;;
-(*let (l_31,p)  = PGame.add_node  PGame.Odd  31 p;;*)
-(*let (e_31,p)  = PGame.add_node  PGame.Even 31 p;;*)
+
+(** Effect of opposer-controlled but supportive priority *)
+
+(*let (l_16,p)  = PGame.add_node  PGame.Odd  16 p;;*)
+(*let (l_31,p)  = PGame.add_node  PGame.Even 31 p;;*)
+
+(** Effect of  Disjointness  - Graph not being fully connected *)
+
+(*let (l_99,p)  = PGame.add_node  PGame.Odd  9 p;;*)
+
 (**
   A non-empty Parity game will always have a Even labeled node 2 or
   an Odd labeled node 3
@@ -136,13 +144,19 @@ let p = PGame.add_edge l_11 l_8   p;;
 let p = PGame.add_edge l_13 l_15  p;;
 let p = PGame.add_edge l_15 l_13  p;;
 let p = PGame.add_edge l_15 l_13  p;;
+
+(** Effect of opposer-controlled but supportive priority *)
+
+(*let p = PGame.add_edge l_16 l_2   p;;*)
+(*let p = PGame.add_edge l_2 l_16   p;;*)
 (*let p = PGame.add_edge l_15 l_31  p;;*)
 (*let p = PGame.add_edge l_31 l_15  p;;*)
-(*let p = PGame.add_edge e_31 l_15  p;;*)
-(*let p = PGame.add_edge e_31 l_31  p;;*)
-(*let p = PGame.add_edge l_31 e_31  p;;*)
-(*let p = PGame.add_edge e_31 l_2   p;;*)
+(*let p = PGame.add_edge l_31 l_16  p;;*)
+(*let p = PGame.add_edge l_16 l_31  p;;*)
 
+(** Effect of  Disjointness *)
+
+(*let p = PGame.add_edge l_99 l_99  p;;*)
 
 (* Convenience functions for printing in the REPl *)
 (** [asplayerprio PGame.t (identity * priority)]
@@ -166,7 +180,7 @@ let cherrypick = function
 ;;
 
 let pp_parity_game:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit = fun game ->
-  Format.printf "{";
+  Format.printf "G: {";
    List.iter (print_player_prio)
    (
     PGame.Graph.elt_bindings game
@@ -175,7 +189,7 @@ let pp_parity_game:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Node
 ;;
 
 let pp_adjset set =
-  Format.printf "{";
+  Format.printf "A: {";
   if PGame.AdjSet.is_empty set then
   Format.printf " ∅ "
       else
@@ -189,12 +203,13 @@ let pp_adjset set =
 let terseness = 10
 
 
-let pp_parity_game_terse:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit = fun game ->
+let pp_parity_game_terse:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit =
+  fun game ->
   let card = PGame.Nodes.cardinal game in
   if  card <= terseness then
     pp_parity_game game
   else
-    (Format.printf "{";
+    (Format.printf "G: {";
     List.iter (print_player_prio)
     (
       Utils.take terseness
@@ -208,7 +223,7 @@ let pp_adjset_terse set =
   if  card <= terseness then
     pp_adjset set
   else
-  (Format.printf "{";
+  (Format.printf "A: {";
   if PGame.AdjSet.is_empty set then
   Format.printf " ∅ "
       else
