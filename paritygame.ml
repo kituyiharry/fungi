@@ -267,7 +267,11 @@ module PGame = struct
     let i          = omega prio in
     let a          = buildattractor node i ?set:(Some u) game in
     let subgame    = carve game a in
-    let (w', w'', w1_i) = assign (node, i, a, game, (zielonka2 subgame)) in
+    let (w0, w1)   = (zielonka2 subgame) in
+    let (wi, w_1_i) = match i with
+      | Even -> (w0, w1)
+      | Odd  -> (w1, w0) in
+    let (w', w'', w1_i) = assign (node, i, a, game, (wi, w_1_i)) in
       if AdjSet.is_empty w1_i then
         (w', w'')
       else
