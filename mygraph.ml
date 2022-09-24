@@ -53,6 +53,17 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
           NodeMap.add nodeTo ((AdjSet.add nodeFrom toIncoming), toOutgoing, label) finMap
   ;;
 
+  let rec add_all nodeFrom nodeToList nodeMap = match nodeToList with
+    | [] -> nodeMap
+    | nodeTo :: rest -> add_edge nodeFrom nodeTo (add_all nodeFrom rest nodeMap)
+  ;;
+
+  let rec from_list_description adjList nodeMap = match adjList with
+    | [] -> nodeMap
+    | (nodeFrom, nodeJoinList) :: rest ->
+        add_all nodeFrom nodeJoinList (from_list_description rest nodeMap)
+  ;;
+
   (*
    * Removes a node from the graph
    *

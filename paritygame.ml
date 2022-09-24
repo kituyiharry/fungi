@@ -69,6 +69,10 @@ module PGame = struct
      Add an Edge between nodes *)
   let add_edge = Graph.add_edge;;
 
+  let add_edge_all = Graph.add_all;;
+
+  let use_adjlist_desc = Graph.from_list_description;;
+
   (** [ incomingof identity (PGame.t) AdjSet.t]
   Incoming set of nodes *)
   let incomingof node game = let (inc, _, _) = Nodes.find node game in inc
@@ -206,7 +210,7 @@ module PGame = struct
   let assign:
     (identity * player * AdjSet.t *  (AdjSet.t * AdjSet.t * priority) Nodes.t * (AdjSet.t * AdjSet.t)) ->
       (AdjSet.t * AdjSet.t * AdjSet.t) =
-  fun (maxnode, _iattr, maxnodeattr, fullgame, (winset0, winset1)) ->
+  fun (maxnode, _iplyr, maxnodeattr, fullgame, (winset0, winset1)) ->
     let (_, out, _ ) = Nodes.find maxnode fullgame in
       if AdjSet.subset out winset0 then
         (AdjSet.union maxnodeattr winset0, winset1, winset1)
@@ -234,7 +238,36 @@ module PGame = struct
     let i          = omega prio in
     let a          = buildattractor node i ?set:(Some u) game in
     let subgame    = carve game a in
-    let (w', w'', w1_i) = assign (node, i, a, game, (zielonka subgame)) in
+    let (w_0, w_1) = zielonka subgame in
+    let (w_i, w_1_i) = match i with
+      Even -> (w_0, w_1)
+    | Odd  -> (w_1, w_0) in
+    if AdjSet.is_empty w_1_i then
+        (w_i, AdjSet.empty)
+      else
+    let b          = buildattractor node (invert i) ?set:(Some w_1_i) game in
+    let subgame    = carve game b in
+    let (w_0, w_1) = zielonka subgame in
+    match invert  i with
+      Even -> (AdjSet.union b w_0, w_1)
+    | Odd  -> (AdjSet.union b w_1, w_0)
+  ;;
+
+  (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
+    Recursive algorithm which produces winning sets of the game
+    https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
+  *)
+  let rec zielonka2:(AdjSet.t * AdjSet.t * priority) Nodes.t -> (AdjSet.t * AdjSet.t) =
+    fun game ->
+    if Nodes.is_empty game then
+      (AdjSet.empty, AdjSet.empty)
+    else
+    let node, prio = max_priority_node game in
+    let u          = cluster node game in
+    let i          = omega prio in
+    let a          = buildattractor node i ?set:(Some u) game in
+    let subgame    = carve game a in
+    let (w', w'', w1_i) = assign (node, i, a, game, (zielonka2 subgame)) in
       if AdjSet.is_empty w1_i then
         (w', w'')
       else

@@ -116,34 +116,46 @@ let (l_15,p)  = PGame.add_node  PGame.Odd  15 p;;
   A non-empty Parity game will always have a Even labeled node 2 or
   an Odd labeled node 3
 **)
-let p = PGame.add_edge l_2  l_4   p;; (* 2 connects to even and 1 attractive odd *)
-let p = PGame.add_edge l_2  l_11  p;;
-let p = PGame.add_edge l_4  l_2   p;;
-let p = PGame.add_edge l_4  l_8   p;;
-let p = PGame.add_edge l_4  l_6   p;; (* 6 has 1 incoming odd node *)
-let p = PGame.add_edge l_6  l_3   p;; (* 3 connects only to even nodes *)
-let p = PGame.add_edge l_6  l_5   p;; (* 6 connects only to odd nodes *)
-let p = PGame.add_edge l_6  l_7   p;;
-let p = PGame.add_edge l_6  l_9   p;;
-let p = PGame.add_edge l_8  l_7   p;;
-let p = PGame.add_edge l_8  l_5   p;;
-let p = PGame.add_edge l_8  l_2   p;;
-let p = PGame.add_edge l_10 l_13  p;;
-let p = PGame.add_edge l_10 l_15  p;;
-let p = PGame.add_edge l_3  l_2   p;;
-let p = PGame.add_edge l_3  l_4   p;;
-let p = PGame.add_edge l_5  l_5   p;; (* 5 connects only to odd nodes *)
-let p = PGame.add_edge l_5  l_7   p;;
-let p = PGame.add_edge l_5  l_9   p;;
-let p = PGame.add_edge l_7  l_7   p;; (* 7 self references *)
-let p = PGame.add_edge l_7  l_10  p;;
-let p = PGame.add_edge l_9  l_5   p;;
-let p = PGame.add_edge l_9  l_10  p;;
-let p = PGame.add_edge l_9  l_3   p;;
-let p = PGame.add_edge l_11 l_8   p;;
-let p = PGame.add_edge l_13 l_15  p;;
-let p = PGame.add_edge l_15 l_13  p;;
-let p = PGame.add_edge l_15 l_13  p;;
+
+(**
+parity 15;
+2  2 0 4, 11 "2";
+4  4 0 2, 8, 6 "4";
+6  6 0 3, 5, 7, 9 "6";
+8  8 0 7, 5, 2 "8";
+10 10 0 13, 15 "10";
+3  3 1 2, 4 "3";
+5  5 1 5, 7, 9 "5";
+7  7 1 10, 7 "7";
+9  9 1 3, 10, 5 "9";
+11 11 1 8 "11";
+13 13 1 15 "13";
+15 15 1 13 "15";
+
+-- Ommited for testing other stuff
+16 16 1 2,31 "16";
+31 31 0 15,16 "31";
+99 99 1 99 "99";
+
+ *)
+
+let p_adjlist =
+  [
+    (l_2,  [l_4;  l_11]);
+    (l_4,  [l_2;  l_8;  l_6]);
+    (l_6,  [l_3;  l_5;  l_7; l_9]);
+    (l_8,  [l_7;  l_5;  l_2]);
+    (l_10, [l_13; l_15]);
+    (l_3,  [l_2;  l_4]);
+    (l_5,  [l_5;  l_7;  l_9]);
+    (l_7,  [l_7;  l_10]);
+    (l_9,  [l_3;  l_5;  l_10]);
+    (l_11, [l_8]);
+    (l_13, [l_15]);
+    (l_15, [l_13])
+]
+
+let p = PGame.use_adjlist_desc p_adjlist p;;
 
 (** Effect of opposer-controlled but supportive priority *)
 
@@ -154,20 +166,66 @@ let p = PGame.add_edge l_15 l_13  p;;
 (*let p = PGame.add_edge l_31 l_16  p;;*)
 (*let p = PGame.add_edge l_16 l_31  p;;*)
 
+(** Leading into the highest value of the opposition *)
+(*let p = PGame.add_edge l_11 l_31  p;;*)
+
 (** Effect of  Disjointness *)
 
 (*let p = PGame.add_edge l_99 l_99  p;;*)
 
+
+(**
+
+parity 10;
+0 6 0 2,3,5 "0";
+1 10 0 3,4,8 "1";
+2 6 1 0,5,7 "2";
+3 2 0 0,3,9 "3";
+4 7 0 2,5,7 "4";
+5 0 0 0,4,8 "5";
+6 7 0 0,5,8 "6";
+7 9 0 1,3,9 "7";
+8 9 0 4,6,9 "8";
+9 2 0 2,4,8 "9";
+
+ *)
+
+let q =  PGame.empty
+
+let (q_0, q)  = PGame.add_node   PGame.Even 6  q;;
+let (q_1, q)  = PGame.add_node   PGame.Even 10 q;;
+let (q_2, q)  = PGame.add_node   PGame.Odd  6  q;;
+let (q_3, q)  = PGame.add_node   PGame.Even 2  q;;
+let (q_4, q)  = PGame.add_node   PGame.Even 7  q;;
+let (q_5, q)  = PGame.add_node   PGame.Even 0  q;;
+let (q_6, q)  = PGame.add_node   PGame.Even 7  q;;
+let (q_7, q)  = PGame.add_node   PGame.Even 9  q;;
+let (q_8, q)  = PGame.add_node   PGame.Even 9  q;;
+let (q_9, q)  = PGame.add_node   PGame.Even 2  q;;
+
+let q_adjlist =
+  [
+    (q_0, [q_2; q_3; q_5;]);
+    (q_1, [q_3; q_4; q_8;]);
+    (q_2, [q_0; q_5; q_7;]);
+    (q_3, [q_0; q_3; q_9;]);
+    (q_4, [q_2; q_5; q_7;]);
+    (q_5, [q_0; q_4; q_8;]);
+    (q_6, [q_0; q_5; q_8;]);
+    (q_7, [q_1; q_3; q_9;]);
+    (q_8, [q_4; q_6; q_9;]);
+    (q_9, [q_2; q_4; q_8;])
+  ]
+
+let q = PGame.use_adjlist_desc q_adjlist q;;
+
+
+
 (* Convenience functions for printing in the REPl *)
 (** [asplayerprio PGame.t (identity * priority)]
 helper to show parity game as a graph without the random generated ids *)
-let asplayerprio game node =
-  let
-    (_,_, value) = PGame.Graph.NodeMap.find node game
-      and
-    PGame.Label (PGame.Priority (_, player) , _rand) = node
-  in
-    (player, value)
+let asplayerprio (PGame.Label (PGame.Priority (value, player) as prio , _rand)) =
+    (player, prio)
 ;;
 
 let print_player_prio (_, (PGame.Priority (value, pplayer)))  = match pplayer with
@@ -195,7 +253,7 @@ let pp_adjset set =
       else
   List.iter (print_player_prio)
   (
-    List.map (asplayerprio p) @@ PGame.AdjSet.elements set
+    List.map (asplayerprio) @@ PGame.AdjSet.elements set
   );
   Format.printf "} "
 ;;
@@ -223,17 +281,15 @@ let pp_adjset_terse set =
   if  card <= terseness then
     pp_adjset set
   else
-  (Format.printf "A: {";
-  if PGame.AdjSet.is_empty set then
-  Format.printf " ∅ "
-      else
-  List.iter (print_player_prio)
-  (
-    (*only take 5 elements for display!*)
-    Utils.take terseness
-    @@ List.map (asplayerprio p) @@ PGame.AdjSet.elements set
-  );
-  Format.printf " ... } ")
+    let _ = Format.printf "A: {" in
+    if PGame.AdjSet.is_empty set then
+      Format.printf " ∅ "
+    else
+      let _ = List.iter (print_player_prio)
+    (
+      (*only take 5 elements for display!*)
+      Utils.take terseness @@ List.map (asplayerprio) @@ PGame.AdjSet.elements set
+    ) in Format.printf " ... } "
 ;;
 
 let pp_prio (PGame.Priority (value, pplayer)) = match pplayer with
@@ -251,4 +307,7 @@ let pp_node (PGame.Label (prio, _rand )) =
 #install_printer pp_node;;
 
 #trace PGame.zielonka;;
+#trace PGame.zielonka2;;
 #trace PGame.assign;;
+#trace PGame.add_edge_all;;
+#trace PGame.use_adjlist_desc;;
