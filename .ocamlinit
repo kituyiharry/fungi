@@ -105,7 +105,7 @@ let (l_15,p)  = PGame.add_node  PGame.Odd  15 p;;
 
 (** Effect of opposer-controlled but supportive priority *)
 
-(*let (l_16,p)  = PGame.add_node  PGame.Odd  16 p;;*)
+let (l_16,p)  = PGame.add_node  PGame.Odd  16 p;;
 (*let (l_31,p)  = PGame.add_node  PGame.Even 31 p;;*)
 
 (** Effect of  Disjointness  - Graph not being fully connected *)
@@ -141,7 +141,7 @@ parity 15;
 
 let p_adjlist =
   [
-    (l_2,  [l_4;  l_11]);
+    (l_2,  [l_4;  l_11; l_16]);
     (l_4,  [l_2;  l_8;  l_6]);
     (l_6,  [l_3;  l_5;  l_7; l_9]);
     (l_8,  [l_7;  l_5;  l_2]);
@@ -260,7 +260,6 @@ let pp_adjset set =
 
 let terseness = 10
 
-
 let pp_parity_game_terse:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit =
   fun game ->
   let card = PGame.Nodes.cardinal game in
@@ -301,7 +300,61 @@ let pp_node (PGame.Label (prio, _rand )) =
   pp_prio prio
 ;;
 
+let pp_player_adjlist: (PGame.identity * PGame.identity list) -> unit =
+  fun  (n, a)->
+    let () = pp_node n in
+    let () = Format.printf "\t-> [" in
+    let () = List.iter (pp_node) a in
+    Format.printf "]\n"
+;;
+
+
+let pp_parity_game_adjacency:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit
+= fun game ->
+  Format.printf "{\n";
+   List.iter (pp_player_adjlist)
+   (
+     List.map (fun (node, _) -> (node, PGame.Graph.adj_list_of node game))
+     @@ PGame.Graph.elt_bindings game
+   );
+  Format.printf "} "
+;;
+
+let pp_adjset_prefix set prefix =
+  Format.printf "%s: {" prefix;
+  if PGame.AdjSet.is_empty set then
+  Format.printf " ∅ "
+      else
+  List.iter (print_player_prio)
+  (
+    List.map (asplayerprio) @@ PGame.AdjSet.elements set
+  );
+  Format.printf "} "
+;;
+
+let pp_player_inc_out: (PGame.identity * PGame.AdjSet.t * PGame.AdjSet.t) -> unit =
+  fun  (n, i, o)->
+    let () = Format.printf "    " in
+    let () = pp_node n in
+    let () = Format.printf "\t-> [" in
+    let () = pp_adjset_prefix i "In" in
+    let () = pp_adjset_prefix o "Out" in
+    Format.printf "]\n"
+;;
+
+let pp_parity_game_redundant:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit
+= fun game ->
+  Format.printf "{\n";
+   List.iter (pp_player_inc_out)
+   (
+     List.map (fun (node, _) -> (node, PGame.incomingof node game, PGame.outgoingof node game ))
+     @@ PGame.Graph.elt_bindings game
+   );
+  Format.printf "} "
+;;
+
 #install_printer pp_parity_game;;
+(*#install_printer pp_parity_game_redundant;;*)
 #install_printer pp_adjset;;
 #install_printer pp_prio;;
 #install_printer pp_node;;

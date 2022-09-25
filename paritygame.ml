@@ -105,6 +105,7 @@ module PGame = struct
     match AdjSet.max_elt_opt fromset with
     | Some(node) -> Some (node, (AdjSet.remove node fromset))
     | _ -> None
+  ;;
 
   (** [hassafeoutgoing AdjSet.t PGame.t identity]
   Get the checked node outgoing set
