@@ -152,10 +152,6 @@ let print_player_prio (_, (PGame.Priority (value, pplayer)))  = match pplayer wi
 | PGame.Odd  -> Format.printf " (Odd %d) " value
 ;;
 
-let cherrypick = function
-  | (_node, edges) -> edges
-;;
-
 let pp_parity_game:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit = fun game ->
   Format.printf "G: {";
    List.iter (print_player_prio)
@@ -279,7 +275,6 @@ let pp_parity_game_redundant:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) 
 #install_printer pp_node;;
 
 #trace PGame.zielonka;;
-#trace PGame.zielonka2;;
+#trace PGame.solve;;
 #trace PGame.assign;;
-#trace PGame.add_edge_all;;
-#trace PGame.use_adjlist_desc;;
+#trace PGame.buildattractor;;

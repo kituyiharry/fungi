@@ -25,6 +25,7 @@ module PGame = struct
    the player type and identifier *)
   type identity =
     | Label of (priority * RAND.t)
+  ;;
 
   let cmprands  (Label(_, l)) (Label(_, r)) = Int.compare (RAND.to_int_exn l)  (RAND.to_int_exn r)
 
@@ -92,8 +93,9 @@ module PGame = struct
   (** [invertplayer identity identity]
   Invert player switches between players but maintains structure *)
   let invert = function
-  | Odd  -> Even
-  | Even -> Odd
+    | Odd  -> Even
+    | Even -> Odd
+  ;;
 
   (** [playerof identity player]
   Destructure the player from a label and its unique component *)
@@ -137,7 +139,8 @@ module PGame = struct
   *)
   let attract attractorset incomingset player game =
     let oktoadd =
-      AdjSet.diff incomingset attractorset |> AdjSet.filter (attractive attractorset player game)
+      AdjSet.diff incomingset attractorset
+      |> AdjSet.filter (attractive attractorset player game)
     in
       (oktoadd, AdjSet.union oktoadd attractorset)
   ;;
@@ -165,8 +168,8 @@ module PGame = struct
      List.map (asplayerprio game) @@ AdjSet.elements
      @@ ...
    *)
-  let buildattractor node player ?set:(startset=AdjSet.empty) game =
-    let istart = AdjSet.add node startset in attractor player game istart istart
+  let buildattractor player ?set:(startset=AdjSet.empty) game =
+    attractor player game startset startset
   ;;
 
   (** [carve PGame.t AdjSet.t PGame.t]
@@ -195,13 +198,34 @@ module PGame = struct
     @@ Nodes.filter (fun (Label ((Priority (r, pr)), _)) _  -> ((r = l) && (pl = pr))) game
   ;;
 
-  let collective: ((AdjSet.t * AdjSet.t * priority) Nodes.t) ->
-    AdjSet.t = fun (game) ->
-      (Nodes.fold
+  let collective: player option -> ((AdjSet.t * AdjSet.t * priority) Nodes.t) ->
+    AdjSet.t = fun plyr game ->
+      match plyr with
+      | Some(cntrl) -> (Nodes.fold
         (fun node _ neighbours ->
-          AdjSet.add node neighbours)
-        game)
-      AdjSet.empty
+          if sameplayer cntrl node then
+            AdjSet.add node neighbours
+          else
+            neighbours
+        ) game) AdjSet.empty
+      | _ -> (Nodes.fold
+        (fun node _ neighbours ->
+          AdjSet.add node neighbours) game) AdjSet.empty
+  ;;
+
+  let elective: player option -> ((AdjSet.t * AdjSet.t * priority) Nodes.t) ->
+    AdjSet.t = fun plyr game ->
+      match plyr with
+      | Some(cntrl) -> (Nodes.fold
+        (fun ((Label (p, _)) as node)  _ neighbours ->
+          if (parity p) = cntrl then
+            AdjSet.add node neighbours
+          else
+            neighbours
+        ) game) AdjSet.empty
+      | _ -> (Nodes.fold
+        (fun node _ neighbours ->
+          AdjSet.add node neighbours) game) AdjSet.empty
   ;;
 
   (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
@@ -234,31 +258,34 @@ module PGame = struct
     if Nodes.is_empty game then
       (AdjSet.empty, AdjSet.empty)
     else
-    let node, prio = max_priority_node game in
-    let u          = cluster node game in
-    let i          = omega prio in
-    let a          = buildattractor node i ?set:(Some u) game in
-    let subgame    = carve game a in
-    let (w_0, w_1) = zielonka subgame in
-    let (w_i, w_1_i) = match i with
-      Even -> (w_0, w_1)
-    | Odd  -> (w_1, w_0) in
+      let node, prio = max_priority_node game in                                (* p ← max{ΩG(v) | v ∈ VG} *)
+      let i          = omega prio in                                            (* i ← p mod 2  *)
+      let (_w_i, w_1_i) = (
+        let u          = cluster node game in                                     (* {v ∈ VG | ΩG(v) = p} *)
+        let a          = buildattractor i ?set:(Some u) game in                   (* Attr_i(G, U) *)
+        let g_a        = carve game a in
+        let (w_0, w_1) = zielonka g_a in                                      (* Solve(G \ A) *)
+        match i with
+        | Even -> (w_0, w_1)
+        | Odd  -> (w_1, w_0)
+      ) in
     if AdjSet.is_empty w_1_i then
-        (w_i, AdjSet.empty)
-      else
-    let b          = buildattractor node (invert i) ?set:(Some w_1_i) game in
-    let subgame    = carve game b in
-    let (w_0, w_1) = zielonka subgame in
-    match invert  i with
-      Even -> (AdjSet.union b w_0, w_1)
-    | Odd  -> (AdjSet.union b w_1, w_0)
+      ((collective None game), w_1_i)                                         (* Wi ← Vi *)
+    else
+      let b          = buildattractor (invert i) ?set:(Some w_1_i) game in
+      let (w_0', w_1') = (
+        let g_b            = carve game b in
+        let (w_'_0, w_'_1) = zielonka g_b in
+        match invert i with
+          | Even -> (w_'_0, w_'_1)
+          | Odd  -> (w_'_1, w_'_0)
+      ) in (w_0',  AdjSet.union w_1' b)
   ;;
 
-  (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
-    Recursive algorithm which produces winning sets of the game
-    https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
+  (**
+     Break this solver
   *)
-  let rec zielonka2:(AdjSet.t * AdjSet.t * priority) Nodes.t -> (AdjSet.t * AdjSet.t) =
+  let rec solve:(AdjSet.t * AdjSet.t * priority) Nodes.t -> (AdjSet.t * AdjSet.t) =
     fun game ->
     if Nodes.is_empty game then
       (AdjSet.empty, AdjSet.empty)
@@ -266,9 +293,9 @@ module PGame = struct
     let node, prio = max_priority_node game in
     let u          = cluster node game in
     let i          = omega prio in
-    let a          = buildattractor node i ?set:(Some u) game in
+    let a          = buildattractor i ?set:(Some u) game in
     let subgame    = carve game a in
-    let (w0, w1)   = (zielonka2 subgame) in
+    let (w0, w1)   = (solve subgame) in
     let (wi, w_1_i) = match i with
       | Even -> (w0, w1)
       | Odd  -> (w1, w0) in
