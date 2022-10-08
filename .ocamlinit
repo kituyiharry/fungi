@@ -277,4 +277,3 @@ let pp_parity_game_redundant:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) 
 #trace PGame.zielonka;;
 #trace PGame.solve;;
 #trace PGame.assign;;
-#trace PGame.buildattractor;;

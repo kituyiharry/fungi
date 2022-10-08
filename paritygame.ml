@@ -259,12 +259,6 @@ module PGame = struct
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
-
-    Notes:
-      - Why is the  last 'switcheroo' needed
-      - Does building the attractor really need a node! Seems to  cause issues
-      but during development earlier it was requested.
-      -
   *)
   let rec zielonka:(AdjSet.t * AdjSet.t * priority) Nodes.t -> (AdjSet.t * AdjSet.t) =
     fun game ->
@@ -274,7 +268,7 @@ module PGame = struct
       let node, prio = max_priority_node game in
       let i          = omega prio in
       let u          = cluster node game in
-      let a          = buildattractor None  (i) ?set:(Some u) game in
+      let a          = buildattractor None (i) ?set:(Some u) game in
       let g_a        = carve game a in
       let (w_0, w_1) = zielonka g_a in
       let (_w_i, w_1_i) = (
@@ -287,8 +281,8 @@ module PGame = struct
     else
       let b            = buildattractor None (invert i) ?set:(Some w_1_i) game in
       let g_b          = carve game b in
-      let (w_0, w_1)   = zielonka g_b in
-      (AdjSet.union w_1 b, w_0)
+      let (w_0', w_1') = zielonka g_b in
+      (AdjSet.union w_1' b, w_0')
   ;;
 
   (**
@@ -313,5 +307,6 @@ module PGame = struct
         (w', w'')
       else
         (anynonempty (w', w''), w1_i)
+  ;;
 
 end

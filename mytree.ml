@@ -20,7 +20,8 @@ module MyTree = struct
         else if x > y then
           Node (y, left, insert_ordered x right)
         else
-          node;;
+          node
+  ;;
 
   (* Make a binary search tree aka ordered or sorted binary tree *)
   let rec make_ordered_binary_tree = function
