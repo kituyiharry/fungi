@@ -285,28 +285,4 @@ module PGame = struct
       (AdjSet.union w_1' b, w_0')
   ;;
 
-  (**
-     Break this ??
-  *)
-  let rec solve:(AdjSet.t * AdjSet.t * priority) Nodes.t -> (AdjSet.t * AdjSet.t) =
-    fun game ->
-    if Nodes.is_empty game then
-      (AdjSet.empty, AdjSet.empty)
-    else
-    let node, prio  = max_priority_node game in
-    let u           = cluster node game in
-    let i           = omega prio in
-    let a           = buildattractor None i ?set:(Some u) game in
-    let subgame     = carve game a in
-    let (w0, w1)    = (solve subgame) in
-    let (wi, w_1_i) = match i with
-      | Even -> (w0, w1)
-      | Odd  -> (w1, w0) in
-    let (w', w'', w1_i) = assign (node, i, a, game, (wi, w_1_i)) in
-      if AdjSet.is_empty w1_i then
-        (w', w'')
-      else
-        (anynonempty (w', w''), w1_i)
-  ;;
-
 end

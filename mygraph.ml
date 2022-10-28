@@ -76,8 +76,7 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
   let delete_node delnode nodeMap =
     let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
       NodeMap.remove delnode (
-        AdjSet.fold(
-          (fun nodelabel updatemap ->
+        AdjSet.fold ((fun nodelabel updatemap ->
             let (deepinc, deepout, deeplabel) = (NodeMap.find nodelabel updatemap) in
             NodeMap.add nodelabel (
               (AdjSet.remove delnode deepinc),
