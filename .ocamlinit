@@ -268,12 +268,17 @@ let pp_parity_game_redundant:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) 
   Format.printf "} "
 ;;
 
+let pp_solution:(PGame.solution) -> unit = fun sol ->
+ let ((w0, w1), (s0, s1)) = (sol.regions, sol.strategy) in
+  Format.printf "\n\tW0: ";  pp_adjset w0;
+  Format.printf "\n\tW1: ";  pp_adjset w1
+;;
+
 (*#install_printer pp_parity_game;;*)
 #install_printer pp_parity_game_redundant;;
 #install_printer pp_adjset;;
 #install_printer pp_prio;;
 #install_printer pp_node;;
+#install_printer pp_solution;;
 
 #trace PGame.zielonka;;
-#trace PGame.solve;;
-#trace PGame.assign;;

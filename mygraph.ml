@@ -39,17 +39,18 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
   ;;
 
   (**
-      Add a directed edge [(tail)] --> [(head)] such that the tails outgoing
-      set points to the heads incoming set.
+    Add a directed edge [(tail)] --> [(head)] such that the tails outgoing
+    set points to the heads incoming set.
+
+    (*Find the tail of the directed edge*)
+      (*Update with outgoing*)
+        (*Find the head of the directed edge*)
+          (*Update with incoming*)
   *)
   let add_edge nodeFrom nodeTo nodeMap =
-    (*Find the tail of the directed edge*)
     let (fromIncoming, fromOutgoing, label) = NodeMap.find nodeFrom nodeMap in
-      (*Update with outgoing*)
       let finMap = (NodeMap.add nodeFrom (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label) nodeMap) in
-        (*Find the head of the directed edge*)
         let (toIncoming, toOutgoing, label) = NodeMap.find nodeTo finMap in
-          (*Update with incoming*)
           NodeMap.add nodeTo ((AdjSet.add nodeFrom toIncoming), toOutgoing, label) finMap
   ;;
 
@@ -122,6 +123,7 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
       @@ NodeMap.bindings
       @@ NodeMap.map(fun (_ , _, label) -> label)
     nodeMap)
+  ;;
 
   (* Max element of the Map but using its internal elements and not keys *)
   let max_elt nodeMap =

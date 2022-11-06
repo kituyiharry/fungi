@@ -11,7 +11,7 @@
 ************************)
 
 module type SET = sig
-  type 'a set
+  type +'a set
   val empty  : 'a set
   val add    : 'a -> 'a set -> 'a set
   val member : 'a -> 'a set -> bool

@@ -52,6 +52,13 @@ module PGame = struct
   (* Empty Game is just an empty Graph *)
   let empty = Graph.empty
 
+  (* A parity game solution is a product of the winning regions and
+     corresponding strategies for each player *)
+  type solution = {
+    regions:  (AdjSet.t * AdjSet.t); (* W0 , W1 *)
+    strategy: (identity list * identity list) (* [0], [1] *)
+  }
+
   (** [ add_node player int PGame.t]
      Adds a node as a mapping from a uniqlabel to a triple of incoming,
      outgoing and priority. Player information is contained in the label
@@ -164,9 +171,6 @@ module PGame = struct
 
   (** [buildattractor ?set:(AdjSet.t) identity player PGame.t AdjSet.t]
     A node is part of its own attractor
-    To print the game as a adjacency list graph in a REPL use
-     List.map (asplayerprio game) @@ AdjSet.elements
-     @@ ...
    *)
   let buildattractor withnode player ?set:(startset=AdjSet.empty) game =
     match withnode with
@@ -178,7 +182,7 @@ module PGame = struct
   ;;
 
   (** [carve PGame.t AdjSet.t PGame.t]
-    Removes nodes from a game
+    Removes a set of nodes from a game
   *)
   let carve game nodeset =
     AdjSet.fold (Graph.delete_node) nodeset game
@@ -198,91 +202,48 @@ module PGame = struct
   (* Cluster max priority nodes *)
   let cluster (Label ((Priority (l, pl)),_)) game =
     AdjSet.of_list
-    @@ List.map (fun (key, _) -> key)
+    @@ List.map (fst)
     @@ Nodes.bindings
     @@ Nodes.filter (fun (Label ((Priority (r, pr)), _)) _  -> ((r = l) && (pl = pr))) game
   ;;
 
-  (* Collect nodes forming the game into a set based on controlling player *)
-  let collective: player option -> ((AdjSet.t * AdjSet.t * priority) Nodes.t) ->
-    AdjSet.t = fun plyr game ->
-      match plyr with
-      | Some(cntrl) -> (Nodes.fold
-        (fun node _ neighbours ->
-          if sameplayer cntrl node then
-            AdjSet.add node neighbours
-          else
-            neighbours
-        ) game) AdjSet.empty
-      | _ -> (Nodes.fold
-        (fun node _ neighbours ->
-          AdjSet.add node neighbours) game) AdjSet.empty
-  ;;
-
-  (* Elect(?) nodes forming the game into a set based on controller and priority *)
-  let elective: player option -> ((AdjSet.t * AdjSet.t * priority) Nodes.t) ->
-    AdjSet.t = fun plyr game ->
-      match plyr with
-      | Some(cntrl) -> (Nodes.fold
-        (fun ((Label (p, _)) as node)  _ neighbours ->
-          if (parity p) = cntrl then
-            AdjSet.add node neighbours
-          else
-            neighbours
-        ) game) AdjSet.empty
-      | _ -> (Nodes.fold
-        (fun node _ neighbours ->
-          AdjSet.add node neighbours) game) AdjSet.empty
+  (* Collect nodes forming the game into a set *)
+  let collective game =
+      (Nodes.fold
+        (fun node _ neighbours -> AdjSet.add node neighbours) game)
+      AdjSet.empty
   ;;
 
   (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
     Largest priority node in the game *)
   let max_priority_node = Graph.max_elt
 
-  let assign:
-    (identity * player * AdjSet.t *  (AdjSet.t * AdjSet.t * priority) Nodes.t * (AdjSet.t * AdjSet.t)) ->
-      (AdjSet.t * AdjSet.t * AdjSet.t) =
-  fun (maxnode, _iplyr, maxnodeattr, fullgame, (winset0, winset1)) ->
-    let (_, out, _ ) = Nodes.find maxnode fullgame in
-      if AdjSet.subset out winset0 then
-        (AdjSet.union maxnodeattr winset0, winset1, winset1)
-      else if AdjSet.subset out winset1 then
-        (winset0, AdjSet.union maxnodeattr winset1, winset0)
-      else
-        (winset0, winset1, maxnodeattr)
-  ;;
-
-  let anynonempty (w0, w1) =
-    if AdjSet.is_empty w0 then w1 else w0
-  ;;
-
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
   *)
-  let rec zielonka:(AdjSet.t * AdjSet.t * priority) Nodes.t -> (AdjSet.t * AdjSet.t) =
-    fun game ->
+  let rec zielonka:'a Nodes.t -> solution = fun game ->
     if Nodes.is_empty game then
-      (AdjSet.empty, AdjSet.empty)
+      { regions = (AdjSet.empty, AdjSet.empty); strategy = ([], []) }
     else
       let node, prio = max_priority_node game in
       let i          = omega prio in
       let u          = cluster node game in
       let a          = buildattractor None (i) ?set:(Some u) game in
       let g_a        = carve game a in
-      let (w_0, w_1) = zielonka g_a in
+      let { regions  = (w_0, w_1); _ } as sols = zielonka g_a in
       let (_w_i, w_1_i) = (
         match i with
          | Even -> (w_0, w_1)
          | Odd  -> (w_1, w_0)
       ) in
-    if AdjSet.is_empty w_1_i then
-      ((collective None game), AdjSet.empty)
-    else
-      let b            = buildattractor None (invert i) ?set:(Some w_1_i) game in
-      let g_b          = carve game b in
-      let (w_0', w_1') = zielonka g_b in
-      (AdjSet.union w_1' b, w_0')
+      if AdjSet.is_empty w_1_i then
+        { sols with regions = ((collective game), AdjSet.empty) }
+      else
+      let b          = buildattractor None (invert i) ?set:(Some w_1_i) game in
+      let g_b        = carve game b in
+      let { regions=(w_0', w_1'); _ } as sols' = zielonka g_b in
+        { sols' with regions=(AdjSet.union w_1' b, w_0'); }
   ;;
 
 end
