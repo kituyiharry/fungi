@@ -16,10 +16,12 @@ module PGame = struct
   type player =
     | Even
     | Odd
+  ;;
 
   (* Each node in a parity game has an Integer priority *)
   type priority =
     | Priority of (int * player)
+  ;;
 
   (* Each node is given a unique label for identification purposes consisting of
    the player type and identifier *)
@@ -52,11 +54,20 @@ module PGame = struct
   (* Empty Game is just an empty Graph *)
   let empty = Graph.empty
 
+  type play = (identity * identity)
+
+  let cmpplays (lf, lt) (rf, rt) = Int.compare (cmprands lf rf) (cmprands lt rt)
+
+  module StrategySet = Set.Make(struct
+    type t = play
+    let compare = cmpplays
+  end)
+
   (* A parity game solution is a product of the winning regions and
      corresponding strategies for each player *)
   type solution = {
     regions:  (AdjSet.t * AdjSet.t); (* W0 , W1 *)
-    strategy: (identity list * identity list) (* [0], [1] *)
+    strategy: (StrategySet.t* StrategySet.t) (* [0], [1] *)
   }
 
   (** [ add_node player int PGame.t]
@@ -66,7 +77,7 @@ module PGame = struct
      return (label id * internal graph)*)
   let add_node player priority game =
     let
-      label    = Label((Priority (priority, player)), RAND.create())
+      label    = Label ((Priority (priority, player)), RAND.create())
         and
       nodedata = (Priority (priority, player))
     in
@@ -106,7 +117,7 @@ module PGame = struct
 
   (** [playerof identity player]
   Destructure the player from a label and its unique component *)
-  let playerof (Priority (_, curplayer)) = curplayer
+  let playerof  (Label ((Priority (_, curplayer), _))) = curplayer
 
   (** [pluck AdjSet.t (identity option)]
   Destructure an element from a set *)
@@ -188,7 +199,7 @@ module PGame = struct
     AdjSet.fold (Graph.delete_node) nodeset game
   ;;
 
-  let omega (Priority (ofprio, _)) =
+  let omega (Label ((Priority (ofprio, _)), _)) =
     if ofprio mod 2 == 0 then Even else Odd
 
   (* Parity based on priority integer *)
@@ -218,32 +229,47 @@ module PGame = struct
     Largest priority node in the game *)
   let max_priority_node = Graph.max_elt
 
+  let collectplays incoming ((Label ((Priority (_, player)),_)) as nd) =
+    StrategySet.of_list
+    @@ List.map (fun incplay -> (incplay, nd))
+    @@ ((AdjSet.filter (sameplayer player) incoming) |> AdjSet.elements)
+
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
   *)
   let rec zielonka:'a Nodes.t -> solution = fun game ->
     if Nodes.is_empty game then
-      { regions = (AdjSet.empty, AdjSet.empty); strategy = ([], []) }
+      { regions = (AdjSet.empty, AdjSet.empty); strategy = (StrategySet.empty, StrategySet.empty); }
     else
-      let node, prio = max_priority_node game in
-      let i          = omega prio in
+      let node, _    = max_priority_node game in
+      let i          = omega node in
       let u          = cluster node game in
       let a          = buildattractor None (i) ?set:(Some u) game in
       let g_a        = carve game a in
-      let { regions  = (w_0, w_1); _ } as sols = zielonka g_a in
+      let plays = (collectplays (incomingof node game) node) in
+      let { regions  = (w_0, w_1); strategy=(s_0, s_1) } = zielonka g_a in
       let (_w_i, w_1_i) = (
         match i with
          | Even -> (w_0, w_1)
          | Odd  -> (w_1, w_0)
       ) in
+      let strats =
+          (match i with
+          | Even -> (StrategySet.union s_0 plays, s_1)
+          | Odd  -> (s_0, StrategySet.union s_1 plays)) in
       if AdjSet.is_empty w_1_i then
-        { sols with regions = ((collective game), AdjSet.empty) }
+        { regions=((collective game), AdjSet.empty); strategy=strats; }
       else
       let b          = buildattractor None (invert i) ?set:(Some w_1_i) game in
       let g_b        = carve game b in
-      let { regions=(w_0', w_1'); _ } as sols' = zielonka g_b in
-        { sols' with regions=(AdjSet.union w_1' b, w_0'); }
+      let { regions=(w_0', w_1'); strategy=(s_0', s_1') } = zielonka g_b in
+      let strats' =
+          (match invert i with
+          | Even -> (StrategySet.union s_0' plays, s_1')
+          | Odd  -> (s_0', StrategySet.union plays s_1'))
+      in
+        { regions=(AdjSet.union w_1' b, w_0'); strategy=strats'; }
   ;;
 
 end

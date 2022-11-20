@@ -268,10 +268,26 @@ let pp_parity_game_redundant:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) 
   Format.printf "} "
 ;;
 
+let ppluck fromset =
+  match PGame.StrategySet.max_elt_opt fromset with
+  | Some(node) -> Some (node, (PGame.StrategySet.remove node fromset))
+  | _ -> None
+;;
+
+let rec pp_strat: PGame.StrategySet.t ->  unit = fun strat ->
+  match ppluck strat with
+  | None -> ()
+  | Some(((f, t), rest)) -> (
+    pp_node f; Format.printf " -> "; pp_node t; pp_strat rest
+  )
+;;
+
 let pp_solution:(PGame.solution) -> unit = fun sol ->
  let ((w0, w1), (s0, s1)) = (sol.regions, sol.strategy) in
   Format.printf "\n\tW0: ";  pp_adjset w0;
-  Format.printf "\n\tW1: ";  pp_adjset w1
+  Format.printf "\n\tS0: ";  pp_strat s0;
+  Format.printf "\n\tW1: ";  pp_adjset w1;
+  Format.printf "\n\tS1: ";  pp_strat s1
 ;;
 
 (*#install_printer pp_parity_game;;*)
