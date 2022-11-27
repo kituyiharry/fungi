@@ -269,12 +269,12 @@ let pp_parity_game_redundant:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) 
 ;;
 
 let ppluck fromset =
-  match PGame.StrategySet.max_elt_opt fromset with
-  | Some(node) -> Some (node, (PGame.StrategySet.remove node fromset))
+  match PGame.StratSet.max_elt_opt fromset with
+  | Some(node) -> Some (node, (PGame.StratSet.remove node fromset))
   | _ -> None
 ;;
 
-let rec pp_strat: PGame.StrategySet.t ->  unit = fun strat ->
+let rec pp_strat: PGame.StratSet.t ->  unit = fun strat ->
   match ppluck strat with
   | None -> ()
   | Some(((f, t), rest)) -> (

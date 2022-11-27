@@ -58,16 +58,23 @@ module PGame = struct
 
   let cmpplays (lf, lt) (rf, rt) = Int.compare (cmprands lf rf) (cmprands lt rt)
 
-  module StrategySet = Set.Make(struct
+  module StratSet = Set.Make(struct
     type t = play
     let compare = cmpplays
   end)
+
+  let connect_strats node stratset adjacent =
+    StratSet.union stratset
+    @@ StratSet.of_list
+    @@ List.map (fun el -> (node , el))
+    @@ AdjSet.elements adjacent
+  ;;
 
   (* A parity game solution is a product of the winning regions and
      corresponding strategies for each player *)
   type solution = {
     regions:  (AdjSet.t * AdjSet.t); (* W0 , W1 *)
-    strategy: (StrategySet.t* StrategySet.t) (* [0], [1] *)
+    strategy: (StratSet.t* StratSet.t) (* [0], [1] *)
   }
 
   (** [ add_node player int PGame.t]
@@ -155,41 +162,38 @@ module PGame = struct
      - Returns a pair of newly found attractive nodes and a union of that set
      with the previously accumulated attractor
   *)
-  let attract attractorset incomingset player game =
+  let attract attractorset incomingset player game node stratset =
     let oktoadd =
-      AdjSet.diff incomingset attractorset
-      |> AdjSet.filter (attractive attractorset player game)
+      AdjSet.filter (attractive attractorset player game)
+      @@ AdjSet.diff incomingset attractorset
     in
-      (oktoadd, AdjSet.union oktoadd attractorset)
+      (oktoadd, (AdjSet.union oktoadd attractorset), (connect_strats node stratset oktoadd))
   ;;
 
 
   (** [attractor player PGame.t AdjSet.t AdjSet.t AdjSet.t]
-  Get the attractor nodes of a player from a node *)
-  let rec attractor player game attractorset nodeset =
+  Get the attractor nodes of a player from a node
+  attractorset is the current state of the attractor
+  nodeset are the unvisited nodes*)
+  let rec attractor player game attractorset nodeset strats =
     match (pluck nodeset) with
     | Some(node, rest) ->
         (*
          Concatenate the attractive non-visited incoming neighbours
          while ensuring they aren't treachorous
         *)
-        let (newels, newaccumulator) =
-          attract attractorset (incomingof node game) player game
+        let (newels, accum, strategy) =
+          attract attractorset (incomingof node game) player game node strats
         in
-          attractor player game (AdjSet.add node newaccumulator) (AdjSet.union newels rest)
-    | _ -> attractorset
+          attractor player game (AdjSet.add node accum) (AdjSet.union newels rest) strategy
+    | _ -> (attractorset, strats)
   ;;
 
   (** [buildattractor ?set:(AdjSet.t) identity player PGame.t AdjSet.t]
     A node is part of its own attractor
    *)
-  let buildattractor withnode player ?set:(startset=AdjSet.empty) game =
-    match withnode with
-    | Some(node) ->
-        let istart = AdjSet.add node startset in
-          attractor player game istart istart
-    | _ ->
-        attractor player game startset startset
+  let buildattractor player ?set:(startset=AdjSet.empty) game =
+    attractor player game startset startset StratSet.empty
   ;;
 
   (** [carve PGame.t AdjSet.t PGame.t]
@@ -229,47 +233,38 @@ module PGame = struct
     Largest priority node in the game *)
   let max_priority_node = Graph.max_elt
 
-  let collectplays incoming ((Label ((Priority (_, player)),_)) as nd) =
-    StrategySet.of_list
-    @@ List.map (fun incplay -> (incplay, nd))
-    @@ ((AdjSet.filter (sameplayer player) incoming) |> AdjSet.elements)
-
   (** [zielonka PGame.t (AdjSet.t * AdjSet.t)]
     Recursive algorithm which produces winning sets of the game
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
   *)
   let rec zielonka:'a Nodes.t -> solution = fun game ->
     if Nodes.is_empty game then
-      { regions = (AdjSet.empty, AdjSet.empty); strategy = (StrategySet.empty, StrategySet.empty); }
+      { regions = (AdjSet.empty, AdjSet.empty); strategy = (StratSet.empty, StratSet.empty); }
     else
       let node, _    = max_priority_node game in
       let i          = omega node in
       let u          = cluster node game in
-      let a          = buildattractor None (i) ?set:(Some u) game in
+      let (a, p_a)   = buildattractor (i) ?set:(Some u) game in
       let g_a        = carve game a in
-      let plays = (collectplays (incomingof node game) node) in
       let { regions  = (w_0, w_1); strategy=(s_0, s_1) } = zielonka g_a in
       let (_w_i, w_1_i) = (
         match i with
          | Even -> (w_0, w_1)
          | Odd  -> (w_1, w_0)
       ) in
-      let strats =
-          (match i with
-          | Even -> (StrategySet.union s_0 plays, s_1)
-          | Odd  -> (s_0, StrategySet.union s_1 plays)) in
+      let strat =  match i with
+        | Even -> (StratSet.union p_a s_0, s_1)
+        | Odd ->  (s_0, StratSet.union p_a s_1) in
       if AdjSet.is_empty w_1_i then
-        { regions=((collective game), AdjSet.empty); strategy=strats; }
+        { regions=((collective game), AdjSet.empty); strategy=strat }
       else
-      let b          = buildattractor None (invert i) ?set:(Some w_1_i) game in
+      let (b, p_b)  = buildattractor (invert i) ?set:(Some w_1_i) game in
       let g_b        = carve game b in
       let { regions=(w_0', w_1'); strategy=(s_0', s_1') } = zielonka g_b in
-      let strats' =
-          (match invert i with
-          | Even -> (StrategySet.union s_0' plays, s_1')
-          | Odd  -> (s_0', StrategySet.union plays s_1'))
-      in
-        { regions=(AdjSet.union w_1' b, w_0'); strategy=strats'; }
+      let strat' =  match invert i with
+        | Even -> (StratSet.union p_b s_0', s_1')
+        | Odd ->  (s_0', StratSet.union p_b s_1') in
+      { regions=(AdjSet.union w_1' b, w_0'); strategy=strat' }
   ;;
 
 end
