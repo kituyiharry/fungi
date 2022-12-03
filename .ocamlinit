@@ -295,6 +295,8 @@ let pp_solution:(PGame.solution) -> unit = fun sol ->
 #install_printer pp_adjset;;
 #install_printer pp_prio;;
 #install_printer pp_node;;
+#install_printer pp_strat;;
 #install_printer pp_solution;;
 
 #trace PGame.zielonka;;
+#trace PGame.stack;;
