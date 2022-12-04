@@ -66,8 +66,8 @@ let p_adjlist =
     (l_8,  [l_7;  l_5;  l_2]);
     (l_10, [l_13; l_15]);
     (l_3,  [l_2;  l_4]);
-    (l_5,  [l_5;  l_7;  l_9]);
-    (l_7,  [l_7;  l_10]);
+    (l_5,  [l_7;  l_9]);
+    (l_7,  [l_10]);
     (l_9,  [l_3;  l_5;  l_10]);
     (l_11, [l_8]);
     (l_13, [l_15]);
@@ -173,7 +173,7 @@ let pp_adjset set =
   Format.printf "} "
 ;;
 
-let terseness = 10
+let terseness = 30
 
 let pp_parity_game_terse:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit =
   fun game ->
@@ -269,25 +269,29 @@ let pp_parity_game_redundant:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) 
 ;;
 
 let ppluck fromset =
-  match PGame.StratSet.max_elt_opt fromset with
-  | Some(node) -> Some (node, (PGame.StratSet.remove node fromset))
+  match PGame.Strat.max_elt_opt fromset with
+  | Some(node) -> Some (node, (PGame.Strat.remove node fromset))
   | _ -> None
 ;;
 
-let rec pp_strat: PGame.StratSet.t ->  unit = fun strat ->
+let rec pp_strat: PGame.Strat.t ->  unit = fun strat ->
   match ppluck strat with
   | None -> ()
   | Some(((f, t), rest)) -> (
-    pp_node f; Format.printf " -> "; pp_node t; pp_strat rest
-  )
+    pp_node f; Format.printf " -> "; pp_node t; Format.printf ",";
+    pp_strat rest
+  );
 ;;
 
 let pp_solution:(PGame.solution) -> unit = fun sol ->
  let ((w0, w1), (s0, s1)) = (sol.regions, sol.strategy) in
-  Format.printf "\n\tW0: ";  pp_adjset w0;
-  Format.printf "\n\tS0: ";  pp_strat s0;
-  Format.printf "\n\tW1: ";  pp_adjset w1;
-  Format.printf "\n\tS1: ";  pp_strat s1
+  Format.printf "\n\t+ ---  ---  --- --- --- --- --- --- --- --- --- --- ---";
+  Format.printf "\n\t|\n\t| W0: ";  pp_adjset w0;
+  Format.printf "\n\t| S0:   < ";  pp_strat s0; Format.printf ">";
+  Format.printf "\n\t|\n\t| ---  ---  --- --- --- --- --- --- --- --- --- --- ---";
+  Format.printf "\n\t|\n\t| W1: ";  pp_adjset w1;
+  Format.printf "\n\t| S1:   < ";  pp_strat s1; Format.printf ">";
+  Format.printf "\n\t|\n\t+ ---  ---  --- --- --- --- --- --- --- --- --- --- ---"
 ;;
 
 (*#install_printer pp_parity_game;;*)
@@ -298,5 +302,7 @@ let pp_solution:(PGame.solution) -> unit = fun sol ->
 #install_printer pp_strat;;
 #install_printer pp_solution;;
 
-#trace PGame.zielonka;;
-#trace PGame.stack;;
+(*#trace PGame.zielonka;;*)
+(*#trace PGame.stack;;*)
+(*#trace PGame.Strat.of_list;;*)
+(*#trace PGame.cmpplays;;*)

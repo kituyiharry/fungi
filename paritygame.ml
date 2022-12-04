@@ -29,7 +29,9 @@ module PGame = struct
     | Label of (priority * RAND.t)
   ;;
 
-  let cmprands  (Label(_, l)) (Label(_, r)) = Int.compare (RAND.to_int_exn l)  (RAND.to_int_exn r)
+  let randof (Label(_, l)) = l
+
+  let cmprands  (Label(_, l)) (Label(_, r)) = (RAND.compare l r)
 
   let cmpprio (Priority lp) (Priority rp) = (compare lp rp)
 
@@ -56,9 +58,14 @@ module PGame = struct
 
   type play = (identity * identity)
 
-  let cmpplays (lf, lt) (rf, rt) = Int.compare (cmprands lf rf) (cmprands lt rt)
+  (* This play implicitly makes the assumption that a strategy can ONLY be used
+   to pick one path - so there is no need to check the 2nd one because a player
+   cannot play 2 strategies! i.e this does not properly compare the RAND parts
 
-  module StratSet = Set.Make(struct
+   Consultation needed *)
+  let cmpplays (lf, _lt) (rf, _rt) = RAND.compare (randof lf) (randof rf)
+
+  module Strat = Set.Make(struct
     type t = play
     let compare = cmpplays
   end)
@@ -67,7 +74,7 @@ module PGame = struct
      corresponding strategies for each player *)
   type solution = {
     regions:  (AdjSet.t * AdjSet.t); (* W0 , W1 *)
-    strategy: (StratSet.t* StratSet.t) (* [0], [1] *)
+    strategy: (Strat.t* Strat.t) (* [0], [1] *)
   }
 
   (** [ add_node player int PGame.t]
@@ -121,14 +128,15 @@ module PGame = struct
     @@ AdjSet.filter (fun y -> AdjSet.mem y attractor) (outgoingof node game)
   ;;
 
-  (*NB: StratSet.of_list doesn't check for duplication in  some cases*)
-  let stack (player, attractor, game) =
-    (List.fold_right (StratSet.add)
-      @@ List.flatten
+  (*NB: Strat.of_list doesn't check for duplication in  some cases*)
+  let stack player attractor game =
+     let els = (
+      List.flatten
       @@ List.map (into_strat attractor game)
       @@ AdjSet.elements
       @@ AdjSet.filter (sameplayer player) attractor
-    ) StratSet.empty
+    ) in
+     Strat.of_list els
   ;;
 
   (** [playerof identity player]
@@ -199,9 +207,9 @@ module PGame = struct
         let (newattr, morenodes) =
           (AdjSet.add node accum, AdjSet.union newels rest)
         in
-        let newstrat =  (stack (player, newattr, game))
+        let newstrat =  (stack player newattr game)
         in
-          attractor player game newattr morenodes (StratSet.union newstrat strats)
+          attractor player game newattr morenodes (Strat.union newstrat strats)
     | _ -> (attractorset, strats)
   ;;
 
@@ -209,7 +217,7 @@ module PGame = struct
     A node is part of its own attractor
    *)
   let buildattractor player ?set:(startset=AdjSet.empty) game =
-    attractor player game startset startset StratSet.empty
+    attractor player game startset startset Strat.empty
   ;;
 
   (** [carve PGame.t AdjSet.t PGame.t]
@@ -257,15 +265,16 @@ module PGame = struct
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
   *)
 
+
   let rec zielonka:'a Nodes.t -> solution = fun game ->
     if Nodes.is_empty game then
-      { regions = (AdjSet.empty, AdjSet.empty); strategy = (StratSet.empty, StratSet.empty); }
+      { regions = (AdjSet.empty, AdjSet.empty); strategy = (Strat.empty, Strat.empty); }
     else
       let node, _    = max_priority_node game in
       let i          = omega node in
       let u          = cluster node game in
+      let tau        = stack i u game in
       let (a, tau')  = buildattractor (i) ?set:(Some u) game in
-      let tau        = stack (i, a, game) in
       let g_a        = carve game a in
       let { regions  = (w_0, w_1); strategy = (s_0, s_1) } = zielonka g_a in
       let (_w_i, w_1_i) = (
@@ -275,16 +284,16 @@ module PGame = struct
       ) in
       if AdjSet.is_empty w_1_i then
         let strat =  match i with
-          | Even -> (StratSet.union s_0 (StratSet.union tau tau'), StratSet.empty)
-          | Odd ->  (StratSet.empty, StratSet.union  s_1 (StratSet.union tau tau')) in
+          | Even -> (Strat.union s_0 (Strat.union tau tau'),Strat.empty)
+          | Odd ->  (Strat.empty, Strat.union  s_1 (Strat.union tau tau')) in
           { regions=((collective game), AdjSet.empty); strategy=strat }
       else
       let (b, rho)  = buildattractor (invert i) ?set:(Some w_1_i) game in
       let g_b       = carve game b in
       let { regions = (w_0', w_1'); strategy = (s_0', s_1') } = zielonka g_b in
         let strat'  =  match invert i with
-          | Even -> (StratSet.union rho (StratSet.union s_0' s_0), s_1')
-          | Odd ->  (s_0', StratSet.union rho  (StratSet.union s_1' s_1)) in
+          | Even -> (Strat.union rho (Strat.union s_0' s_0), s_1')
+          | Odd ->  (s_0', Strat.union rho  (Strat.union s_1' s_1)) in
           { regions=(AdjSet.union w_1' b, w_0'); strategy=strat' }
   ;;
 
