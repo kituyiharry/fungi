@@ -130,13 +130,11 @@ module PGame = struct
 
   (*NB: Strat.of_list doesn't check for duplication in  some cases*)
   let stack player attractor game =
-     let els = (
-      List.flatten
-      @@ List.map (into_strat attractor game)
-      @@ AdjSet.elements
-      @@ AdjSet.filter (sameplayer player) attractor
-    ) in
-     Strat.of_list els
+    Strat.of_list
+    @@ List.flatten
+    @@ List.map (into_strat attractor game)
+    @@ AdjSet.elements
+    @@ AdjSet.filter (sameplayer player) attractor
   ;;
 
   (** [playerof identity player]
@@ -242,11 +240,10 @@ module PGame = struct
      NB: AdjSet.of_list doesn't check for equality in  some cases
    *)
   let cluster (Label ((Priority (l, pl)),_)) game =
-    (List.fold_right (AdjSet.add)
+    AdjSet.of_list
     @@ List.map (fst)
     @@ Nodes.bindings
     @@ Nodes.filter (fun (Label ((Priority (r, pr)), _)) _  -> ((r = l) && (pl = pr))) game
-    ) AdjSet.empty
   ;;
 
   (* Collect nodes forming the game into a set *)
