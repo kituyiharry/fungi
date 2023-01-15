@@ -7,7 +7,6 @@
  https://www.lri.fr/~filliatr/ftp/publis/ocamlgraph-tfp-8.pdf
  https://bryangarza.github.io/basic-graph-traversal-in-ocaml.html
  https://gist.github.com/theawesomestllama/7d1c0961a2c4446ef40b
-
 ************************)
 
 (**

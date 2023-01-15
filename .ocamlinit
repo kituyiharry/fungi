@@ -138,7 +138,22 @@ let q_adjlist =
 
 let q = PGame.use_adjlist_desc q_adjlist q;;
 
+let r = PGame.empty
 
+let (r_100, r)  = PGame.add_node   PGame.Even 100 r;;
+let (r_5, r)  = PGame.add_node   PGame.Even 5   r;;
+let (r_1, r)  = PGame.add_node   PGame.Even 1   r;;
+let (r_0, r)  = PGame.add_node   PGame.Even 0   r;;
+
+let r_adjlist =
+  [
+    (r_0,   [r_0;]);
+    (r_100, [r_0;]);
+    (r_5,   [r_100; r_1]);
+    (r_1,   [r_5;])
+  ]
+
+let r = PGame.use_adjlist_desc r_adjlist r;;
 
 (* Convenience functions for printing in the REPl *)
 (** [asplayerprio PGame.t (identity * priority)]

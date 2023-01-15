@@ -115,6 +115,10 @@ module PGame = struct
   Structural difference i.e Odd != Even or Even != Odd *)
   let diffplayer player_a (Label (Priority (_, player_b), _)) = player_a <> player_b
 
+  let playerof (Label (Priority (_, playeri), _)) = playeri
+
+  let priorityof (Label ((p, _))) = p
+
   (** [invertplayer identity identity]
   Invert player switches between players but maintains structure *)
   let invert = function
@@ -128,13 +132,45 @@ module PGame = struct
     @@ AdjSet.filter (fun y -> AdjSet.mem y attractor) (outgoingof node game)
   ;;
 
-  (*NB: Strat.of_list doesn't check for duplication in  some cases*)
-  let getstrategy player attractor game =
-    Strat.of_list
+  (* Left to right is being added as the edge *)
+  let validstrategy stratset owner (protagonist, foreigner) =
+    if Strat.mem (protagonist, foreigner) stratset then
+      stratset
+    else if sameplayer (playerof protagonist) foreigner then
+      Strat.add (protagonist, foreigner) stratset
+    else
+      if sameplayer owner protagonist then
+        if (cmpprio (priorityof protagonist) (priorityof foreigner)) > 0 then
+          Strat.add (protagonist, foreigner) stratset
+        else
+          stratset
+      else
+        if (cmpprio (priorityof protagonist) (priorityof foreigner)) > 0 then
+          stratset
+        else
+          Strat.add (protagonist, foreigner) stratset
+  ;;
+
+
+  (**
+    * In the attractor
+    * - start from max_same_player_node
+    * - keep a visited set (max is the first in this node)
+    * - keep a cycle set for a node (max is also in this node)
+    * - from incoming of max_player_node
+    * - same player as attractor pointing back can be added
+    * - different player must take priority value into account
+    * - priority of different must be less than max to be added
+    * - different player pointing back with smaller cardinality can be added
+    * - cardinal priority with respect to the priority
+   *)
+  let getstrategy player attractor game stratstate =
+    stratstate
+    |> Strat.fold (fun ply acc -> validstrategy acc player ply)
+    @@ Strat.of_list
     @@ List.flatten
     @@ List.map (into_strat attractor game)
-    @@ AdjSet.elements
-    @@ AdjSet.filter (sameplayer player) attractor
+    @@ AdjSet.elements attractor
   ;;
 
   (** [playerof identity player]
@@ -205,7 +241,7 @@ module PGame = struct
         let (newattr, morenodes) =
           (AdjSet.add node accum, AdjSet.union newels rest)
         in
-        let newstrat =  (getstrategy player newattr game)
+        let newstrat =  (getstrategy player newattr game strats)
         in
           attractor player game newattr morenodes (Strat.union newstrat strats)
     | _ -> (attractorset, strats)
@@ -256,8 +292,9 @@ module PGame = struct
   (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
     Largest priority node in the game *)
   let max_priority_node = Graph.max_elt
-  let null_strategy  = (Strat.empty, Strat.empty)
-  let null_region  = (AdjSet.empty, AdjSet.empty)
+  let empty_strategy  = (Strat.empty, Strat.empty)
+  let empty_region  = (AdjSet.empty, AdjSet.empty)
+
   let rec ustrat strategies =
     match strategies with
     | [] -> Strat.empty
@@ -276,12 +313,12 @@ module PGame = struct
   *)
   let rec zielonka:'a Nodes.t -> solution = fun game ->
     if Nodes.is_empty game then
-      { regions=null_region; strategy=null_strategy; }
+      { regions=empty_region; strategy=empty_strategy; }
     else
       let node, _       = max_priority_node game in
       let i             = omega node in
       let u             = cluster node game in
-      let tau           = getstrategy i u game in
+      let tau           = getstrategy i u game Strat.empty in
       let (a, tau')     = attr (i) ?set:(Some u) game in
       let g_a           = carve game a in
       let { regions=(w_0, w_1); strategy=(s_0, s_1); } = zielonka g_a in
@@ -290,8 +327,8 @@ module PGame = struct
           | Odd  -> (w_1, w_0) ) in
           if AdjSet.is_empty w_1_i then
             let strat = match i with
-              | Even -> (ustrat [s_0;tau;tau';], Strat.empty)
-              | Odd  -> (Strat.empty, ustrat [s_1;tau;tau';]) in
+              | Even -> (ustrat [s_0;tau;tau'], Strat.empty)
+              | Odd  -> (Strat.empty, ustrat [s_1;tau;tau']) in
             { regions=((collective game), AdjSet.empty); strategy=strat }
           else
             let (b, rho) = attr (invert i) ?set:(Some w_1_i) game in
