@@ -154,10 +154,10 @@ module PGame = struct
 
   (**
     * In the attractor
-    * - start from max_same_player_node
+    * - start from max same player node
     * - keep a visited set (max is the first in this node)
     * - keep a cycle set for a node (max is also in this node)
-    * - from incoming of max_player_node
+    * - from incoming of max player node
     * - same player as attractor pointing back can be added
     * - different player must take priority value into account
     * - priority of different must be less than max to be added

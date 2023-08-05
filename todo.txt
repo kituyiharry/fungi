@@ -1,0 +1,9 @@
+skiplist for sorted-set
+hyperloglog algo
+hashindex for kv based on hash
+sstable - data-on-disk sorted order
+lsmtree | memtable -  store recent writes (write-ops)
+BTree | B+ Tree - store and receive large amounts of data (indexes)
+Inverted index - efficient search and retrieve data (word -> document)
+suffix-trree - search
+ortree - spatial index data structure
