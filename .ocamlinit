@@ -160,7 +160,7 @@ let r_adjlist =
 let r = PGame.use_adjlist_desc r_adjlist r;;
 
 (* Convenience functions for printing in the REPl *)
-(** [asplayerprio PGame.t (identity * priority)]
+(** [asplayerprio PGame.t (node * priority)]
 helper to show parity game as a graph without the random generated ids *)
 let asplayerprio (PGame.Label (PGame.Priority (value, player) as prio , _rand)) =
     (player, prio)
@@ -234,7 +234,7 @@ let pp_node (PGame.Label (prio, _rand )) =
   pp_prio prio
 ;;
 
-let pp_player_adjlist: (PGame.identity * PGame.identity list) -> unit =
+let pp_player_adjlist: (PGame.node * PGame.node list) -> unit =
   fun  (n, a)->
     let () = pp_node n in
     let () = Format.printf "\t-> [" in
@@ -266,7 +266,7 @@ let pp_adjset_prefix set prefix =
   Format.printf "} "
 ;;
 
-let pp_player_inc_out: (PGame.identity * PGame.AdjSet.t * PGame.AdjSet.t) -> unit =
+let pp_player_inc_out: (PGame.node * PGame.AdjSet.t * PGame.AdjSet.t) -> unit =
   fun  (n, i, o)->
     let () = Format.printf "    " in
     let () = pp_node n in

@@ -28,8 +28,11 @@ module type SET = sig
   val render : int set -> unit
   val invert : 'a set-> 'a set
   val inorder: 'a list -> 'a set -> 'a list
+  val iter_inorder: ('a -> unit) -> 'a set -> unit
   val preorder: 'a list -> 'a set -> 'a list
+  val iter_preorder: ('a -> unit) -> 'a set -> unit
   val postorder: 'a list -> 'a set -> 'a list
+  val iter_postorder: ('a -> unit) -> 'a set ->  unit
 end
 
 module BSTSet : SET = struct
@@ -37,6 +40,7 @@ module BSTSet : SET = struct
   type 'a tree =
     | Empty
     | Node of 'a tree * 'a * 'a tree
+  ;;
 
   type 'a set = 'a tree
 
@@ -52,6 +56,7 @@ module BSTSet : SET = struct
           Node (left, v, add aval right)
         else
           Node(left, v, right);; (* What do i do here, they are equal *)
+  ;;
 
   (** [member 'a 'a set] Checks whether 'a is a member of the set *)
   let rec member aval = function
@@ -190,6 +195,14 @@ module BSTSet : SET = struct
         inorder ((inorder stack x) @ [a]) y
   ;; (* Inorder traversal - Left - Root - Right *)
 
+  let rec iter_inorder g = function
+    | Empty -> ()
+    | Node (Empty, a, Empty) ->  (g a)
+    | Node (x, a, y) ->
+        let _ = iter_inorder g x in
+          let _ = g a in
+            iter_inorder g y
+  ;; (* Inorder traversal - Left - Root - Right *)
 
   (** [preorder 'a set] Preorder walk on the set *)
   let rec preorder stack = function
@@ -199,12 +212,32 @@ module BSTSet : SET = struct
        preorder (preorder (stack @ [a]) x) y
   ;; (* Preorder traversal - Root - left - Right*)
 
+  (** [preorder 'a set] Preorder walk on the set *)
+  let rec iter_preorder g = function
+    | Empty -> ()
+    | Node (Empty, a, Empty) ->  (g a)
+    | Node (x, a, y) ->
+        let _ = g a in
+          let _ = iter_preorder g x in
+            iter_preorder g y
+  ;; (* Preorder traversal - Root - left - Right*)
+
   (** [postorder 'a set] Postorder walk on the set *)
   let rec postorder stack = function
     | Empty -> stack
     | Node (Empty, a, Empty) ->  stack @ [a]
     | Node (x, a, y) ->
         (postorder (postorder stack x) y) @ [a]
+  ;; (* Postorder traversal Left - Right - Root *)
+
+  (** [postorder 'a set] Postorder walk on the set *)
+  let rec iter_postorder g = function
+    | Empty -> ()
+    | Node (Empty, a, Empty) ->  (g a)
+    | Node (x, a, y) ->
+        let _ = iter_postorder g x in
+          let _ =  iter_postorder g y in
+              g a
   ;; (* Postorder traversal Left - Right - Root *)
 
 end

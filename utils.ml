@@ -61,4 +61,7 @@ module Utils = struct
 
 ;;
 
+let print_ints x =
+  Printf.sprintf  (format_of_string " %d ") x
+
 end

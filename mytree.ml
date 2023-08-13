@@ -34,10 +34,13 @@ module MyTree = struct
     | Node (y, left, right) ->
         x = y || (x < y && mem x left) || (x > y && mem y right);;
 
-  let rec inorder stack = function
+  let rec iter f stack = function
     | Leaf -> stack
-    | Node (a, Leaf, Leaf) ->  a :: stack
-    | Node (_, x, y) ->
-        inorder (inorder stack x) y
+    | Node (a, Leaf, Leaf) -> 
+      let () = f a in 
+        a :: stack
+    | Node (a, x, y) ->
+      let () = f a in 
+        iter f (iter f stack x) y
 
 end

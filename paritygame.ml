@@ -25,7 +25,7 @@ module PGame = struct
 
   (* Each node is given a unique label for identification purposes consisting of
    the player type and identifier *)
-  type identity =
+  type node =
     | Label of (priority * RAND.t)
   ;;
 
@@ -43,7 +43,7 @@ module PGame = struct
       let compare = cmpprio
     end)
     (struct
-      type t      = identity   (* The type to uniquely identify a node *)
+      type t      = node   (* The type to uniquely identify a node *)
       let compare = cmprands
     end)
 
@@ -56,7 +56,7 @@ module PGame = struct
   (* Empty Game is just an empty Graph *)
   let empty = Graph.empty
 
-  type play = (identity * identity)
+  type play = (node * node)
 
   (* This play implicitly makes the assumption that a strategy can ONLY be used
    to pick one path - so there is no need to check the 2nd one because a player
@@ -132,7 +132,8 @@ module PGame = struct
     @@ AdjSet.filter (fun y -> AdjSet.mem y attractor) (outgoingof node game)
   ;;
 
-  (* Left to right is being added as the edge *)
+  (* Checks whether the a play can be added as a strategy for owner into the
+     strategy set *)
   let validstrategy stratset owner (protagonist, foreigner) =
     if Strat.mem (protagonist, foreigner) stratset then
       stratset
@@ -163,14 +164,25 @@ module PGame = struct
     * - priority of different must be less than max to be added
     * - different player pointing back with smaller cardinality can be added
     * - cardinal priority with respect to the priority
-   *)
+
+    (*let biggest = AdjSet.max_elt attractor in*)
+      (*(*let  (visited, cycle) = (AdjSet.empty, AdjSet.empty) in*)*)
+        (*let inc = incomingof biggest game in*)
+          (*AdjSet.fold  (fun enc acc -> *)
+              (*if sameplayer player enc then *)
+                (*validstrategy acc player (enc, biggest)*)
+              (*else*)
+                (*acc*)
+          (*) inc stratstate*)
+
+    *)
   let getstrategy player attractor game stratstate =
     stratstate
     |> Strat.fold (fun ply acc -> validstrategy acc player ply)
     @@ Strat.of_list
     @@ List.flatten
     @@ List.map (into_strat attractor game)
-    @@ AdjSet.elements attractor
+    @@ AdjSet.elements attractor (* from attractor *)
   ;;
 
   (** [playerof identity player]
