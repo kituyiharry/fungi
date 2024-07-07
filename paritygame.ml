@@ -8,7 +8,7 @@
     https://github.com/janestreet/core_kernel/search?q=Unique_Id
     https://ocaml.janestreet.com/ocaml-core/109.55.00/tmp/core_kernel/Unique_id.Int.html
  *)
-module RAND: Core.Unique_id.Id = Core.Unique_id.Int63 ()
+module RAND = Random.State
 
 module PGame = struct
 
@@ -29,16 +29,15 @@ module PGame = struct
     | Label of (priority * RAND.t)
   ;;
 
-  let randof (Label(_, l)) = l
+  let labelof (Label(_, l)) = l
 
-  let cmprands  (Label(_, l)) (Label(_, r)) = (RAND.compare l r)
+  let cmprands  (Label(_, l)) (Label(_, r)) = (compare l r)
 
   let cmpprio (Priority lp) (Priority rp) = (compare lp rp)
 
   (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] .. *)
   (* Noted: there is duplication of priority type -> doesn't help at all *)
-  module Graph  = Mygraph.MakeGraph
-    (struct
+  module Graph  = Mygraph.MakeGraph(struct
       type t      = priority   (* The type of the internal data *)
       let compare = cmpprio
     end)
@@ -63,7 +62,7 @@ module PGame = struct
    cannot play 2 strategies! i.e this does not properly compare the RAND parts
 
    Consultation needed *)
-  let cmpplays (lf, _lt) (rf, _rt) = RAND.compare (randof lf) (randof rf)
+  let cmpplays (lf, _lt) (rf, _rt) = compare (labelof lf) (labelof rf)
 
   module Strat = Set.Make(struct
     type t = play
@@ -84,7 +83,7 @@ module PGame = struct
      return (label id * internal graph)*)
   let add_node player priority game =
     let
-      label    = Label ((Priority (priority, player)), (RAND.create ()))
+      label    = Label ((Priority (priority, player)), (RAND.make_self_init ()))
         and
       nodedata = (Priority (priority, player))
     in
