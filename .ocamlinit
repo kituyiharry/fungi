@@ -288,32 +288,35 @@ let pp_parity_game_redundant:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) 
 ;;
 
 let ppluck fromset =
-  match PGame.Strat.max_elt_opt fromset with
-  | Some(node) -> Some (node, (PGame.Strat.remove node fromset))
+  match PGame.StrSet.max_elt_opt fromset with
+  | Some(node) -> Some (node, (PGame.StrSet.remove node fromset))
   | _ -> None
 ;;
 
-let rec pp_strat: PGame.Strat.t ->  unit = fun strat ->
-  match ppluck strat with
-  | None -> ()
-  | Some(((f, t), rest)) -> (
-    pp_node f; Format.printf " -> "; pp_node t; Format.printf ",";
-    pp_strat rest
-  );
+let rec pp_strat: PGame.StrSet.t ->  unit = fun strat ->
+  if PGame.StrSet.is_empty strat then
+    Format.printf " ∅ "
+  else
+    match ppluck strat with
+    | None -> ()
+    | Some(((f, t), rest)) -> (
+      pp_node f; Format.printf " -> "; pp_node t; Format.printf ",";
+      pp_strat rest
+    );
 ;;
 
 let pp_solution:(PGame.solution) -> unit = fun sol ->
  let ((w0, w1), (s0, s1)) = (sol.regions, sol.strategy) in
   Format.printf "\n\t+ ---  ---  --- --- --- --- --- --- --- --- --- --- ---";
   Format.printf "\n\t|\n\t| W0: ";  pp_adjset w0;
-  Format.printf "\n\t| S0:   < ";  pp_strat s0; Format.printf ">";
+  Format.printf "\n\t| S0:    <";  pp_strat s0; Format.printf ">";
   Format.printf "\n\t|\n\t| ---  ---  --- --- --- --- --- --- --- --- --- --- ---";
   Format.printf "\n\t|\n\t| W1: ";  pp_adjset w1;
-  Format.printf "\n\t| S1:   < ";  pp_strat s1; Format.printf ">";
+  Format.printf "\n\t| S1:    <";  pp_strat s1; Format.printf ">";
   Format.printf "\n\t|\n\t+ ---  ---  --- --- --- --- --- --- --- --- --- --- ---"
 ;;
 
-(*#install_printer pp_parity_game;;*)
+#install_printer pp_parity_game;;
 #install_printer pp_parity_game_redundant;;
 #install_printer pp_adjset;;
 #install_printer pp_prio;;
@@ -321,7 +324,7 @@ let pp_solution:(PGame.solution) -> unit = fun sol ->
 #install_printer pp_strat;;
 #install_printer pp_solution;;
 
-(*#trace PGame.zielonka;;*)
+#trace PGame.zielonka;;
 (*#trace PGame.stack;;*)
-(*#trace PGame.Strat.of_list;;*)
+(*#trace PGame.StrSet.of_list;;*)
 (*#trace PGame.cmpplays;;*)

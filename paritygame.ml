@@ -64,7 +64,7 @@ module PGame = struct
    Consultation needed *)
   let cmpplays (lf, _lt) (rf, _rt) = compare (labelof lf) (labelof rf)
 
-  module Strat = Set.Make(struct
+  module StrSet = Set.Make(struct
     type t = play
     let compare = cmpplays
   end)
@@ -73,7 +73,7 @@ module PGame = struct
      corresponding strategies for each player *)
   type solution = {
     regions:  (AdjSet.t * AdjSet.t); (* W0 , W1 *)
-    strategy: (Strat.t* Strat.t) (* [0 x -> x+1], [1 y -> y+1] *)
+    strategy: (StrSet.t* StrSet.t) (* [0 x -> x+1 -> ... ], [1 y -> y+1 -> ... ] *)
   }
 
   (** [ add_node player int PGame.t]
@@ -134,21 +134,21 @@ module PGame = struct
   (* Checks whether the a play can be added as a strategy for owner into the
      strategy set *)
   let validstrategy stratset owner (protagonist, foreigner) =
-    if Strat.mem (protagonist, foreigner) stratset then
+    if StrSet.mem (protagonist, foreigner) stratset then
       stratset
     else if sameplayer (playerof protagonist) foreigner then
-      Strat.add (protagonist, foreigner) stratset
+      StrSet.add (protagonist, foreigner) stratset
     else
       if sameplayer owner protagonist then
         if (cmpprio (priorityof protagonist) (priorityof foreigner)) > 0 then
-          Strat.add (protagonist, foreigner) stratset
+          StrSet.add (protagonist, foreigner) stratset
         else
           stratset
       else
         if (cmpprio (priorityof protagonist) (priorityof foreigner)) > 0 then
           stratset
         else
-          Strat.add (protagonist, foreigner) stratset
+          StrSet.add (protagonist, foreigner) stratset
   ;;
 
 
@@ -177,8 +177,8 @@ module PGame = struct
     *)
   let getstrategy player attractor game stratstate =
     stratstate
-    |> Strat.fold (fun ply acc -> validstrategy acc player ply)
-    @@ Strat.of_list
+    |> StrSet.fold (fun ply acc -> validstrategy acc player ply)
+    @@ StrSet.of_list
     @@ List.flatten
     @@ List.map (into_strat attractor game)
     @@ AdjSet.elements attractor (* from attractor *)
@@ -254,7 +254,7 @@ module PGame = struct
         in
         let newstrat =  (getstrategy player newattr game strats)
         in
-          attractor player game newattr morenodes (Strat.union newstrat strats)
+          attractor player game newattr morenodes (StrSet.union newstrat strats)
     | _ -> (attractorset, strats)
   ;;
 
@@ -262,7 +262,7 @@ module PGame = struct
     A node is part of its own attractor
    *)
   let attr player ?set:(startset=AdjSet.empty) game =
-    attractor player game startset startset Strat.empty
+    attractor player game startset startset StrSet.empty
   ;;
 
   (** [carve PGame.t AdjSet.t PGame.t]
@@ -303,20 +303,32 @@ module PGame = struct
   (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
     Largest priority node in the game *)
   let max_priority_node = Graph.max_elt
-  let empty_strategy  = (Strat.empty, Strat.empty)
+  let empty_strategy  = (StrSet.empty, StrSet.empty)
   let empty_region  = (AdjSet.empty, AdjSet.empty)
 
   let rec ustrat strategies =
     match strategies with
-    | [] -> Strat.empty
-    |  next :: rest -> Strat.union next (ustrat rest)
+    | [] -> StrSet.empty
+    | next :: rest -> StrSet.union next (ustrat rest)
   ;;
 
   let rec uadj adjacencies =
     match adjacencies  with
     | [] -> AdjSet.empty
-    |  next :: rest -> AdjSet.union next (uadj rest)
+    | next :: rest -> AdjSet.union next (uadj rest)
   ;;
+
+  (* TODO: Figure out how to do Set Ops generically over the modules as bellow  *)
+  (*module type SetOps = sig*)
+    (*type set*)
+    (*val union : set -> set -> set*)
+  (*end*)
+  (*let (<@>) (type a) (module S : SetOps with type set = a) (set1 : a) (set2 : a) =
+    S.union set1 set2*)
+
+  (* Union shorthand *)
+  let (<+>) x y = StrSet.union x y
+  let (<->) x y = AdjSet.union x y
 
   (** [zielonka PGame.t PGame.solution]
     Recursive algorithm which produces winning sets of the game
@@ -329,7 +341,7 @@ module PGame = struct
       let node, _       = max_priority_node game in
       let i             = omega node in
       let u             = cluster node game in
-      let tau           = getstrategy i u game Strat.empty in
+      let tau           = getstrategy i u game StrSet.empty in
       let (a, tau')     = attr (i) ?set:(Some u) game in
       let g_a           = carve game a in
       let { regions=(w_0, w_1); strategy=(s_0, s_1); } = zielonka g_a in
@@ -338,17 +350,17 @@ module PGame = struct
           | Odd  -> (w_1, w_0) ) in
           if AdjSet.is_empty w_1_i then
             let strat = match i with
-              | Even -> (ustrat [s_0;tau;tau'], Strat.empty)
-              | Odd  -> (Strat.empty, ustrat [s_1;tau;tau']) in
+              | Even -> ((s_0 <+> tau <+> tau'), StrSet.empty)
+              | Odd  -> (StrSet.empty, (s_1 <+> tau <+> tau')) in
             { regions=((collective game), AdjSet.empty); strategy=strat }
           else
             let (b, rho) = attr (invert i) ?set:(Some w_1_i) game in
             let g_b      = carve game b in
             let { regions=(w_0', w_1'); strategy=(s_0', s_1') } = zielonka g_b in
             let strat' = match invert i with
-              | Even -> (ustrat [rho;s_0';s_0], s_1')
-              | Odd  -> (s_0', ustrat [rho;s_1';s_1]) in
-            { regions=(uadj [w_1';b], w_0'); strategy=strat' }
+              | Even -> ((rho <+> s_0' <+> s_0), s_1')
+              | Odd  -> (s_0', (rho <+> s_1' <+> s_1)) in
+            { regions=(w_1' <-> b, w_0'); strategy=strat' }
   ;;
 
 end
