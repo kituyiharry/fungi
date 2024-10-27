@@ -26,6 +26,7 @@ let bubble_sort_iter array =
   (*Use refs for some mutability*)
   let mpass = ref 0 in
   let sorted = ref false in
+  (* remember '!' is like 'deref-mut'*)
   while (not !sorted) do
     sorted := true;
 

@@ -175,7 +175,7 @@ module PGame = struct
           (*) inc stratstate*)
 
     *)
-  let getstrategy player attractor game stratstate =
+  let strategy player attractor game stratstate =
     stratstate
     |> StrSet.fold (fun ply acc -> validstrategy acc player ply)
     @@ StrSet.of_list
@@ -252,7 +252,7 @@ module PGame = struct
         let (newattr, morenodes) =
           (AdjSet.add node accum, AdjSet.union newels rest)
         in
-        let newstrat =  (getstrategy player newattr game strats)
+        let newstrat =  (strategy player newattr game strats)
         in
           attractor player game newattr morenodes (StrSet.union newstrat strats)
     | _ -> (attractorset, strats)
@@ -341,13 +341,15 @@ module PGame = struct
       let node, _       = max_priority_node game in
       let i             = omega node in
       let u             = cluster node game in
-      let tau           = getstrategy i u game StrSet.empty in
+      let tau           = strategy i u game StrSet.empty in
       let (a, tau')     = attr (i) ?set:(Some u) game in
       let g_a           = carve game a in
       let { regions=(w_0, w_1); strategy=(s_0, s_1); } = zielonka g_a in
-        let (_w_i, w_1_i) = (match i with
+        let (_w_i, w_1_i) = (
+          match i with
           | Even -> (w_0, w_1)
-          | Odd  -> (w_1, w_0) ) in
+          | Odd  -> (w_1, w_0)
+        ) in
           if AdjSet.is_empty w_1_i then
             let strat = match i with
               | Even -> ((s_0 <+> tau <+> tau'), StrSet.empty)
