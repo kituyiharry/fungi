@@ -8,7 +8,11 @@
     https://github.com/janestreet/core_kernel/search?q=Unique_Id
     https://ocaml.janestreet.com/ocaml-core/109.55.00/tmp/core_kernel/Unique_id.Int.html
  *)
-module RAND = Random.State
+
+
+let monotonic x = let () = x := !x+1 in !x + 1;;
+let entropy = ref 0
+
 
 module PGame = struct
 
@@ -26,7 +30,7 @@ module PGame = struct
   (* Each node is given a unique label for identification purposes consisting of
    the player type and identifier *)
   type node =
-    | Label of (priority * RAND.t)
+    | Label of (priority * int)
   ;;
 
   let labelof (Label(_, l)) = l
@@ -73,8 +77,9 @@ module PGame = struct
      corresponding strategies for each player *)
   type solution = {
     regions:  (AdjSet.t * AdjSet.t); (* W0 , W1 *)
-    strategy: (StrSet.t* StrSet.t) (* [0 x -> x+1 -> ... ], [1 y -> y+1 -> ... ] *)
+    strategy: (StrSet.t * StrSet.t); (* [0 x -> x+1 -> ... ], [1 y -> y+1 -> ... ] *)
   }
+
 
   (** [ add_node player int PGame.t]
      Adds a node as a mapping from a uniqlabel to a triple of incoming,
@@ -83,7 +88,7 @@ module PGame = struct
      return (label id * internal graph)*)
   let add_node player priority game =
     let
-      label    = Label ((Priority (priority, player)), (RAND.make_self_init ()))
+      label    = Label ((Priority (priority, player)), (monotonic entropy))
         and
       nodedata = (Priority (priority, player))
     in
@@ -261,7 +266,7 @@ module PGame = struct
   (** [buildattractor ?set:(AdjSet.t) identity player PGame.t AdjSet.t]
     A node is part of its own attractor
    *)
-  let attr player ?set:(startset=AdjSet.empty) game =
+  let attr player startset game =
     attractor player game startset startset StrSet.empty
   ;;
 
@@ -327,8 +332,8 @@ module PGame = struct
     S.union set1 set2*)
 
   (* Union shorthand *)
-  let (<+>) x y = StrSet.union x y
-  let (<->) x y = AdjSet.union x y
+  let (<->) x y = StrSet.union x y
+  let (<+>) x y = AdjSet.union x y
 
   (** [zielonka PGame.t PGame.solution]
     Recursive algorithm which produces winning sets of the game
@@ -342,7 +347,7 @@ module PGame = struct
       let i             = omega node in
       let u             = cluster node game in
       let tau           = strategy i u game StrSet.empty in
-      let (a, tau')     = attr (i) ?set:(Some u) game in
+      let (a, tau')     = attr (i) u game in
       let g_a           = carve game a in
       let { regions=(w_0, w_1); strategy=(s_0, s_1); } = zielonka g_a in
         let (_w_i, w_1_i) = (
@@ -352,17 +357,18 @@ module PGame = struct
         ) in
           if AdjSet.is_empty w_1_i then
             let strat = match i with
-              | Even -> ((s_0 <+> tau <+> tau'), StrSet.empty)
-              | Odd  -> (StrSet.empty, (s_1 <+> tau <+> tau')) in
+              | Even -> ((s_0 <-> tau <-> tau'), StrSet.empty)
+              | Odd  -> (StrSet.empty, (s_1 <-> tau <-> tau')) in
             { regions=((collective game), AdjSet.empty); strategy=strat }
           else
-            let (b, rho) = attr (invert i) ?set:(Some w_1_i) game in
+            let flip     = invert i in
+            let (b, rho) = attr (flip) w_1_i game in
             let g_b      = carve game b in
             let { regions=(w_0', w_1'); strategy=(s_0', s_1') } = zielonka g_b in
-            let strat' = match invert i with
-              | Even -> ((rho <+> s_0' <+> s_0), s_1')
-              | Odd  -> (s_0', (rho <+> s_1' <+> s_1)) in
-            { regions=(w_1' <-> b, w_0'); strategy=strat' }
+            let strat' = match flip with
+              | Even -> ((rho <-> s_0' <-> s_0), s_1')
+              | Odd  -> (s_0', (rho <-> s_1' <-> s_1)) in
+            { regions=(w_1' <+> b, w_0'); strategy=strat' }
   ;;
 
 end
