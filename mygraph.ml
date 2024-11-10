@@ -13,18 +13,21 @@
  * Functor to produce a graph from any ordinal type
  * using Node as the data and labels as key for identifying the node
  **)
-module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
+module MakeGraph(Node: Myset.Ord)(Label: Myset.Ord) = struct
 
   (** Adjacency list graph definition **)
   type t = (
-    (* Incoming nodes      Outgoing nodes         label *)
-    Set.Make(Label).t * Set.Make(Label).t * Node.t
+    (* Incoming nodes            Outgoing nodes               label *)
+    (Myset.TreeSet (Label).elt * Myset.TreeSet (Label).elt  * Node.t)
     (* Map from NodeType.t to (incoming outgoing label) *)
   ) Map.Make(Label).t
 
   (** Module for manipulating the Set structure holding the Adjacency list
-      holding Label.t *)
-  module AdjSet  = Set.Make (Label)
+      holding Label.t 
+
+    TODO: Find a way to pass your own Set implementation
+   *)
+  module AdjSet  = Myset.TreeSet (Label)
 
   (** Module for manipulating the Map (Node -> (set , set , label)) *)
   module NodeMap = Map.Make (Label)
@@ -58,11 +61,19 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
     | nodeTo :: rest -> add_edge nodeFrom nodeTo (add_all nodeFrom rest nodeMap)
   ;;
 
-  let rec from_list_description adjList nodeMap = match adjList with
+  let rec of_list adjList nodeMap = match adjList with
     | [] -> nodeMap
     | (nodeFrom, nodeJoinList) :: rest ->
-        add_all nodeFrom nodeJoinList (from_list_description rest nodeMap)
+        add_all nodeFrom nodeJoinList (of_list rest nodeMap)
   ;;
+
+  (** [ incomingof identity (Graph.t) AdjSet.t]
+  Incoming set of nodes *)
+  let incomingof node game = let (inc, _, _) = NodeMap.find node game in inc
+
+  (** [ incomingof identity (Graph.t) AdjSet.t]
+  Outgoing set of nodes *)
+  let outgoingof node game = let (_, out, _) = NodeMap.find node game in out
 
   (*
    * Removes a node from the graph
@@ -94,7 +105,7 @@ module MakeGraph(Node: Set.OrderedType)(Label: Map.OrderedType) = struct
       AdjSet.fold (
         fun anode alist ->
           anode :: alist
-      ) (AdjSet.union incoming outgoing) []
+        )  (AdjSet.union incoming outgoing) []
   ;;
 
   (* Get adjacency list of a node *)

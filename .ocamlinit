@@ -74,16 +74,16 @@ let p_adjlist =
     (l_15, [l_13])
 ]
 
-let p = PGame.use_adjlist_desc p_adjlist p;;
+let p = PGame.Graph.of_list p_adjlist p;;
 
 (** Effect of opposer-controlled but supportive priority *)
 
-(*let p = PGame.add_edge l_16 l_2   p;;*)
-(*let p = PGame.add_edge l_2 l_16   p;;*)
-(*let p = PGame.add_edge l_15 l_31  p;;*)
-(*let p = PGame.add_edge l_31 l_15  p;;*)
-(*let p = PGame.add_edge l_31 l_16  p;;*)
-(*let p = PGame.add_edge l_16 l_31  p;;*)
+(*let p = PGame.Graph.add_edge l_16 l_2   p;;*)
+(*let p = PGame.Graph.add_edge l_2 l_16   p;;*)
+(*let p = PGame.Graph.add_edge l_15 l_31  p;;*)
+(*let p = PGame.Graph.add_edge l_31 l_15  p;;*)
+(*let p = PGame.Graph.add_edge l_31 l_16  p;;*)
+(*let p = PGame.Graph.add_edge l_16 l_31  p;;*)
 
 (** Leading into the highest value of the opposition *)
 (*let p = PGame.add_edge l_11 l_31  p;;*)
@@ -136,7 +136,7 @@ let q_adjlist =
     (q_9, [q_2; q_4; q_8;])
   ]
 
-let q = PGame.use_adjlist_desc q_adjlist q;;
+let q = PGame.Graph.of_list q_adjlist q;;
 
 let r = PGame.empty
 
@@ -157,7 +157,7 @@ let r_adjlist =
     (r_0_c, [r_0_c]);
   ]
 
-let r = PGame.use_adjlist_desc r_adjlist r;;
+let r = PGame.Graph.of_list r_adjlist r;;
 
 (* Convenience functions for printing in the REPl *)
 (** [asplayerprio PGame.t (node * priority)]
@@ -177,6 +177,18 @@ let pp_parity_game:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Node
    (
     PGame.Graph.elt_bindings game
    );
+  Format.printf "} "
+;;
+
+let pp_adjset_depth (set: PGame.AdjSet.t) =
+  Format.printf "A: {";
+  if PGame.AdjSet.is_empty set then
+  Format.printf " ∅ "
+      else
+  List.iter (print_player_prio)
+  (
+    List.map (asplayerprio) @@ PGame.AdjSet.elements set
+  );
   Format.printf "} "
 ;;
 
@@ -281,7 +293,8 @@ let pp_parity_game_redundant:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) 
   Format.printf "{\n";
    List.iter (pp_player_inc_out)
    (
-     List.map (fun (node, _) -> (node, PGame.incomingof node game, PGame.outgoingof node game ))
+     List.map (fun (node, _) -> (node, PGame.Graph.incomingof node game,
+                PGame.Graph.outgoingof node game ))
      @@ PGame.Graph.elt_bindings game
    );
   Format.printf "} "
@@ -323,8 +336,22 @@ let pp_solution:(PGame.solution) -> unit = fun sol ->
 #install_printer pp_node;;
 #install_printer pp_strat;;
 #install_printer pp_solution;;
+#install_printer pp_adjset_depth;;
 
-#trace PGame.zielonka;;
+(*#trace PGame.zielonka;;*)
+(*#trace PGame.attr;;*)
+(*#trace PGame.attractor;;*)
+(*#trace PGame.attract;;*)
+(*#trace PGame.attractive;;*)
+(*#trace PGame.cluster;;*)
+(*#trace PGame.pluck;;*)
+(*#trace PGame.incomingof;;*)
+(*#trace PGame.outgoingof;;*)
+(*#trace PGame.carve;;*)
+(*#trace PGame.AdjSet.remove;;*)
+(*#trace PGame.AdjSet.diff;;*)
+(*#trace PGame.AdjSet.filter;;*)
+(*#trace PGame.AdjSet.subset;;*)
 (*#trace PGame.stack;;*)
 (*#trace PGame.StrSet.of_list;;*)
 (*#trace PGame.cmpplays;;*)
