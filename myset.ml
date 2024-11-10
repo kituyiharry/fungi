@@ -73,8 +73,8 @@ struct
 
     (** [member 'a 'a set] Checks whether 'a is a member of the set *)
     let rec mem aval = function
-        | Empty -> false                
-        | Node(left, v, right) ->       
+        | Empty -> false
+        | Node(left, v, right) ->
             let p = Ord.compare aval v in
             p = 0 || (if p > 0 then mem aval right else mem aval left)
     ;;
@@ -267,7 +267,7 @@ struct
     (* subset other self -> other is subset of self *)
     let subset other = function
         | Empty -> is_empty other
-        | nodes -> 
+        | nodes ->
             for_all (fun x -> mem x nodes) other
     ;;
 
