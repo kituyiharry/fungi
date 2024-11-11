@@ -6,30 +6,30 @@ open Libset.Paritygame;;
 open Libset.Myset;;
 open Libset.Utils;;
 
-let p = PGame.empty;;
+let p = ParityGame.empty;;
 
 (* I also assume there are no same priority nodes to make life easy *)
-let (l_2, p)  = PGame.add_node  PGame.Even 2  p;;
-let (l_4, p)  = PGame.add_node  PGame.Even 4  p;;
-let (l_6, p)  = PGame.add_node  PGame.Even 6  p;;
-let (l_8, p)  = PGame.add_node  PGame.Even 8  p;;
-let (l_10,p)  = PGame.add_node  PGame.Even 10 p;;
-let (l_3, p)  = PGame.add_node  PGame.Odd  3  p;;
-let (l_5, p)  = PGame.add_node  PGame.Odd  5  p;;
-let (l_7, p)  = PGame.add_node  PGame.Odd  7  p;;
-let (l_9, p)  = PGame.add_node  PGame.Odd  9  p;;
-let (l_11,p)  = PGame.add_node  PGame.Odd  11 p;;
-let (l_13,p)  = PGame.add_node  PGame.Odd  13 p;;
-let (l_15,p)  = PGame.add_node  PGame.Odd  15 p;;
+let (l_2, p)  = ParityGame.add_node  ParityGame.Even 2  p;;
+let (l_15,p)  = ParityGame.add_node  ParityGame.Odd  15 p;;
+let (l_4, p)  = ParityGame.add_node  ParityGame.Even 4  p;;
+let (l_6, p)  = ParityGame.add_node  ParityGame.Even 6  p;;
+let (l_8, p)  = ParityGame.add_node  ParityGame.Even 8  p;;
+let (l_10,p)  = ParityGame.add_node  ParityGame.Even 10 p;;
+let (l_3, p)  = ParityGame.add_node  ParityGame.Odd  3  p;;
+let (l_5, p)  = ParityGame.add_node  ParityGame.Odd  5  p;;
+let (l_7, p)  = ParityGame.add_node  ParityGame.Odd  7  p;;
+let (l_9, p)  = ParityGame.add_node  ParityGame.Odd  9  p;;
+let (l_11,p)  = ParityGame.add_node  ParityGame.Odd  11 p;;
+let (l_13,p)  = ParityGame.add_node  ParityGame.Odd  13 p;;
 
 (** Effect of opposer-controlled but supportive priority *)
 
-(*let (l_16,p)  = PGame.add_node  PGame.Odd  16 p;;*)
-(*let (l_31,p)  = PGame.add_node  PGame.Even 31 p;;*)
+(*let (l_16,p)  = ParityGame.add_node  ParityGame.Odd  16 p;;*)
+(*let (l_31,p)  = ParityGame.add_node  ParityGame.Even 31 p;;*)
 
 (** Effect of  Disjointness  - Graph not being fully connected *)
 
-(*let (l_99,p)  = PGame.add_node  PGame.Odd  9 p;;*)
+(*let (l_99,p)  = ParityGame.add_node  ParityGame.Odd  9 p;;*)
 
 (**
   A non-empty Parity game will always have a Even labeled node 2 or
@@ -74,23 +74,23 @@ let p_adjlist =
     (l_15, [l_13])
 ]
 
-let p = PGame.Graph.of_list p_adjlist p;;
+let p = ParityGame.Graph.of_list p_adjlist p;;
 
 (** Effect of opposer-controlled but supportive priority *)
 
-(*let p = PGame.Graph.add_edge l_16 l_2   p;;*)
-(*let p = PGame.Graph.add_edge l_2 l_16   p;;*)
-(*let p = PGame.Graph.add_edge l_15 l_31  p;;*)
-(*let p = PGame.Graph.add_edge l_31 l_15  p;;*)
-(*let p = PGame.Graph.add_edge l_31 l_16  p;;*)
-(*let p = PGame.Graph.add_edge l_16 l_31  p;;*)
+(*let p = ParityGame.Graph.add_edge l_16 l_2   p;;*)
+(*let p = ParityGame.Graph.add_edge l_2 l_16   p;;*)
+(*let p = ParityGame.Graph.add_edge l_15 l_31  p;;*)
+(*let p = ParityGame.Graph.add_edge l_31 l_15  p;;*)
+(*let p = ParityGame.Graph.add_edge l_31 l_16  p;;*)
+(*let p = ParityGame.Graph.add_edge l_16 l_31  p;;*)
 
 (** Leading into the highest value of the opposition *)
-(*let p = PGame.add_edge l_11 l_31  p;;*)
+(*let p = ParityGame.add_edge l_11 l_31  p;;*)
 
 (** Effect of  Disjointness *)
 
-(*let p = PGame.add_edge l_99 l_99  p;;*)
+(*let p = ParityGame.add_edge l_99 l_99  p;;*)
 
 
 (**
@@ -109,18 +109,18 @@ parity 10;
 
  *)
 
-let q =  PGame.empty
+let q =  ParityGame.empty
 
-let (q_0, q)  = PGame.add_node   PGame.Even 6  q;;
-let (q_1, q)  = PGame.add_node   PGame.Even 10 q;;
-let (q_2, q)  = PGame.add_node   PGame.Odd  6  q;;
-let (q_3, q)  = PGame.add_node   PGame.Even 2  q;;
-let (q_4, q)  = PGame.add_node   PGame.Even 7  q;;
-let (q_5, q)  = PGame.add_node   PGame.Even 0  q;;
-let (q_6, q)  = PGame.add_node   PGame.Even 7  q;;
-let (q_7, q)  = PGame.add_node   PGame.Even 9  q;;
-let (q_8, q)  = PGame.add_node   PGame.Even 9  q;;
-let (q_9, q)  = PGame.add_node   PGame.Even 2  q;;
+let (q_0, q)  = ParityGame.add_node   ParityGame.Even 6  q;;
+let (q_1, q)  = ParityGame.add_node   ParityGame.Even 10 q;;
+let (q_2, q)  = ParityGame.add_node   ParityGame.Odd  6  q;;
+let (q_3, q)  = ParityGame.add_node   ParityGame.Even 2  q;;
+let (q_4, q)  = ParityGame.add_node   ParityGame.Even 7  q;;
+let (q_5, q)  = ParityGame.add_node   ParityGame.Even 0  q;;
+let (q_6, q)  = ParityGame.add_node   ParityGame.Even 7  q;;
+let (q_7, q)  = ParityGame.add_node   ParityGame.Even 9  q;;
+let (q_8, q)  = ParityGame.add_node   ParityGame.Even 9  q;;
+let (q_9, q)  = ParityGame.add_node   ParityGame.Even 2  q;;
 
 let q_adjlist =
   [
@@ -136,16 +136,16 @@ let q_adjlist =
     (q_9, [q_2; q_4; q_8;])
   ]
 
-let q = PGame.Graph.of_list q_adjlist q;;
+let q = ParityGame.Graph.of_list q_adjlist q;;
 
-let r = PGame.empty
+let r = ParityGame.empty
 
-let (r_100, r)  = PGame.add_node PGame.Even 100 r;;
-let (r_5, r)    = PGame.add_node PGame.Even 5   r;;
-let (r_1, r)    = PGame.add_node PGame.Even 1   r;;
-let (r_0, r)    = PGame.add_node PGame.Even 0   r;;
-let (r_0_b, r)  = PGame.add_node PGame.Even 0   r;;
-let (r_0_c, r)  = PGame.add_node PGame.Even 0   r;;
+let (r_100, r)  = ParityGame.add_node ParityGame.Even 100 r;;
+let (r_5, r)    = ParityGame.add_node ParityGame.Even 5   r;;
+let (r_1, r)    = ParityGame.add_node ParityGame.Even 1   r;;
+let (r_0, r)    = ParityGame.add_node ParityGame.Even 0   r;;
+let (r_0_b, r)  = ParityGame.add_node ParityGame.Even 0   r;;
+let (r_0_c, r)  = ParityGame.add_node ParityGame.Even 0   r;;
 
 let r_adjlist =
   [
@@ -157,58 +157,64 @@ let r_adjlist =
     (r_0_c, [r_0_c]);
   ]
 
-let r = PGame.Graph.of_list r_adjlist r;;
+let r = ParityGame.Graph.of_list r_adjlist r;;
 
 (* Convenience functions for printing in the REPl *)
-(** [asplayerprio PGame.t (node * priority)]
+(** [asplayerprio ParityGame.t (node * priority)]
 helper to show parity game as a graph without the random generated ids *)
-let asplayerprio (PGame.Label (PGame.Priority (value, player) as prio , _rand)) =
+let asplayerprio (ParityGame.Label (ParityGame.Priority (value, player) as prio , _rand)) =
     (player, prio)
 ;;
 
-let print_player_prio (_, (PGame.Priority (value, pplayer)))  = match pplayer with
-| PGame.Even -> Format.printf " (Even %d) " value
-| PGame.Odd  -> Format.printf " (Odd %d) " value
+let print_player_prio (ParityGame.Label(ParityGame.Priority (value,pplayer),_), _)  = match pplayer with
+| ParityGame.Even -> Format.printf " (Even %d) " value
+| ParityGame.Odd  -> Format.printf " (Odd %d) " value
 ;;
 
-let pp_parity_game:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit = fun game ->
+let print_player_prio_dir (_, (ParityGame.Priority (value,pplayer)))  = match pplayer with
+| ParityGame.Even -> Format.printf " (Even %d) " value
+| ParityGame.Odd  -> Format.printf " (Odd %d) " value
+;;
+
+let pp_parity_game:(ParityGame.AdjSet.t * ParityGame.AdjSet.t * ParityGame.node) ParityGame.Nodes.t -> unit = fun game ->
   Format.printf "G: {";
    List.iter (print_player_prio)
    (
-    PGame.Graph.elt_bindings game
+    ParityGame.bindings game
    );
   Format.printf "} "
 ;;
 
-let pp_adjset_depth (set: PGame.AdjSet.t) =
-  Format.printf "A: {";
-  if PGame.AdjSet.is_empty set then
-  Format.printf " ∅ "
+let pp_adjset_depth (set: ParityGame.AdjSet.t) =
+  Format.printf "{$ A: {";
+  if ParityGame.AdjSet.is_empty set then
+    Format.printf " ∅ "
       else
-  List.iter (print_player_prio)
+  List.iter (print_player_prio_dir)
   (
-    List.map (asplayerprio) @@ PGame.AdjSet.elements set
+    List.map (asplayerprio) @@ ParityGame.AdjSet.elements set
   );
-  Format.printf "} "
+    Format.printf "} $} "
 ;;
 
 let pp_adjset set =
-  Format.printf "A: {";
-  if PGame.AdjSet.is_empty set then
+  Format.printf "{$ A: {";
+  if ParityGame.AdjSet.is_empty set then
   Format.printf " ∅ "
       else
-  List.iter (print_player_prio)
+  List.iter (print_player_prio_dir)
   (
-    List.map (asplayerprio) @@ PGame.AdjSet.elements set
+    List.map (asplayerprio) @@ ParityGame.AdjSet.elements set
   );
-  Format.printf "} "
+    Format.printf "} $} "
 ;;
 
 let terseness = 30
 
-let pp_parity_game_terse:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit =
+let pp_parity_game_terse:(ParityGame.AdjSet.t * ParityGame.AdjSet.t *
+    ParityGame.node) ParityGame.Nodes.t -> unit =
   fun game ->
-  let card = PGame.Nodes.cardinal game in
+  let card = ParityGame.Nodes.cardinal game in
   if  card <= terseness then
     pp_parity_game game
   else
@@ -216,37 +222,37 @@ let pp_parity_game_terse:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGam
     List.iter (print_player_prio)
     (
       Utils.take terseness
-      @@ PGame.Graph.elt_bindings game
+      @@ ParityGame.bindings game
     );
     Format.printf " ... } ")
 ;;
 
 let pp_adjset_terse set =
-  let card = PGame.AdjSet.cardinal set in
+  let card = ParityGame.AdjSet.cardinal set in
   if  card <= terseness then
     pp_adjset set
   else
     let _ = Format.printf "A: {" in
-    if PGame.AdjSet.is_empty set then
+    if ParityGame.AdjSet.is_empty set then
       Format.printf " ∅ "
     else
-      let _ = List.iter (print_player_prio)
+      let _ = List.iter (print_player_prio_dir)
     (
       (*only take 5 elements for display!*)
-      Utils.take terseness @@ List.map (asplayerprio) @@ PGame.AdjSet.elements set
+      Utils.take terseness @@ List.map (asplayerprio) @@ ParityGame.AdjSet.elements set
     ) in Format.printf " ... } "
 ;;
 
-let pp_prio (PGame.Priority (value, pplayer)) = match pplayer with
-  | PGame.Even -> Format.printf " (Even %d) " value
-  | PGame.Odd  -> Format.printf " (Odd  %d) " value
+let pp_prio (ParityGame.Priority (value, pplayer)) = match pplayer with
+  | ParityGame.Even -> Format.printf " (Even %d) " value
+  | ParityGame.Odd  -> Format.printf " (Odd  %d) " value
 ;;
 
-let pp_node (PGame.Label (prio, _rand )) =
+let pp_node (ParityGame.Label (prio, _rand )) =
   pp_prio prio
 ;;
 
-let pp_player_adjlist: (PGame.node * PGame.node list) -> unit =
+let pp_player_adjlist: (ParityGame.node * ParityGame.node list) -> unit =
   fun  (n, a)->
     let () = pp_node n in
     let () = Format.printf "\t-> [" in
@@ -255,30 +261,30 @@ let pp_player_adjlist: (PGame.node * PGame.node list) -> unit =
 ;;
 
 
-let pp_parity_game_adjacency:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit
+let pp_parity_game_adjacency:(ParityGame.AdjSet.t * ParityGame.AdjSet.t * ParityGame.node) ParityGame.Nodes.t -> unit
 = fun game ->
   Format.printf "{\n";
    List.iter (pp_player_adjlist)
    (
-     List.map (fun (node, _) -> (node, PGame.Graph.adj_list_of node game))
-     @@ PGame.Graph.elt_bindings game
+     List.map (fun (node, _) -> (node, ParityGame.Graph.adj_list_of node game))
+     @@ ParityGame.bindings game
    );
   Format.printf "} "
 ;;
 
 let pp_adjset_prefix set prefix =
   Format.printf "%s: {" prefix;
-  if PGame.AdjSet.is_empty set then
+  if ParityGame.AdjSet.is_empty set then
   Format.printf " ∅ "
       else
-  List.iter (print_player_prio)
+  List.iter (print_player_prio_dir)
   (
-    List.map (asplayerprio) @@ PGame.AdjSet.elements set
+    List.map (asplayerprio) @@ ParityGame.AdjSet.elements set
   );
   Format.printf "} "
 ;;
 
-let pp_player_inc_out: (PGame.node * PGame.AdjSet.t * PGame.AdjSet.t) -> unit =
+let pp_player_inc_out: (ParityGame.node * ParityGame.AdjSet.t * ParityGame.AdjSet.t) -> unit =
   fun  (n, i, o)->
     let () = Format.printf "    " in
     let () = pp_node n in
@@ -288,26 +294,27 @@ let pp_player_inc_out: (PGame.node * PGame.AdjSet.t * PGame.AdjSet.t) -> unit =
     Format.printf "]\n"
 ;;
 
-let pp_parity_game_redundant:(PGame.AdjSet.t * PGame.AdjSet.t * PGame.priority) PGame.Nodes.t -> unit
+let pp_parity_game_redundant:(ParityGame.AdjSet.t * ParityGame.AdjSet.t *
+    ParityGame.node) ParityGame.Nodes.t -> unit
 = fun game ->
   Format.printf "{\n";
    List.iter (pp_player_inc_out)
    (
-     List.map (fun (node, _) -> (node, PGame.Graph.incomingof node game,
-                PGame.Graph.outgoingof node game ))
-     @@ PGame.Graph.elt_bindings game
+     List.map (fun (node, _) -> (node, ParityGame.Graph.incomingof node game,
+                ParityGame.Graph.outgoingof node game ))
+     @@ ParityGame.bindings game
    );
   Format.printf "} "
 ;;
 
 let ppluck fromset =
-  match PGame.StrSet.max_elt_opt fromset with
-  | Some(node) -> Some (node, (PGame.StrSet.remove node fromset))
+  match ParityGame.StrSet.max_elt_opt fromset with
+  | Some(node) -> Some (node, (ParityGame.StrSet.remove node fromset))
   | _ -> None
 ;;
 
-let rec pp_strat: PGame.StrSet.t ->  unit = fun strat ->
-  if PGame.StrSet.is_empty strat then
+let rec pp_strat: ParityGame.StrSet.t ->  unit = fun strat ->
+  if ParityGame.StrSet.is_empty strat then
     Format.printf " ∅ "
   else
     match ppluck strat with
@@ -318,7 +325,7 @@ let rec pp_strat: PGame.StrSet.t ->  unit = fun strat ->
     );
 ;;
 
-let pp_solution:(PGame.solution) -> unit = fun sol ->
+let pp_solution:(ParityGame.solution) -> unit = fun sol ->
  let ((w0, w1), (s0, s1)) = (sol.regions, sol.strategy) in
   Format.printf "\n\t+ ---  ---  --- --- --- --- --- --- --- --- --- --- ---";
   Format.printf "\n\t|\n\t| W0: ";  pp_adjset w0;
@@ -338,20 +345,20 @@ let pp_solution:(PGame.solution) -> unit = fun sol ->
 #install_printer pp_solution;;
 #install_printer pp_adjset_depth;;
 
-(*#trace PGame.zielonka;;*)
-(*#trace PGame.attr;;*)
-(*#trace PGame.attractor;;*)
-(*#trace PGame.attract;;*)
-(*#trace PGame.attractive;;*)
-(*#trace PGame.cluster;;*)
-(*#trace PGame.pluck;;*)
-(*#trace PGame.incomingof;;*)
-(*#trace PGame.outgoingof;;*)
-(*#trace PGame.carve;;*)
-(*#trace PGame.AdjSet.remove;;*)
-(*#trace PGame.AdjSet.diff;;*)
-(*#trace PGame.AdjSet.filter;;*)
-(*#trace PGame.AdjSet.subset;;*)
-(*#trace PGame.stack;;*)
-(*#trace PGame.StrSet.of_list;;*)
-(*#trace PGame.cmpplays;;*)
+(*#trace ParityGame.zielonka;;*)
+(*#trace ParityGame.attr;;*)
+(*#trace ParityGame.attractor;;*)
+(*#trace ParityGame.attract;;*)
+(*#trace ParityGame.attractive;;*)
+(*#trace ParityGame.cluster;;*)
+(*#trace ParityGame.pluck;;*)
+(*#trace ParityGame.incomingof;;*)
+(*#trace ParityGame.outgoingof;;*)
+(*#trace ParityGame.carve;;*)
+(*#trace ParityGame.AdjSet.remove;;*)
+(*#trace ParityGame.AdjSet.diff;;*)
+(*#trace ParityGame.AdjSet.filter;;*)
+(*#trace ParityGame.AdjSet.subset;;*)
+(*#trace ParityGame.stack;;*)
+(*#trace ParityGame.StrSet.of_list;;*)
+(*#trace ParityGame.cmpplays;;*)

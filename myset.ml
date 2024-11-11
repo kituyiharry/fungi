@@ -223,7 +223,6 @@ struct
                     match min with
                     | Some v -> Node(x, v, rest)
                     | None -> x
-
             else if p > 0 then
                 Node(x, a, remove el y)
             else

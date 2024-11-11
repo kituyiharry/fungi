@@ -13,34 +13,40 @@
  * Functor to produce a graph from any ordinal type
  * using Node as the data and labels as key for identifying the node
  **)
-module MakeGraph(Node: Myset.Ord)(Label: Myset.Ord) = struct
 
-  (** Adjacency list graph definition **)
-  type t = (
-    (* Incoming nodes            Outgoing nodes               label *)
-    (Myset.TreeSet (Label).elt * Myset.TreeSet (Label).elt  * Node.t)
+(*module MakeGraph(Node: Myset.Ord)(Label: Myset.Ord) = struct*)
+module MakeGraph(Label: Myset.Ord) = struct
+
+    (* A given set of nodes *)
+    type elt = Myset.TreeSet (Label).t
+
+    (*  Incoming nodes  Outgoing nodes data *)
+    module Vertex = struct 
+        type t = (elt * elt * Label.t)
+        let compare = fun (_, _, lnode) (_, _, rnode) -> Label.compare lnode rnode
+    end
+
+    (** Adjacency list graph definition **)
     (* Map from NodeType.t to (incoming outgoing label) *)
-  ) Map.Make(Label).t
+    type t = (Vertex.t) Map.Make(Label).t
 
-  (** Module for manipulating the Set structure holding the Adjacency list
+    (** Module for manipulating the Set structure holding the Adjacency list
       holding Label.t 
-
-    TODO: Find a way to pass your own Set implementation
    *)
-  module AdjSet  = Myset.TreeSet (Label)
+    module AdjSet  = Myset.TreeSet (Label)
 
-  (** Module for manipulating the Map (Node -> (set , set , label)) *)
-  module NodeMap = Map.Make (Label)
+    (** Module for manipulating the Map (Node -> (set , set , label)) *)
+    module NodeMap = Map.Make (Label)
 
-  (** An empty graph **)
-  let empty = NodeMap.empty
+    (** An empty graph **)
+    let empty = NodeMap.empty
 
-  (** Add a new node with its label -> ( ... , nodedata) *)
-  let add_node nodekey nodedata nodeMap =
-    NodeMap.add nodekey (AdjSet.empty, AdjSet.empty, nodedata) nodeMap
-  ;;
+    (** Add a new node with its label -> ( ... , nodedata) *)
+    let add_node nodekey nodeMap =
+        NodeMap.add nodekey (AdjSet.empty, AdjSet.empty, nodekey) nodeMap
+    ;;
 
-  (**
+    (**
     Add a directed edge [(tail)] --> [(head)] such that the tails outgoing
     set points to the heads incoming set.
 
@@ -48,96 +54,71 @@ module MakeGraph(Node: Myset.Ord)(Label: Myset.Ord) = struct
       (*Update with outgoing*)
         (*Find the head of the directed edge*)
           (*Update with incoming*)
-  *)
-  let add_edge nodeFrom nodeTo nodeMap =
-    let (fromIncoming, fromOutgoing, label) = NodeMap.find nodeFrom nodeMap in
-      let finMap = (NodeMap.add nodeFrom (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label) nodeMap) in
+    *)
+    let add_edge nodeFrom nodeTo nodeMap =
+        let (fromIncoming, fromOutgoing, label) = NodeMap.find nodeFrom nodeMap in
+        let finMap = (NodeMap.add nodeFrom (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label) nodeMap) in
         let (toIncoming, toOutgoing, label) = NodeMap.find nodeTo finMap in
-          NodeMap.add nodeTo ((AdjSet.add nodeFrom toIncoming), toOutgoing, label) finMap
-  ;;
+            NodeMap.add nodeTo (
+                (AdjSet.add nodeFrom toIncoming), toOutgoing, label) 
+            finMap
+    ;;
 
-  let rec add_all nodeFrom nodeToList nodeMap = match nodeToList with
-    | [] -> nodeMap
-    | nodeTo :: rest -> add_edge nodeFrom nodeTo (add_all nodeFrom rest nodeMap)
-  ;;
+    let rec add_all nodeFrom nodeToList nodeMap = match nodeToList with
+        | [] -> nodeMap
+        | nodeTo :: rest -> add_edge nodeFrom nodeTo (add_all nodeFrom rest nodeMap)
+    ;;
 
-  let rec of_list adjList nodeMap = match adjList with
-    | [] -> nodeMap
-    | (nodeFrom, nodeJoinList) :: rest ->
-        add_all nodeFrom nodeJoinList (of_list rest nodeMap)
-  ;;
+    let rec of_list adjList nodeMap = match adjList with
+        | [] -> nodeMap
+        | (nodeFrom, nodeJoinList) :: rest ->
+            add_all nodeFrom nodeJoinList (of_list rest nodeMap)
+    ;;
 
-  (** [ incomingof identity (Graph.t) AdjSet.t]
+    (** [ incomingof identity (Graph.t) AdjSet.t]
   Incoming set of nodes *)
-  let incomingof node game = let (inc, _, _) = NodeMap.find node game in inc
+    let incomingof node game = let (inc, _, _) = NodeMap.find node game in inc
 
-  (** [ incomingof identity (Graph.t) AdjSet.t]
+    (** [ incomingof identity (Graph.t) AdjSet.t]
   Outgoing set of nodes *)
-  let outgoingof node game = let (_, out, _) = NodeMap.find node game in out
+    let outgoingof node game = let (_, out, _) = NodeMap.find node game in out
 
-  (*
-   * Removes a node from the graph
-   *
-   * I realized since a node can be in the incoming or outgoing (or both),
-   * then a function over the union of both sets while removing in both
-   * still works and is simple enough
-   *
-   * This way i don't have to do an O(n) on both nodes
-   *)
-  let delete_node delnode nodeMap =
-    let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
-      NodeMap.remove delnode (
-        AdjSet.fold ((fun nodelabel updatemap ->
-            let (deepinc, deepout, deeplabel) = (NodeMap.find nodelabel updatemap) in
-            NodeMap.add nodelabel (
-              (AdjSet.remove delnode deepinc),
-              (AdjSet.remove delnode deepout),
-              deeplabel
-            ) updatemap
-          )
-        ) (AdjSet.union incoming outgoing) nodeMap
-      )
-  ;;
+    (*
+    * Removes a node from the graph
+    *
+    * I realized since a node can be in the incoming or outgoing (or both),
+    * then a function over the union of both sets while removing in both
+    * still works and is simple enough
+    *
+    * This way i don't have to do an O(n) on both nodes
+    *)
+    let delete_node delnode nodeMap =
+        let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
+        NodeMap.remove delnode (
+            AdjSet.fold ((fun nodelabel updatemap ->
+                let (deepinc, deepout, deeplabel) = (NodeMap.find nodelabel updatemap) in
+                NodeMap.add nodelabel (
+                    (AdjSet.remove delnode deepinc),
+                    (AdjSet.remove delnode deepout),
+                    deeplabel
+                ) updatemap
+            )
+            ) (AdjSet.union incoming outgoing) nodeMap
+        )
+    ;;
 
-  (* Get adjacency list of a node *)
-  let adj_list_of node nodeMap =
-    let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
-      AdjSet.fold (
-        fun anode alist ->
-          anode :: alist
+    (* Get adjacency list of a node *)
+    let adj_list_of node nodeMap =
+        let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
+        AdjSet.fold (
+            fun anode alist ->
+            anode :: alist
         )  (AdjSet.union incoming outgoing) []
-  ;;
+    ;;
 
-  (* Get adjacency list of a node *)
-  let adj_set_of node nodeMap =
-    let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
-      (AdjSet.union incoming outgoing)
-  ;;
-
-  (* Print the graph as an adjacency list *)
-  (* [
-      ....
-      (key * label * [ adjacency list ])
-      ....
-  ] *)
-  let render nodeMap =
-    NodeMap.fold (
-      fun key (_, _, label) acc  ->
-        (key, label, (adj_list_of key nodeMap)) :: acc
-    ) nodeMap []
-  ;;
-
-  let elt_bindings nodeMap =
-    (List.rev
-      @@ List.sort (fun (_, lnode) (_, rnode) -> Node.compare lnode rnode)
-      @@ NodeMap.bindings
-      @@ NodeMap.map(fun (_ , _, label) -> label)
-    nodeMap)
-  ;;
-
-  (* Max element of the Map but using its internal elements and not keys *)
-  let max_elt nodeMap =
-    List.hd (elt_bindings nodeMap)
-  ;;
-
+    (* Get adjacency list of a node *)
+    let adj_set_of node nodeMap =
+        let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
+        (AdjSet.union incoming outgoing)
+    ;;
 end;;

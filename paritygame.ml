@@ -3,12 +3,15 @@
  *
  *
  *
+ *
+ *
+ *
  **********************************************)
 
 let monotonic x = let () = x := !x+1 in !x + 1;;
 let entropy = ref 0
 
-module PGame = struct
+module ParityGame = struct
 
     (* A parity game has an Odd and Even player *)
     type player =
@@ -22,7 +25,9 @@ module PGame = struct
     ;;
 
     (* Each node is given a unique label for identification purposes consisting of
-    the player type and identifier *)
+    the player type and identifier - the second int makes it unique in a graph
+    or set as 2 or more nodes in a graph can have the same integer priority and
+    player from above ^*)
     type node =
         | Label of (priority * int)
     ;;
@@ -38,14 +43,18 @@ module PGame = struct
         let compare = cmpprios
     end
 
-    module NodeValue = struct 
-        type t      = node   (* The type to uniquely identify a node *)
+    module NodeValue = struct
+        type t      = node       (* The type to uniquely identify a node *)
         let compare = cmprands
     end
 
     (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] .. *)
     (* Noted: there is duplication of priority type -> doesn't help at all *)
-    module Graph  = Mygraph.MakeGraph(NodePriority)(NodeValue)
+    (*module Graph  = Mygraph.MakeGraph(NodePriority)(NodeValue)*)
+    module Graph  = Mygraph.MakeGraph(struct 
+        type t = NodeValue.t
+        let compare = cmprands
+    end)
 
     module AdjSet = Graph.AdjSet
 
@@ -84,10 +93,8 @@ module PGame = struct
     let add_node player priority game =
         let
             label = Label ((Priority (priority, player)), (monotonic entropy))
-        and
-            nodes = (Priority (priority, player))
         in
-            (label, Graph.add_node label nodes game)
+            (label, Graph.add_node label game)
     ;;
 
     (* Structural equality i.e Odd = Odd or Even = Even *)
@@ -188,7 +195,7 @@ module PGame = struct
      It is OK to add it in the accumulator now so that later checks don't miss it!
      - Returns a pair of newly found attractive nodes and a union of that set
      with the previously accumulated attractor
-  *)
+    *)
     let attract attractorset incomingset player game =
         let oktoadd = AdjSet.diff incomingset attractorset
             |> AdjSet.filter (attractive attractorset player game)
@@ -235,6 +242,7 @@ module PGame = struct
 
     let omega (Label ((Priority (ofprio, _)), _)) =
         if ofprio mod 2 == 0 then Even else Odd
+    ;;
 
     (* Cluster max priority nodes
     *)
@@ -250,9 +258,25 @@ module PGame = struct
         game) AdjSet.empty
     ;;
 
+    (*let bindings nodeMap: (AdjSet.t * AdjSet.t * node) Nodes.t =*)
+    let bindings nodeMap  =
+        (List.rev
+            (*Have to sort by the priority and not the internal representation *)
+            @@ List.sort (fun ((Label (lp, _)), _) ((Label (rp, _)), _) -> cmpprios lp rp)
+            @@ Graph.NodeMap.bindings nodeMap 
+            (*@@ Graph.NodeMap.map(fun (_, _, label) -> label) nodeMap*)
+        )
+    ;;
+
+    (*Max element of the Map but using its internal elements and not keys *)
+    let max_elt nodeMap =
+        List.hd (bindings nodeMap)
+    ;;
+
     (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
     Largest priority node in the game *)
-    let max_priority_node = Graph.max_elt
+    let max_priority_node = max_elt
+
     let empty_strategy    = (StrSet.empty, StrSet.empty)
     let empty_region      = (AdjSet.empty, AdjSet.empty)
 
@@ -268,14 +292,14 @@ module PGame = struct
         if Nodes.is_empty game then
             { regions=empty_region; strategy=empty_strategy; }
         else
-            let node, _       = max_priority_node game in
-            let i             = omega node in
-            let u             = cluster node game in
-            let tau           = strategy i u game StrSet.empty in
-            let (a, tau')     = attr (i) u game in
-            let g_a           = carve game a in
+            let node, _      = max_priority_node game in
+            let i            = omega node in
+            let u            = cluster node game in
+            let tau          = strategy i u game StrSet.empty in
+            let (a, tau')    = attr (i) u game in
+            let g_a          = carve game a in
             let { regions=(w_0, w_1); strategy=(s_0, s_1); } = zielonka g_a in
-            let (_w_i, w_1_i) = (
+            let (_wi, w_1_i) = (
                 match i with
                 | Even -> (w_0, w_1)
                 | Odd  -> (w_1, w_0)
