@@ -10,6 +10,7 @@
    monotonicity idk lol!
    At the end of the day Stdlib.compare decides your fate.
 *)
+open Mygraph;;
 
 let precision         = 0.01     (* Set to precision of the universe if necessary :-) *)
 let entropy           = ref 0.00
@@ -45,7 +46,7 @@ module ParityGame = struct
     (* Compare only the structural priority part of the nodes relevant to parity games  *)
     let compare  (Label ((Priority lp), _)) (Label ((Priority rp), _)) = (compare rp lp)
 
-    module NodeValue = struct
+    module GraphNode = struct
         type t      = node       (* The type to uniquely identify a node *)
         let compare = cmprands
     end
@@ -53,7 +54,7 @@ module ParityGame = struct
     (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] .. *)
     (* Noted: there is duplication of priority type -> doesn't help at all *)
     (* So for the graph we only compare at the random level *)
-    module Graph  = Mygraph.MakeGraph(NodeValue)
+    module Graph  = MakeGraph(GraphNode)
 
     module AdjSet = Graph.AdjSet
 
@@ -129,21 +130,27 @@ module ParityGame = struct
         @@ AdjSet.filter (fun y -> AdjSet.mem y attractor) (Graph.outgoingof node game)
     ;;
 
+    let into_strat_lazy attractor game node =
+        Seq.map (fun pair -> (node, pair))
+        @@ AdjSet.elements_lazy
+        @@ AdjSet.filter (fun y -> AdjSet.mem y attractor) (Graph.outgoingof node game)
+    ;;
+
     (* Checks whether the a play can be added as a strategy for owner into the
      strategy set *)
-    let validstrategy stratset owner (protagonist, foreigner) =
+    let validstrategy owner (protagonist, foreigner) stratset  =
         if StrSet.mem (protagonist, foreigner) stratset then
             stratset
         else if sameplayer (playerof protagonist) foreigner then
             StrSet.add (protagonist, foreigner) stratset
         else
         if sameplayer owner protagonist then
-            if (cmpprios (priorityof protagonist) (priorityof foreigner)) > 0 then
+            if (compare protagonist foreigner) > 0 then
                 StrSet.add (protagonist, foreigner) stratset
             else
                 stratset
         else
-            if (cmpprios (priorityof protagonist) (priorityof foreigner)) > 0 then
+            if (compare protagonist foreigner) > 0 then
                 stratset
             else
                 StrSet.add (protagonist, foreigner) stratset
@@ -161,13 +168,21 @@ module ParityGame = struct
     * - different player pointing back with smaller cardinality can be added
     * - cardinal priority with respect to the priority
     *)
-    let strategy player attractor game stratstate =
+    let eager_strategy player attractor game stratstate = 
         stratstate
-        |> StrSet.fold (fun ply acc -> validstrategy acc player ply)
+        |> StrSet.fold (validstrategy player)
         @@ StrSet.of_list
         @@ List.flatten
         @@ List.map (into_strat attractor game)
         @@ AdjSet.elements attractor (* from attractor *)
+    ;;
+
+    let strategy player attractor game stratstate =
+        StrSet.fold (validstrategy player) stratstate
+        @@ StrSet.of_seq
+        @@ Seq.concat
+        @@ Seq.map (into_strat_lazy attractor game)
+        @@ AdjSet.elements_lazy attractor (* from attractor *)
     ;;
 
     (** [playerof identity player]

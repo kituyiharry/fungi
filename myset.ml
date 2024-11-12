@@ -5,6 +5,7 @@
    https://www.seas.upenn.edu/~cis120/archive/16sp/lectures/lec10.pdf
 
    The tree will remain mostly unbalanced!
+   Target is to add some 'laziness' with the functions
 
   Usage:
     let f = TreeSet.empty ;;                            (* Empty Set *)
@@ -112,11 +113,25 @@ struct
         | Node(_, v, _) -> Some(v)
     ;;
 
+    (** [root 'a set] Root element of the Set *)
+    let take_root_lazy = function
+        | Empty ->  (None, fun () -> Empty)
+        | Node (x, v, y) -> (Some(v), fun () -> 
+            let min, rest = take_min y in 
+                match min with
+                | Some next -> Node(x, next, rest)
+                | None -> x
+        )
+    ;;
+
     (** [set_of_list 'a list] Build a Set from a list *)
     let rec of_list = function
         | [] -> Empty
         | hd :: tail -> add hd (of_list tail)
     ;;
+
+    (** [set_of_seq 'a Seq] Build a Set from a lazy sequence *)
+    let of_seq = Seq.fold_left (fun x a -> add a x) Empty;;
 
     (** [cardinality 'a set] number of elements in the set (recursive) *)
     let rec cardinal = function
@@ -233,6 +248,16 @@ struct
     let elements = function
         | Empty -> []
         | nodes -> fold (fun elt acc -> (elt :: acc)) nodes [] 
+    ;;
+
+    (** ... sequence of elements in a set ... *)
+    let elements_lazy = function
+        | nodes ->
+            let rec aux l () = match take_root_lazy l with
+                | (None, _) -> Seq.Nil
+                | (Some x, tail) -> Seq.Cons (x, (aux (tail ())))
+            in
+                (aux nodes)
     ;;
 
     (** ... test whether f is true for_all members of this set ... *)
