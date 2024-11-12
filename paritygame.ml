@@ -1,15 +1,18 @@
-(**********************************************
- *  A Parity Game implementation
- *
- *
- *
- *
- *
- *
- **********************************************)
+(*****************************************************************************
+ *                                                                           *
+ *                       A Parity Game Implementation                        *
+ *                                                                           *
+ *****************************************************************************)
 
-let monotonic x = let () = x := !x+1 in !x + 1;;
-let entropy = ref 0
+(* Caveat Emptor:
+   I use floating points as way to escape the integer limit for unique nodes.
+   Of course that brings its own challenges -> maybe the float init can break 
+   monotonicity idk lol!
+*)
+
+let precision         = 0.01 (* Set to precision of the universe if necessary :-) *)
+let entropy           = ref 0.00
+let strictmonotonic x = let () = x := !x+.precision in !x+.precision;;
 
 module ParityGame = struct
 
@@ -29,7 +32,7 @@ module ParityGame = struct
     or set as 2 or more nodes in a graph can have the same integer priority and
     player from above ^*)
     type node =
-        | Label of (priority * int)
+        | Label of (priority * float)
     ;;
 
     let labelof (Label(_, l)) = l
@@ -38,10 +41,8 @@ module ParityGame = struct
 
     let cmpprios (Priority lp) (Priority rp) = (compare lp rp)
 
-    module NodePriority = struct 
-        type t      = priority   (* The type of the internal data *)
-        let compare = cmpprios
-    end
+    (* Compare only the structural part of the nodes relevant to parity games  *)
+    let compare  (Label ((Priority lp), _)) (Label ((Priority rp), _)) = (compare rp lp)
 
     module NodeValue = struct
         type t      = node       (* The type to uniquely identify a node *)
@@ -50,11 +51,8 @@ module ParityGame = struct
 
     (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] .. *)
     (* Noted: there is duplication of priority type -> doesn't help at all *)
-    (*module Graph  = Mygraph.MakeGraph(NodePriority)(NodeValue)*)
-    module Graph  = Mygraph.MakeGraph(struct 
-        type t = NodeValue.t
-        let compare = cmprands
-    end)
+    (* So for the graph we only compare at the random level *)
+    module Graph  = Mygraph.MakeGraph(NodeValue)
 
     module AdjSet = Graph.AdjSet
 
@@ -65,13 +63,14 @@ module ParityGame = struct
     (* Empty Game is just an empty Graph *)
     let empty = Graph.empty
 
+    (* Basically denoting an edge where the token moves *)
     type play = (node * node)
 
     (* This play implicitly makes the assumption that a strategy can ONLY be used
     to pick one path - so there is no need to check the 2nd one because a player
     cannot play 2 strategies! i.e this does not properly compare the RAND parts
     ...Consultation needed *)
-    let cmpplays (lf, _lt) (rf, _rt) = compare (labelof lf) (labelof rf)
+    let cmpplays (lf, _lt) (rf, _rt) = Float.compare (labelof lf) (labelof rf)
 
     module StrSet = Myset.TreeSet(struct
         type t = play
@@ -89,20 +88,27 @@ module ParityGame = struct
      Adds a node as a mapping from a uniqlabel to a triple of incoming,
      outgoing and priority. Player information is contained in the label
      this uses the underlying graph  while handling the setup boilerplate
-     return (label id * internal graph)*)
+     return (label id * internal graph)
+     returns back the label in case you want to add edges *)
     let add_node player priority game =
         let
-            label = Label ((Priority (priority, player)), (monotonic entropy))
+            label = Label ((Priority (priority, player)), (strictmonotonic entropy))
         in
-            (label, Graph.add_node label game)
+            (label, Graph.add label game)
     ;;
 
+
+    (** [ add player int PGame.t]
+     like add_node but doesn't return the node *)
+    let add player priority game =
+        Graph.add (Label ((Priority (priority, player)), (strictmonotonic entropy))) game
+    ;;
+
+
     (* Structural equality i.e Odd = Odd or Even = Even *)
-    (* Which player do we consider!!! *)
     let sameplayer player_a (Label (Priority (_, player_b), _)) = player_a = player_b
 
-    (** [diffplayer player identity bool]
-    Structural difference i.e Odd != Even or Even != Odd *)
+    (** [diffplayer player identity bool] Structural difference i.e Odd != Even or Even != Odd *)
     let diffplayer player_a (Label (Priority (_, player_b), _)) = player_a <> player_b
 
     let playerof (Label (Priority (_, playeri), _)) = playeri
@@ -182,7 +188,7 @@ module ParityGame = struct
     let attractive attractorset forplayer game agivennode =
         (* Controlled by the player and can reach the predecessor node *)
         (sameplayer forplayer agivennode)
-        ||
+            ||
         (* all outgoing members lead into the accumulator which is also an attractor *)
         (hassafeoutgoing attractorset game agivennode)
     ;;
@@ -237,7 +243,7 @@ module ParityGame = struct
     Removes a set of nodes from a game
     *)
     let carve game nodeset =
-        AdjSet.fold (Graph.delete_node) nodeset game
+        AdjSet.fold (Graph.remove) nodeset game
     ;;
 
     let omega (Label ((Priority (ofprio, _)), _)) =
@@ -260,64 +266,17 @@ module ParityGame = struct
 
     (*let bindings nodeMap: (AdjSet.t * AdjSet.t * node) Nodes.t =*)
     let bindings nodeMap  =
-        (List.rev
-            (*Have to sort by the priority and not the internal representation *)
-            @@ List.sort (fun ((Label (lp, _)), _) ((Label (rp, _)), _) -> cmpprios lp rp)
-            @@ Graph.NodeMap.bindings nodeMap 
-            (*@@ Graph.NodeMap.map(fun (_, _, label) -> label) nodeMap*)
+        (
+            (*Have to sort by the priority and not the internal 'entropy' representation *)
+            List.sort (compare)
+            @@ List.map (fst)
+            @@ Graph.NodeMap.bindings nodeMap
         )
     ;;
 
     (*Max element of the Map but using its internal elements and not keys *)
     let max_elt nodeMap =
         List.hd (bindings nodeMap)
-    ;;
-
-    (** [ max_priority_node (PGame.t)  (Nodes.t * priority) ]
-    Largest priority node in the game *)
-    let max_priority_node = max_elt
-
-    let empty_strategy    = (StrSet.empty, StrSet.empty)
-    let empty_region      = (AdjSet.empty, AdjSet.empty)
-
-    (* Union shorthand *)
-    let (<->) x y = StrSet.union x y
-    let (<+>) x y = AdjSet.union x y
-
-    (** [zielonka PGame.t PGame.solution]
-    Recursive algorithm which produces winning sets of the game
-    https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
-    *)
-    let rec zielonka:'a Nodes.t -> solution = fun game ->
-        if Nodes.is_empty game then
-            { regions=empty_region; strategy=empty_strategy; }
-        else
-            let node, _      = max_priority_node game in
-            let i            = omega node in
-            let u            = cluster node game in
-            let tau          = strategy i u game StrSet.empty in
-            let (a, tau')    = attr (i) u game in
-            let g_a          = carve game a in
-            let { regions=(w_0, w_1); strategy=(s_0, s_1); } = zielonka g_a in
-            let (_wi, w_1_i) = (
-                match i with
-                | Even -> (w_0, w_1)
-                | Odd  -> (w_1, w_0)
-            ) in
-            if AdjSet.is_empty w_1_i then
-                let strat = match i with
-                    | Even -> ((s_0 <-> tau <-> tau'), StrSet.empty)
-                    | Odd  -> (StrSet.empty, (s_1 <-> tau <-> tau')) in
-                { regions=((collective game), AdjSet.empty); strategy=strat }
-            else
-                let flip     = invert i in
-                let (b, rho) = attr (flip) w_1_i game in
-                let g_b      = carve game b in
-                let { regions=(w_0', w_1'); strategy=(s_0', s_1') } = zielonka g_b in
-                let strat' = match flip with
-                    | Even -> ((rho <-> s_0' <-> s_0), s_1')
-                    | Odd  -> (s_0', (rho <-> s_1' <-> s_1)) in
-                { regions=(w_1' <+> b, w_0'); strategy=strat' }
     ;;
 
 end

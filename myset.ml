@@ -1,20 +1,18 @@
 (************************
  * Author: Harry K
  * Date  : Nov 14, 2020
- * Based on upenn lectures: (Interface only)
+ * Based on upenn lectures: (most of the Interface only)
    https://www.seas.upenn.edu/~cis120/archive/16sp/lectures/lec10.pdf
 
+   The tree will remain mostly unbalanced!
+
   Usage:
-    let f = BSTSet.empty ;;  (* Empty Set *)
-    let f = BSTSet.set_of_list [1;2;3;4;5;6;7;...;];;  (* Set from a List *)
+    let f = TreeSet.empty ;;                            (* Empty Set *)
+    let f = TreeSet.set_of_list [1;2;3;4;5;6;7;...;];;  (* Set from a List *)
 
 ************************)
-module type Ord = sig 
-    type t
-    val compare: t -> t -> int
-end
 
-module type TreeSet = functor(Ord: Ord) -> sig
+module type TreeSet = functor(Ord: Set.OrderedType) -> sig
     type t
     type elt
     type 'a set
@@ -44,7 +42,7 @@ module type TreeSet = functor(Ord: Ord) -> sig
     val diff: elt set -> elt set -> elt set
 end
 
-module TreeSet(Ord: Ord) =
+module TreeSet(Ord: Set.OrderedType) =
 struct
 
     type elt = Ord.t

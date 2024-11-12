@@ -8,41 +8,36 @@
  https://bryangarza.github.io/basic-graph-traversal-in-ocaml.html
  https://gist.github.com/theawesomestllama/7d1c0961a2c4446ef40b
 ************************)
+open Myset;;
 
-(**
- * Functor to produce a graph from any ordinal type
- * using Node as the data and labels as key for identifying the node
- **)
+module MakeGraph(Unique: Set.OrderedType) = struct
 
-(*module MakeGraph(Node: Myset.Ord)(Label: Myset.Ord) = struct*)
-module MakeGraph(Label: Myset.Ord) = struct
-
-    (* A given set of nodes *)
-    type elt = Myset.TreeSet (Label).t
+    (* A given adjacency set of nodes *)
+    type adj = TreeSet (Unique).t
 
     (*  Incoming nodes  Outgoing nodes data *)
     module Vertex = struct 
-        type t = (elt * elt * Label.t)
-        let compare = fun (_, _, lnode) (_, _, rnode) -> Label.compare lnode rnode
+        type t = (adj * adj * Unique.t)
+        let compare = fun (_, _, lnode) (_, _, rnode) -> Unique.compare lnode rnode
     end
 
     (** Adjacency list graph definition **)
     (* Map from NodeType.t to (incoming outgoing label) *)
-    type t = (Vertex.t) Map.Make(Label).t
+    type t = (Vertex.t) Map.Make(Unique).t
 
     (** Module for manipulating the Set structure holding the Adjacency list
-      holding Label.t 
-   *)
-    module AdjSet  = Myset.TreeSet (Label)
+      holding Unique.t 
+    *)
+    module AdjSet  = Myset.TreeSet (Unique)
 
     (** Module for manipulating the Map (Node -> (set , set , label)) *)
-    module NodeMap = Map.Make (Label)
+    module NodeMap = Map.Make (Unique)
 
     (** An empty graph **)
-    let empty = NodeMap.empty
+    let empty      = NodeMap.empty
 
     (** Add a new node with its label -> ( ... , nodedata) *)
-    let add_node nodekey nodeMap =
+    let add nodekey nodeMap =
         NodeMap.add nodekey (AdjSet.empty, AdjSet.empty, nodekey) nodeMap
     ;;
 
@@ -80,7 +75,7 @@ module MakeGraph(Label: Myset.Ord) = struct
     let incomingof node game = let (inc, _, _) = NodeMap.find node game in inc
 
     (** [ incomingof identity (Graph.t) AdjSet.t]
-  Outgoing set of nodes *)
+    Outgoing set of nodes *)
     let outgoingof node game = let (_, out, _) = NodeMap.find node game in out
 
     (*
@@ -92,7 +87,7 @@ module MakeGraph(Label: Myset.Ord) = struct
     *
     * This way i don't have to do an O(n) on both nodes
     *)
-    let delete_node delnode nodeMap =
+    let remove delnode nodeMap =
         let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
         NodeMap.remove delnode (
             AdjSet.fold ((fun nodelabel updatemap ->
@@ -116,9 +111,4 @@ module MakeGraph(Label: Myset.Ord) = struct
         )  (AdjSet.union incoming outgoing) []
     ;;
 
-    (* Get adjacency list of a node *)
-    let adj_set_of node nodeMap =
-        let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
-        (AdjSet.union incoming outgoing)
-    ;;
 end;;

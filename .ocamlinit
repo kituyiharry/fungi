@@ -166,7 +166,7 @@ let asplayerprio (ParityGame.Label (ParityGame.Priority (value, player) as prio 
     (player, prio)
 ;;
 
-let print_player_prio (ParityGame.Label(ParityGame.Priority (value,pplayer),_), _)  = match pplayer with
+let print_player_prio (ParityGame.Label(ParityGame.Priority (value,pplayer),_))  = match pplayer with
 | ParityGame.Even -> Format.printf " (Even %d) " value
 | ParityGame.Odd  -> Format.printf " (Odd %d) " value
 ;;
@@ -266,7 +266,7 @@ let pp_parity_game_adjacency:(ParityGame.AdjSet.t * ParityGame.AdjSet.t * Parity
   Format.printf "{\n";
    List.iter (pp_player_adjlist)
    (
-     List.map (fun (node, _) -> (node, ParityGame.Graph.adj_list_of node game))
+     List.map (fun node -> (node, ParityGame.Graph.adj_list_of node game))
      @@ ParityGame.bindings game
    );
   Format.printf "} "
@@ -300,7 +300,7 @@ let pp_parity_game_redundant:(ParityGame.AdjSet.t * ParityGame.AdjSet.t *
   Format.printf "{\n";
    List.iter (pp_player_inc_out)
    (
-     List.map (fun (node, _) -> (node, ParityGame.Graph.incomingof node game,
+     List.map (fun (node) -> (node, ParityGame.Graph.incomingof node game,
                 ParityGame.Graph.outgoingof node game ))
      @@ ParityGame.bindings game
    );
