@@ -44,7 +44,7 @@ module Utils = struct
     ;;
 
     let randnode max_prio idx =  
-        if (idx mod 2) = 0 then
+        if ((Random.int (idx+1)) mod 2) = 0 then
             (Paritygame.ParityGame.Even, Random.int max_prio)
         else
             (Paritygame.ParityGame.Odd, Random.int max_prio)

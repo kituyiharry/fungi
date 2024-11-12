@@ -8,21 +8,15 @@
 
 (* Caveat Emptor:
 
-   I use floating points as way to escape the integer limit for unique nodes.
-   Of course that brings its own challenges -> maybe the float init can break 
-   monotonicity idk lol!
-
    This implementation is only meant to be simple with a focus on learning
-
-   At the end of the day Stdlib.compare decides your fate.
 
    TODO: Also I think the strategy implementation may not be correct in some games
 *)
 open Mygraph;;
 
-let precision         = 0.01     (* Set to precision of the universe if necessary :-) *)
-let entropy           = ref 0.00
-let strictmonotonic x = let () = x := !x+.precision in !x+.precision;;
+let precision         = 1     (* Set to precision of the universe if necessary :-) *)
+let entropy           = ref 0
+let strictmonotonic x = let () = x := !x+precision in !x+precision;;
 
 module ParityGame = struct
 
@@ -42,7 +36,7 @@ module ParityGame = struct
     or set as 2 or more nodes in a graph can have the same integer priority and
     player from above ^*)
     type node =
-        | Label of (priority * float)
+        | Label of (priority * int)
     ;;
 
     let labelof (Label(_, l)) = l
@@ -50,6 +44,18 @@ module ParityGame = struct
     let cmprands (Label(_, l)) (Label(_, r)) = (compare l r)
 
     let cmpprios (Priority lp) (Priority rp) = (compare lp rp)
+
+    let export_player = function 
+            | Even -> 0
+            | Odd  -> 1
+    ;;
+
+    let import_player = function 
+            | Even -> 0
+            | Odd  -> 1
+    ;;
+
+    let priority_value (Label ((Priority (d, _)), _)) = d
 
     (* Compare only the structural priority part of the nodes relevant to parity games  *)
     let compare  (Label ((Priority lp), _)) (Label ((Priority rp), _)) = (compare rp lp)
