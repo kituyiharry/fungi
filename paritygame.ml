@@ -1,13 +1,19 @@
 (*****************************************************************************
  *                                                                           *
- *                       A Parity Game Implementation                        *
+ *                                                                           *
+ *                A Dead Simple Parity Game Implementation                   *
+ *                                                                           *
  *                                                                           *
  *****************************************************************************)
 
 (* Caveat Emptor:
+
    I use floating points as way to escape the integer limit for unique nodes.
    Of course that brings its own challenges -> maybe the float init can break 
    monotonicity idk lol!
+
+   This implementation is only meant to be simple with a focus on learning
+
    At the end of the day Stdlib.compare decides your fate.
 
    TODO: Also I think the strategy implementation may not be correct in some games
@@ -141,21 +147,13 @@ module ParityGame = struct
     (* Checks whether the a play can be added as a strategy for owner into the
      strategy set *)
     let validstrategy owner (protagonist, foreigner) stratset  =
-        if StrSet.mem (protagonist, foreigner) stratset then
-            stratset
-        else if sameplayer (playerof protagonist) foreigner then
-            StrSet.add (protagonist, foreigner) stratset
-        else
-        if sameplayer owner protagonist then
-            if (compare protagonist foreigner) > 0 then
-                StrSet.add (protagonist, foreigner) stratset
+        if StrSet.mem (protagonist, foreigner) stratset then stratset else 
+        if sameplayer (playerof protagonist) foreigner then StrSet.add (protagonist, foreigner) stratset
+        else let parity = compare protagonist foreigner in
+            if sameplayer owner protagonist then
+                if parity > 0 then StrSet.add (protagonist, foreigner) stratset else stratset
             else
-                stratset
-        else
-            if (compare protagonist foreigner) > 0 then
-                stratset
-            else
-                StrSet.add (protagonist, foreigner) stratset
+                if parity > 0 then stratset else StrSet.add (protagonist, foreigner) stratset
     ;;
 
     (**
@@ -179,8 +177,6 @@ module ParityGame = struct
     ;;
 
     let lazy_strategy attractor game =
-        (*StrSet.fold (validstrategy player) stratstate*)
-        (*StrSet.of_seq*)
         Seq.concat
         @@ Seq.map (into_strat_lazy attractor game)
         @@ AdjSet.to_seq attractor (* from attractor *)
@@ -239,23 +235,16 @@ module ParityGame = struct
                 Concatenate the attractive non-visited incoming neighbours
                 while ensuring they aren't treachorous
             *)
-            let (newels, accum) =
-                attract attractorset (Graph.incomingof node game) player game
-            in
-            let (newattr, morenodes) =
-                (AdjSet.add node accum, AdjSet.union newels rest)
-            in
-            let newstrat =  (strategy player newattr game strats)
-            in
-            attractor player game newattr morenodes (StrSet.union newstrat strats)
+            let (newels, accum) = attract attractorset (Graph.incomingof node game) player game in
+            let (newattr, morenodes) = (AdjSet.add node accum, AdjSet.union newels rest) in
+            let newstrat =  (strategy player newattr game strats) in
+                attractor player game newattr morenodes (StrSet.union newstrat strats)
         | _ ->
             (attractorset, strats)
     ;;
 
-    (** [attractor player PGame.t AdjSet.t AdjSet.t AdjSet.t]
-    Get the attractor nodes of a player from a node
-    attractorset is the current state of the attractor
-    nodeset are the unvisited nodes *)
+    (** [lazy_attractor player PGame.t AdjSet.t AdjSet.t AdjSet.t]
+    same as attractor but lazy on getting strategies *)
     let rec lazy_attractor player game attractorset nodeset strats =
         match (AdjSet.take_max nodeset) with
         | (Some(node), rest) ->
@@ -287,9 +276,7 @@ module ParityGame = struct
         lazy_attractor player game startset startset (StrSet.to_seq StrSet.empty)
     ;;
 
-    (** [carve PGame.t AdjSet.t PGame.t]
-    Removes a set of nodes from a game
-    *)
+    (** [carve PGame.t AdjSet.t PGame.t] Removes a set of nodes from a game *)
     let carve game nodeset =
         AdjSet.fold (Graph.remove) nodeset game
     ;;
@@ -298,8 +285,7 @@ module ParityGame = struct
         if ofprio mod 2 == 0 then Even else Odd
     ;;
 
-    (* Cluster max priority nodes
-    *)
+    (* Cluster max priority nodes (same player and priority) *)
     let cluster (Label ((Priority (l, pl)),_)) game =
         let nodes = Nodes.filter (fun (Label ((Priority (r, pr)), _)) _  -> ((r = l) && (pl = pr))) game in
         Nodes.fold (fun x _y acc -> AdjSet.add x acc) nodes AdjSet.empty

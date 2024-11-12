@@ -1,5 +1,5 @@
 (library
-  (name libset)
-  (public_name libset)
+  (name libparity)
+  (public_name libparity)
   (modules myset mygraph paritygame solve utils)
   (libraries ))
