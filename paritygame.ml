@@ -9,6 +9,8 @@
    Of course that brings its own challenges -> maybe the float init can break 
    monotonicity idk lol!
    At the end of the day Stdlib.compare decides your fate.
+
+   TODO: Also I think the strategy implementation may not be correct in some games
 *)
 open Mygraph;;
 
@@ -132,7 +134,7 @@ module ParityGame = struct
 
     let into_strat_lazy attractor game node =
         Seq.map (fun pair -> (node, pair))
-        @@ AdjSet.elements_lazy
+        @@ AdjSet.to_seq
         @@ AdjSet.filter (fun y -> AdjSet.mem y attractor) (Graph.outgoingof node game)
     ;;
 
@@ -168,22 +170,25 @@ module ParityGame = struct
     * - different player pointing back with smaller cardinality can be added
     * - cardinal priority with respect to the priority
     *)
-    let eager_strategy player attractor game stratstate = 
-        stratstate
-        |> StrSet.fold (validstrategy player)
+    let strategy player attractor game stratstate = 
+        StrSet.fold (validstrategy player) stratstate
         @@ StrSet.of_list
         @@ List.flatten
         @@ List.map (into_strat attractor game)
         @@ AdjSet.elements attractor (* from attractor *)
     ;;
 
-    let strategy player attractor game stratstate =
-        StrSet.fold (validstrategy player) stratstate
-        @@ StrSet.of_seq
-        @@ Seq.concat
+    let lazy_strategy attractor game =
+        (*StrSet.fold (validstrategy player) stratstate*)
+        (*StrSet.of_seq*)
+        Seq.concat
         @@ Seq.map (into_strat_lazy attractor game)
-        @@ AdjSet.elements_lazy attractor (* from attractor *)
+        @@ AdjSet.to_seq attractor (* from attractor *)
     ;;
+
+    let resolve player stratstate seq =
+        StrSet.fold (validstrategy player) stratstate
+        @@ StrSet.of_seq seq
 
     (** [playerof identity player]
     Destructure the player from a label and its unique component *)
@@ -247,11 +252,39 @@ module ParityGame = struct
             (attractorset, strats)
     ;;
 
+    (** [attractor player PGame.t AdjSet.t AdjSet.t AdjSet.t]
+    Get the attractor nodes of a player from a node
+    attractorset is the current state of the attractor
+    nodeset are the unvisited nodes *)
+    let rec lazy_attractor player game attractorset nodeset strats =
+        match (AdjSet.take_max nodeset) with
+        | (Some(node), rest) ->
+            (*
+                Concatenate the attractive non-visited incoming neighbours
+                while ensuring they aren't treachorous
+            *)
+            let (newels, accum) = attract attractorset (Graph.incomingof node game) player game in
+            let (newattr, morenodes) = (AdjSet.add node accum, AdjSet.union newels rest) in
+            let newstrat =  (lazy_strategy newattr game) in
+                lazy_attractor player game newattr morenodes (Seq.append newstrat strats)
+        | _ ->
+            (attractorset, strats)
+    ;;
+
+
+
     (** [buildattractor ?set:(AdjSet.t) identity player PGame.t AdjSet.t]
         A node is part of its own attractor
     *)
     let attr player startset game =
         attractor player game startset startset StrSet.empty
+    ;;
+
+    (** [buildattractor ?set:(AdjSet.t) identity player PGame.t AdjSet.t]
+        A node is part of its own attractor
+    *)
+    let lazy_attr player startset game =
+        lazy_attractor player game startset startset (StrSet.to_seq StrSet.empty)
     ;;
 
     (** [carve PGame.t AdjSet.t PGame.t]

@@ -251,7 +251,7 @@ struct
     ;;
 
     (** ... sequence of elements in a set ... *)
-    let elements_lazy = function
+    let to_seq = function
         | nodes ->
             let rec aux l () = match take_root_lazy l with
                 | (None, _) -> Seq.Nil
