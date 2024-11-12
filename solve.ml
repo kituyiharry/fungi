@@ -1,12 +1,9 @@
 open Paritygame
 
-(* Largest priority node in the game *)
-let max_priority_node = ParityGame.max_elt
-
 let empty_strategy    = (ParityGame.StrSet.empty, ParityGame.StrSet.empty)
 let empty_region      = (ParityGame.AdjSet.empty, ParityGame.AdjSet.empty)
 
-(* Union shorthand *)
+(* infix Union shorthand *)
 let (<->) x y = ParityGame.StrSet.union x y
 let (<+>) x y = ParityGame.AdjSet.union x y
 
@@ -14,11 +11,11 @@ let (<+>) x y = ParityGame.AdjSet.union x y
     Recursive algorithm which produces winning sets of the game
     https://oliverfriedmann.com/downloads/papers/recursive_lower_bound.pdf
 *)
-let rec zielonka:'a ParityGame.Nodes.t -> ParityGame.solution = fun game ->
+let rec zielonka:ParityGame.t -> ParityGame.solution = fun game ->
     if ParityGame.Nodes.is_empty game then
         { regions=empty_region; strategy=empty_strategy; }
     else
-        let node         = max_priority_node game in
+        let node         = ParityGame.max_elt game in
         let i            = ParityGame.omega node in
         let u            = ParityGame.cluster node game in
         let tau          = ParityGame.strategy i u game ParityGame.StrSet.empty in

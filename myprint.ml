@@ -1,8 +1,3 @@
-module T = Set.Make(Int);;
-
-let x = T.cardinal
-
-
 (** Rendering function *)
 let render_right = function
     | (depth, value) ->

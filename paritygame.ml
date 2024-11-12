@@ -8,6 +8,7 @@
    I use floating points as way to escape the integer limit for unique nodes.
    Of course that brings its own challenges -> maybe the float init can break 
    monotonicity idk lol!
+   At the end of the day Stdlib.compare decides your fate.
 *)
 
 let precision         = 0.01 (* Set to precision of the universe if necessary :-) *)
@@ -41,7 +42,7 @@ module ParityGame = struct
 
     let cmpprios (Priority lp) (Priority rp) = (compare lp rp)
 
-    (* Compare only the structural part of the nodes relevant to parity games  *)
+    (* Compare only the structural priority part of the nodes relevant to parity games  *)
     let compare  (Label ((Priority lp), _)) (Label ((Priority rp), _)) = (compare rp lp)
 
     module NodeValue = struct
@@ -58,7 +59,7 @@ module ParityGame = struct
 
     module Nodes  = Graph.NodeMap
 
-    type t = Graph.t
+    type t        = Graph.t
 
     (* Empty Game is just an empty Graph *)
     let empty = Graph.empty
@@ -70,7 +71,7 @@ module ParityGame = struct
     to pick one path - so there is no need to check the 2nd one because a player
     cannot play 2 strategies! i.e this does not properly compare the RAND parts
     ...Consultation needed *)
-    let cmpplays (lf, _lt) (rf, _rt) = Float.compare (labelof lf) (labelof rf)
+    let cmpplays (lf, _lt) (rf, _rt) = Stdlib.compare (labelof lf) (labelof rf)
 
     module StrSet = Myset.TreeSet(struct
         type t = play
@@ -159,7 +160,6 @@ module ParityGame = struct
     * - priority of different must be less than max to be added
     * - different player pointing back with smaller cardinality can be added
     * - cardinal priority with respect to the priority
-
     *)
     let strategy player attractor game stratstate =
         stratstate

@@ -2,11 +2,12 @@
  * @author Harry K kituyiharry@github.com
  * @date   2021-02-19
 
- Simplest Graph Implementation (Adjacency list)
+ Simplest Directed Graph Implementation (Adjacency list)
 
  https://www.lri.fr/~filliatr/ftp/publis/ocamlgraph-tfp-8.pdf
- https://bryangarza.github.io/basic-graph-traversal-in-ocaml.html
+ https://bryangarza.github.io/blog/basic-graph-traversal-in-ocaml
  https://gist.github.com/theawesomestllama/7d1c0961a2c4446ef40b
+ https://github.com/backtracking/ocamlgraph
 ************************)
 open Myset;;
 
@@ -25,10 +26,8 @@ module MakeGraph(Unique: Set.OrderedType) = struct
     (* Map from NodeType.t to (incoming outgoing label) *)
     type t = (Vertex.t) Map.Make(Unique).t
 
-    (** Module for manipulating the Set structure holding the Adjacency list
-      holding Unique.t 
-    *)
-    module AdjSet  = Myset.TreeSet (Unique)
+    (** Module for manipulating the Set structure holding the Adjacency list *)
+    module AdjSet  = TreeSet (Unique)
 
     (** Module for manipulating the Map (Node -> (set , set , label)) *)
     module NodeMap = Map.Make (Unique)
@@ -64,6 +63,8 @@ module MakeGraph(Unique: Set.OrderedType) = struct
         | nodeTo :: rest -> add_edge nodeFrom nodeTo (add_all nodeFrom rest nodeMap)
     ;;
 
+    (* Creates a graph given a node and outgoing edge, incoming edges will be
+       resolved naturally. All nodes should already be available in the map  *)
     let rec of_list adjList nodeMap = match adjList with
         | [] -> nodeMap
         | (nodeFrom, nodeJoinList) :: rest ->
@@ -71,7 +72,7 @@ module MakeGraph(Unique: Set.OrderedType) = struct
     ;;
 
     (** [ incomingof identity (Graph.t) AdjSet.t]
-  Incoming set of nodes *)
+    Incoming set of nodes *)
     let incomingof node game = let (inc, _, _) = NodeMap.find node game in inc
 
     (** [ incomingof identity (Graph.t) AdjSet.t]
@@ -79,14 +80,8 @@ module MakeGraph(Unique: Set.OrderedType) = struct
     let outgoingof node game = let (_, out, _) = NodeMap.find node game in out
 
     (*
-    * Removes a node from the graph
-    *
-    * I realized since a node can be in the incoming or outgoing (or both),
-    * then a function over the union of both sets while removing in both
-    * still works and is simple enough
-    *
-    * This way i don't have to do an O(n) on both nodes
-    *)
+     * Removes a node from the graph
+     *)
     let remove delnode nodeMap =
         let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
         NodeMap.remove delnode (
@@ -106,8 +101,7 @@ module MakeGraph(Unique: Set.OrderedType) = struct
     let adj_list_of node nodeMap =
         let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
         AdjSet.fold (
-            fun anode alist ->
-            anode :: alist
+            fun anode alist -> anode :: alist
         )  (AdjSet.union incoming outgoing) []
     ;;
 
