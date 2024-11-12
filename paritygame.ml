@@ -11,7 +11,7 @@
    At the end of the day Stdlib.compare decides your fate.
 *)
 
-let precision         = 0.01 (* Set to precision of the universe if necessary :-) *)
+let precision         = 0.01     (* Set to precision of the universe if necessary :-) *)
 let entropy           = ref 0.00
 let strictmonotonic x = let () = x := !x+.precision in !x+.precision;;
 

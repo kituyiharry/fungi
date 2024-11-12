@@ -124,18 +124,6 @@ struct
         | Node(x,_,y) -> cardinal x + 1 + cardinal y
     ;; (* Sum Left and Right subtrees *)
 
-    (** [cardinality 'a set] number of elements in the set (tail recursive) *)
-    (*
-     *let cardinal = function
-     *    | sometree ->
-     *        let rec cardrec tree sum = match take_min tree with
-     *            | (Some _value, more) -> cardrec more (sum + 1)
-     *            | (None, _) -> sum
-     *        in
-     *        cardrec sometree 0
-     *;; (* Tail recursive cardinality :-) but still slow :-( *)
-     *)
-
     (** [invert 'a set] Invert the BST holding the set *)
     let rec invert = function
         | Node(x, a, y) -> Node(invert y, a, invert x)
@@ -230,7 +218,7 @@ struct
     (** ... set union of 2 sets  ... *)
     let rec union other = function
         | Empty -> other
-        | self -> 
+        | self ->
             match (take_max self, take_max other) with
             | ((Some a, rest), (Some b, more)) -> 
                 (add a (add b (union rest more)))
