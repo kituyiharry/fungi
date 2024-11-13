@@ -67,7 +67,7 @@ let rec lazy_zielonka:ParityGame.t -> ParityGame.solution = fun game ->
         if ParityGame.AdjSet.is_empty w_1_i then
             let strat = match i with
                 | Even -> (((ParityGame.resolve i s_0 ((~~) tau tau'))), ParityGame.StrSet.empty)
-                | Odd  -> (ParityGame.StrSet.empty, (ParityGame.resolve i s_1 ((~~)tau tau'))) in
+                | Odd  -> (ParityGame.StrSet.empty, (ParityGame.resolve i s_1 ((~~) tau tau'))) in
             { ParityGame.regions=((ParityGame.collective game), ParityGame.AdjSet.empty); strategy=strat }
         else
             let flip     = ParityGame.invert i in

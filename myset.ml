@@ -5,7 +5,7 @@
    https://www.seas.upenn.edu/~cis120/archive/16sp/lectures/lec10.pdf
 
    The tree will remain mostly unbalanced!
-   Target is to add some 'laziness' with the functions
+   Target is to add some 'laziness' with some functions
 
   Usage:
     let f = TreeSet.empty ;;                            (* Empty Set *)
@@ -149,8 +149,7 @@ struct
     let rec inorder stack = function
         | Empty -> stack
         | Node (Empty, a, Empty) ->  stack @ [a]
-        | Node (x, a, y) ->
-            inorder ((inorder stack x) @ [a]) y
+        | Node (x, a, y) -> inorder ((inorder stack x) @ [a]) y
     ;; (* Inorder traversal - Left - Root - Right *)
 
     let rec iter_inorder g = function
@@ -166,16 +165,14 @@ struct
     let rec preorder stack = function
         | Empty -> stack
         | Node (Empty, a, Empty) ->  stack @ [a]
-        | Node (x, a, y) ->
-            preorder (preorder (stack @ [a]) x) y
+        | Node (x, a, y) -> preorder (preorder (stack @ [a]) x) y
     ;; (* Preorder traversal - Root - left - Right*)
 
     (** [preorder 'a set] Preorder walk on the set *)
     let rec iter_preorder g = function
         | Empty -> ()
         | Node (Empty, a, Empty) ->  (g a)
-        | Node (x, a, y) ->
-            let _ = g a in
+        | Node (x, a, y) -> let _ = g a in
             let _ = iter_preorder g x in
             iter_preorder g y
     ;; (* Preorder traversal - Root - left - Right*)
@@ -184,8 +181,7 @@ struct
     let rec postorder stack = function
         | Empty -> stack
         | Node (Empty, a, Empty) ->  stack @ [a]
-        | Node (x, a, y) ->
-            (postorder (postorder stack x) y) @ [a]
+        | Node (x, a, y) -> (postorder (postorder stack x) y) @ [a]
     ;; (* Postorder traversal Left - Right - Root *)
 
     (** [postorder 'a set] Postorder walk on the set *)
@@ -266,35 +262,26 @@ struct
         | nodes -> 
             let (max, rest) = take_max nodes in 
             match max with
-            | Some v -> 
-                if f v then
-                    for_all f rest
-                else
-                    false
+            | Some v -> if f v then for_all f rest else false
             | _ -> true
     ;;
 
     (* subset other self -> other is subset of self *)
     let subset other = function
         | Empty -> is_empty other
-        | nodes ->
-            for_all (fun x -> mem x nodes) other
+        | nodes -> for_all (fun x -> mem x nodes) other
     ;;
 
     (* Filter the elements of a set *)
     let filter f = function
         | Empty -> Empty
-        | nodes ->
-            fold (fun elt acc -> 
-                if f elt then add elt acc else acc
-            ) nodes empty
+        | nodes -> fold (fun elt acc -> if f elt then add elt acc else acc) nodes empty
     ;;
 
     (* set difference *)
     let diff other = function
         | Empty -> other
-        | nodes ->
-            filter (fun x -> not (mem x nodes)) other
+        | nodes -> filter (fun x -> not (mem x nodes)) other
     ;;
 
 end
