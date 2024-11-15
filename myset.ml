@@ -9,7 +9,7 @@
 
   Usage:
     let f = TreeSet.empty ;;                            (* Empty Set *)
-    let f = TreeSet.set_of_list [1;2;3;4;5;6;7;...;];;  (* Set from a List *)
+    let f = TreeSet.of_list [1;2;3;4;5;6;7;...;];;  (* Set from a List *)
 
 ************************)
 

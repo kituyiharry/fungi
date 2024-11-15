@@ -2,7 +2,7 @@
  * @author Harry K kituyiharry@github.com
  * @date   2021-02-19
 
- Simplest Directed Graph Implementation (Adjacency list)
+ Simplest Functional Directed Graph Implementation (Adjacency list)
 
  https://www.lri.fr/~filliatr/ftp/publis/ocamlgraph-tfp-8.pdf
  https://bryangarza.github.io/blog/basic-graph-traversal-in-ocaml
@@ -92,8 +92,7 @@ module MakeGraph(Unique: Set.OrderedType) = struct
                     (AdjSet.remove delnode deepout),
                     deeplabel
                 ) updatemap
-            )
-            ) (AdjSet.union incoming outgoing) nodeMap
+            )) (AdjSet.union incoming outgoing) nodeMap
         )
     ;;
 
