@@ -36,7 +36,7 @@ let dump game =
     List.iter (fun (b, (_in, out, _node))->  
         Format.printf "%d %d %d %s \"%s\";\n" 
             (ParityGame.labelof b)
-            (ParityGame.priority_value b) 
+            (ParityGame.valueof b)
             (ParityGame.export_player (ParityGame.playerof b))
             (edges out)
             (repr_node b)

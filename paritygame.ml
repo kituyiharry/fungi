@@ -45,17 +45,10 @@ module ParityGame = struct
 
     let cmpprios (Priority lp) (Priority rp) = (compare lp rp)
 
-    let export_player = function 
-            | Even -> 0
-            | Odd  -> 1
+    let export_player = function
+        | Even -> 0
+        | Odd  -> 1
     ;;
-
-    let import_player = function 
-            | Even -> 0
-            | Odd  -> 1
-    ;;
-
-    let priority_value (Label ((Priority (d, _)), _)) = d
 
     (* Compare only the structural priority part of the nodes relevant to parity games  *)
     let compare  (Label ((Priority lp), _)) (Label ((Priority rp), _)) = (compare rp lp)
@@ -66,8 +59,6 @@ module ParityGame = struct
     end
 
     (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] .. *)
-    (* Noted: there is duplication of priority type -> doesn't help at all *)
-    (* So for the graph we only compare at the random level *)
     module Graph  = MakeGraph(GraphNode)
 
     module AdjSet = Graph.AdjSet
@@ -77,10 +68,13 @@ module ParityGame = struct
     type t        = Graph.t
 
     (* Empty Game is just an empty Graph *)
-    let empty = Graph.empty
+    let empty     = Graph.empty
 
     (* Basically denoting an edge where the token moves *)
-    type play = (node * node)
+    type play     = (node * node)
+
+    (* integer priority value of a node *)
+    let valueof (Label((Priority (d, _)), _)) = d
 
     (* This play implicitly makes the assumption that a strategy can ONLY be used
     to pick one path - so there is no need to check the 2nd one because a player
@@ -88,10 +82,13 @@ module ParityGame = struct
     ...Consultation needed *)
     let cmpplays (lf, _lt) (rf, _rt) = Stdlib.compare (labelof lf) (labelof rf)
 
-    module StrSet = Myset.TreeSet(struct
-        type t = play
+    (* A set of edges which a token follows in a graph *)
+    module Strategy = struct
+        type t      = play
         let compare = cmpplays
-    end)
+    end
+
+    module StrSet = Myset.TreeSet(Strategy)
 
     (* A parity game solution is a product of the winning regions and
      corresponding strategies for each player *)
@@ -113,13 +110,11 @@ module ParityGame = struct
             (label, Graph.add label game)
     ;;
 
-
     (** [ add player int PGame.t]
      like add_node but doesn't return the node *)
     let add player priority game =
         Graph.add (Label ((Priority (priority, player)), (strictmonotonic entropy))) game
     ;;
-
 
     (* Structural equality i.e Odd = Odd or Even = Even *)
     let sameplayer player_a (Label (Priority (_, player_b), _)) = player_a = player_b
@@ -153,7 +148,7 @@ module ParityGame = struct
     (* Checks whether the a play can be added as a strategy for owner into the
      strategy set *)
     let validstrategy owner (protagonist, foreigner) stratset  =
-        if StrSet.mem (protagonist, foreigner) stratset then stratset else 
+        if StrSet.mem (protagonist, foreigner) stratset then stratset else
         if sameplayer (playerof protagonist) foreigner then StrSet.add (protagonist, foreigner) stratset
         else let parity = compare protagonist foreigner in
             if sameplayer owner protagonist then
@@ -266,8 +261,6 @@ module ParityGame = struct
             (attractorset, strats)
     ;;
 
-
-
     (** [buildattractor ?set:(AdjSet.t) identity player PGame.t AdjSet.t]
         A node is part of its own attractor
     *)
@@ -306,12 +299,10 @@ module ParityGame = struct
 
     (*let bindings nodeMap: (AdjSet.t * AdjSet.t * node) Nodes.t =*)
     let bindings nodeMap  =
-        (
-            (*Have to sort by the priority and not the internal 'entropy' representation *)
-            List.sort (compare)
-            @@ List.map (fst)
-            @@ Graph.NodeMap.bindings nodeMap
-        )
+        (*Have to sort by the priority and not the internal 'entropy' representation *)
+        List.sort (compare)
+        @@ List.map (fst)
+        @@ Graph.NodeMap.bindings nodeMap
     ;;
 
     (*Max element of the Map but using its internal elements and not keys *)
