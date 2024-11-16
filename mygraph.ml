@@ -1,14 +1,11 @@
-(************************
- * @author Harry K kituyiharry@github.com
- * @date   2021-02-19
-
- Simplest Functional Directed Graph Implementation (Adjacency list)
-
- https://www.lri.fr/~filliatr/ftp/publis/ocamlgraph-tfp-8.pdf
- https://bryangarza.github.io/blog/basic-graph-traversal-in-ocaml
- https://gist.github.com/theawesomestllama/7d1c0961a2c4446ef40b
- https://github.com/backtracking/ocamlgraph
-************************)
+(******************************************************************************
+*     Simplest Functional Directed Graph Implementation (Adjacency list)      *
+*                                                                             *
+* https://www.lri.fr/~filliatr/ftp/publis/ocamlgraph-tfp-8.pdf                *
+* https://bryangarza.github.io/blog/basic-graph-traversal-in-ocaml            *
+* https://gist.github.com/theawesomestllama/7d1c0961a2c4446ef40b              *
+* https://github.com/backtracking/ocamlgraph                                  *
+*******************************************************************************)
 open Myset;;
 
 module MakeGraph(Unique: Set.OrderedType) = struct
@@ -18,7 +15,7 @@ module MakeGraph(Unique: Set.OrderedType) = struct
 
     (*  Incoming nodes  Outgoing nodes data *)
     module Vertex = struct 
-        type t = (adj * adj * Unique.t)
+        type t      = (adj * adj * Unique.t)
         let compare = fun (_, _, lnode) (_, _, rnode) -> Unique.compare lnode rnode
     end
 
@@ -53,9 +50,7 @@ module MakeGraph(Unique: Set.OrderedType) = struct
         let (fromIncoming, fromOutgoing, label) = NodeMap.find nodeFrom nodeMap in
         let finMap = (NodeMap.add nodeFrom (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label) nodeMap) in
         let (toIncoming, toOutgoing, label) = NodeMap.find nodeTo finMap in
-            NodeMap.add nodeTo (
-                (AdjSet.add nodeFrom toIncoming), toOutgoing, label) 
-            finMap
+            NodeMap.add nodeTo ( (AdjSet.add nodeFrom toIncoming), toOutgoing, label) finMap
     ;;
 
     let rec add_all nodeFrom nodeToList nodeMap = match nodeToList with
@@ -79,9 +74,7 @@ module MakeGraph(Unique: Set.OrderedType) = struct
     Outgoing set of nodes *)
     let outgoingof node game = let (_, out, _) = NodeMap.find node game in out
 
-    (*
-     * Removes a node from the graph
-     *)
+    (** Removes a node from the graph *)
     let remove delnode nodeMap =
         let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
         NodeMap.remove delnode (

@@ -1,7 +1,8 @@
-(**
-  Utilities and Helpers for some repetitive tasks
-*)
-
+(******************************************************************************
+*                                                                             *
+*            Utilities and Helpers for some repetitive tasks                  *
+*                                                                             *
+*******************************************************************************)
 module Utils = struct
 
 

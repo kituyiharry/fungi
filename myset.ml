@@ -1,17 +1,14 @@
-(************************
- * Author: Harry K
- * Date  : Nov 14, 2020
- * Based on upenn lectures: (most of the Interface only)
-   https://www.seas.upenn.edu/~cis120/archive/16sp/lectures/lec10.pdf
-
-   The tree will remain mostly unbalanced!
-   Target is to add some 'laziness' with some functions
-
-  Usage:
-    let f = TreeSet.empty ;;                            (* Empty Set *)
-    let f = TreeSet.of_list [1;2;3;4;5;6;7;...;];;  (* Set from a List *)
-
-************************)
+(******************************************************************************
+*                                                                             *
+*                      A Tree Set implementation                              *
+**      Based on upenn lectures: (most of the Interface only)                 *
+*       https://www.seas.upenn.edu/~cis120/archive/16sp/lectures/lec10.pdf    *
+*                                                                             *
+*       The tree will remain mostly unbalanced!                               *
+*       Target is to add some 'laziness' with some functions                  *
+*                                                                             *
+*                                                                             *
+*******************************************************************************)
 
 module type TreeSet = functor(Ord: Set.OrderedType) -> sig
     type t

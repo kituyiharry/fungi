@@ -1,3 +1,8 @@
+(******************************************************************************
+*                                                                             *
+*                       Functions to Solve Parity Games                       *
+*                                                                             *
+*******************************************************************************)
 open Paritygame
 
 let empty_strategy    = (ParityGame.StrSet.empty, ParityGame.StrSet.empty)

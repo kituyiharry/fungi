@@ -1,17 +1,19 @@
+(******************************************************************************
+*                                                                             *
+*       Export | Import the game in a format compatible with                  *
+*       https://github.com/tcsprojects/pgsolver/blob/master/doc/pgsolver.pdf  *
+*                                                                             *
+*       ⟨parity game⟩ ::= [parity ⟨identifier⟩;] ⟨node spec⟩+                 *
+*       ⟨node spec⟩ ::= ⟨identifier⟩⟨priority⟩⟨owner⟩ ⟨successors⟩[⟨name⟩] ;  *
+*       ⟨identifier⟩ ::= N                                                    *
+*       ⟨priority⟩ ::= N                                                      *
+*       ⟨owner⟩ ::= 0 |1                                                      *
+*       ⟨successors⟩ ::= ⟨identifier⟩(, ⟨identifier⟩)∗                        *
+*       ⟨name⟩ ::= \" ( any ASCII string not containing ‘\"’)"                *
+*                                                                             *
+*                                                                             *
+*******************************************************************************)
 open Paritygame;;
-
-(**
-   Export the game in a format compatible with https://github.com/tcsprojects/pgsolver/blob/master/doc/pgsolver.pdf
-
-   ⟨parity game⟩ ::= [parity ⟨identifier⟩;] ⟨node spec⟩+
-   ⟨node spec⟩ ::= ⟨identifier⟩⟨priority⟩⟨owner⟩ ⟨successors⟩[⟨name⟩] ;
-   ⟨identifier⟩ ::= N
-   ⟨priority⟩ ::= N
-   ⟨owner⟩ ::= 0 |1
-   ⟨successors⟩ ::= ⟨identifier⟩(, ⟨identifier⟩)∗
-   ⟨name⟩ ::= \" ( any ASCII string not containing ‘\"’)"
-
-*)
 
 
 let edges outgoing = 

@@ -1,7 +1,7 @@
 (*****************************************************************************
  *                                                                           *
  *                                                                           *
- *                A Dead Simple Parity Game Implementation                   *
+ *            A Dead Simple Functional Parity Game Implementation            *
  *                                                                           *
  *                                                                           *
  *****************************************************************************)
@@ -9,10 +9,9 @@
 (* Caveat Emptor:
 
    This implementation is only meant to be simple with a focus on learning
-
-   TODO: Also I think the strategy implementation may not be correct in some games
 *)
 open Mygraph;;
+open Myset;;
 
 let precision         = 1     (* Set to precision of the universe if necessary :-) *)
 let entropy           = ref 0
@@ -76,11 +75,8 @@ module ParityGame = struct
     (* integer priority value of a node *)
     let valueof (Label((Priority (d, _)), _)) = d
 
-    (* This play implicitly makes the assumption that a strategy can ONLY be used
-    to pick one path - so there is no need to check the 2nd one because a player
-    cannot play 2 strategies! i.e this does not properly compare the RAND parts
-    ...Consultation needed *)
-    let cmpplays (lf, _lt) (rf, _rt) = Stdlib.compare (labelof lf) (labelof rf)
+    (* compare two paths of a strategy *)
+    let cmpplays (lf, _lt) (rf, _rt) = Int.compare (labelof lf) (labelof rf)
 
     (* A set of edges which a token follows in a graph *)
     module Strategy = struct
@@ -88,7 +84,7 @@ module ParityGame = struct
         let compare = cmpplays
     end
 
-    module StrSet = Myset.TreeSet(Strategy)
+    module StrSet = TreeSet(Strategy)
 
     (* A parity game solution is a product of the winning regions and
      corresponding strategies for each player *)
