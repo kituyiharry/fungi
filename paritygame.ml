@@ -6,10 +6,7 @@
  *                                                                           *
  *****************************************************************************)
 
-(* Caveat Emptor:
-
-   This implementation is only meant to be simple with a focus on learning
-*)
+(* Caveat Emptor: This implementation is only meant to be simple with a focus on learning *)
 open Mygraph;;
 open Myset;;
 
