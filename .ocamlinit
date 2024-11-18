@@ -248,8 +248,9 @@ let pp_prio (ParityGame.Priority (value, pplayer)) = match pplayer with
   | ParityGame.Odd  -> Format.printf " (Odd  %d) " value
 ;;
 
-let pp_node (ParityGame.Label (prio, _rand )) =
-  pp_prio prio
+let pp_node (ParityGame.Label (prio, rand )) =
+    let () =    Format.printf "%d:" rand in
+        pp_prio prio
 ;;
 
 let pp_player_adjlist: (ParityGame.node * ParityGame.node list) -> unit =
@@ -342,7 +343,7 @@ let pp_solution:(ParityGame.solution) -> unit = fun sol ->
 (*#install_printer pp_prio;;*)
 (*#install_printer pp_node;;*)
 (*#install_printer pp_strat;;*)
-(*#install_printer pp_solution;;*)
+#install_printer pp_solution;;
 (*#install_printer pp_adjset_depth;;*)
 
 (*#trace ParityGame.zielonka;;*)
