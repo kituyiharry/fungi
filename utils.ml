@@ -75,4 +75,18 @@ module Utils = struct
                 Paritygame.ParityGame.Graph.of_list adj_list_desc game
     ;;
 
+    (* use seeded random *)
+    let smakerandomgame seed num_nodes max_prio = 
+        let _ = Random.init seed in
+        let game =
+            Seq.fold_left (add_node) Paritygame.ParityGame.empty
+            @@ Seq.init num_nodes (randnode max_prio) 
+        in 
+            let bindings = Paritygame.ParityGame.bindings game in
+            let adj_list_desc =
+                List.map (fun x -> (x, pick bindings num_nodes [])) bindings
+            in
+                Paritygame.ParityGame.Graph.of_list adj_list_desc game
+    ;;
+
 end
