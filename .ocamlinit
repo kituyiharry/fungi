@@ -337,14 +337,14 @@ let pp_solution:(ParityGame.solution) -> unit = fun sol ->
   Format.printf "\n\t|\n\t+ ---  ---  --- --- --- --- --- --- --- --- --- --- ---"
 ;;
 
-(*#install_printer pp_parity_game;;*)
-(*#install_printer pp_parity_game_redundant;;*)
-(*#install_printer pp_adjset;;*)
+#install_printer pp_parity_game;;
+#install_printer pp_parity_game_redundant;;
+#install_printer pp_adjset;;
 (*#install_printer pp_prio;;*)
-(*#install_printer pp_node;;*)
+#install_printer pp_node;;
 (*#install_printer pp_strat;;*)
 #install_printer pp_solution;;
-(*#install_printer pp_adjset_depth;;*)
+#install_printer pp_adjset_depth;;
 
 (*#trace ParityGame.zielonka;;*)
 (*#trace ParityGame.attr;;*)
@@ -359,6 +359,8 @@ let pp_solution:(ParityGame.solution) -> unit = fun sol ->
 (*#trace ParityGame.AdjSet.remove;;*)
 (*#trace ParityGame.AdjSet.diff;;*)
 (*#trace ParityGame.AdjSet.filter;;*)
+(*#trace ParityGame.AdjSet.fold;;*)
+(*#trace ParityGame.Graph.NodeMap.update;;*)
 (*#trace ParityGame.AdjSet.subset;;*)
 (*#trace ParityGame.stack;;*)
 (*#trace ParityGame.StrSet.of_list;;*)

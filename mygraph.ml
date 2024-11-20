@@ -8,6 +8,8 @@
 *******************************************************************************)
 open Myset;;
 
+let (let*) = Option.bind
+
 module MakeGraph(Unique: Set.OrderedType) = struct
 
     (* A given adjacency set of nodes *)
@@ -77,16 +79,15 @@ module MakeGraph(Unique: Set.OrderedType) = struct
     (** Removes a node from the graph *)
     let remove delnode nodeMap =
         let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
-        NodeMap.remove delnode (
-            AdjSet.fold ((fun nodelabel updatemap ->
-                let (deepinc, deepout, deeplabel) = (NodeMap.find nodelabel updatemap) in
-                NodeMap.add nodelabel (
-                    (AdjSet.remove delnode deepinc),
-                    (AdjSet.remove delnode deepout),
-                    deeplabel
-                ) updatemap
-            )) (AdjSet.union incoming outgoing) nodeMap
-        )
+        (AdjSet.fold ((fun nodelabel updatemap ->
+            NodeMap.update nodelabel (fun x -> 
+                let* (deepinc, deepout, deeplabel) = x in
+                if (Unique.compare delnode deeplabel) = 0 then
+                    None
+                else
+                    Some (AdjSet.remove delnode deepinc, AdjSet.remove delnode deepout, deeplabel)
+            ) updatemap
+        )) (AdjSet.add delnode (AdjSet.union incoming outgoing)) nodeMap)
     ;;
 
     (* Get adjacency list of a node *)

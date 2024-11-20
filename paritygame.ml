@@ -18,8 +18,8 @@ module ParityGame = struct
 
     (* A parity game has an Odd and Even player *)
     type player =
-        | Even
         | Odd
+        | Even
     ;;
 
     (* Each node in a parity game has an Integer priority *)

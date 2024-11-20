@@ -1,7 +1,7 @@
 (******************************************************************************
 *                                                                             *
 *                      A Tree Set implementation                              *
-**      Based on upenn lectures: (most of the Interface only)                 *
+*       Based on upenn lectures: (most of the Interface only)                 *
 *       https://www.seas.upenn.edu/~cis120/archive/16sp/lectures/lec10.pdf    *
 *                                                                             *
 *       The tree will remain mostly unbalanced!                               *
@@ -14,15 +14,15 @@ module type TreeSet = functor(Ord: Set.OrderedType) -> sig
     type t
     type elt
     type 'a set
-    val empty  : elt set
-    val add    : elt -> elt set -> elt set
-    val member : elt -> elt set -> bool
-    val cardinality : elt set -> int
-    val tailcardinality : elt set -> int
-    val of_list : elt list -> elt set
-    val root : elt set -> elt option
+    val empty: elt set
+    val add: elt -> elt set -> elt set
+    val member: elt -> elt set -> bool
+    val cardinality: elt set -> int
+    val tailcardinality: elt set -> int
+    val of_list: elt list -> elt set
+    val root: elt set -> elt option
     val take_min: elt set -> elt option * elt set
-    val invert : elt set-> elt set
+    val invert: elt set-> elt set
     val inorder: elt list -> elt set -> elt list
     val iter_inorder: (elt -> unit) -> elt set -> unit
     val preorder: elt list -> elt set -> elt list
@@ -38,6 +38,7 @@ module type TreeSet = functor(Ord: Set.OrderedType) -> sig
     val for_all: (elt -> bool) -> elt set -> bool
     val subset: elt set -> elt set -> bool
     val diff: elt set -> elt set -> elt set
+    val to_seq: elt set -> elt Seq.t
 end
 
 module TreeSet(Ord: Set.OrderedType) =
@@ -111,14 +112,15 @@ struct
     ;;
 
     (** [root 'a set] Root element of the Set *)
-    let take_root_lazy = function
-        | Empty ->  (None, fun () -> Empty)
-        | Node (x, v, y) -> (Some(v), fun () -> 
-            let min, rest = take_min y in 
+    let take_root = function
+        | Empty ->  (None, Empty)
+        | Node (x, v, y) -> 
+            let g = let min, rest = take_min y in 
                 match min with
                 | Some next -> Node(x, next, rest)
                 | None -> x
-        )
+            in
+                Some(v), g
     ;;
 
     (** [set_of_list 'a list] Build a Set from a list *)
@@ -210,31 +212,27 @@ struct
         | Node (x, a, y) -> 
             let p = Ord.compare el a in
             if p = 0 then
-                match (x, y) with
-                | (Empty, Empty) -> Empty
-                |  _ ->
-                    let min, rest = take_min y in 
-                    match min with
-                    | Some v -> Node(x, v, rest)
-                    | None -> x
+                let min, rest = take_min y in
+                match min with
+                | Some v -> Node(x, v, rest)
+                | None -> x
             else if p > 0 then
                 Node(x, a, remove el y)
             else
                 Node(remove el x, a, y)
     ;;
 
+    (** [travers 'a set] Inorder traversal on the set *)
+    let rec traverse f acc = function
+        | Empty -> acc
+        | Node (Empty, a, Empty) ->  (f a acc)
+        | Node (x, a, y) -> traverse f (traverse f (f a acc) x) y
+    ;; (* Inorder traversal - Left - Root - Right *)
+
     (** ... set union of 2 sets  ... *)
-    let rec union other = function
+    let union other = function
         | Empty -> other
-        | self ->
-            match (take_max self, take_max other) with
-            | ((Some a, rest), (Some b, more)) -> 
-                (add a (add b (union rest more)))
-            | ((None, _rest), (Some _b, _more)) -> 
-                other
-            | ((Some _a, _rest), (None, _more)) -> 
-                self
-            | _ -> Empty
+        | self -> traverse (add) other self
     ;;
 
     (** ... list of elements in a set ... *)
@@ -246,9 +244,9 @@ struct
     (** ... sequence of elements in a set ... *)
     let to_seq = function
         | nodes ->
-            let rec aux l () = match take_root_lazy l with
+            let rec aux l () = match take_root l with
                 | (None, _) -> Seq.Nil
-                | (Some x, tail) -> Seq.Cons (x, (aux (tail ())))
+                | (Some x, tail) -> Seq.Cons (x, (aux tail))
             in
                 (aux nodes)
     ;;
@@ -257,7 +255,7 @@ struct
     let rec for_all f = function
         | Empty -> true
         | nodes -> 
-            let (max, rest) = take_max nodes in 
+            let (max, rest) = take_min nodes in 
             match max with
             | Some v -> if f v then for_all f rest else false
             | _ -> true
