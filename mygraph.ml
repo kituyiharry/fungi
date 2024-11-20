@@ -5,6 +5,9 @@
 * https://bryangarza.github.io/blog/basic-graph-traversal-in-ocaml            *
 * https://gist.github.com/theawesomestllama/7d1c0961a2c4446ef40b              *
 * https://github.com/backtracking/ocamlgraph                                  *
+*                                                                             *
+* TODO: use Weak module instead of label-key duplication                      *
+*                                                                             *
 *******************************************************************************)
 open Myset;;
 
@@ -49,10 +52,10 @@ module MakeGraph(Unique: Set.OrderedType) = struct
           (*Update with incoming*)
     *)
     let add_edge nodeFrom nodeTo nodeMap =
-        let (fromIncoming, fromOutgoing, label) = NodeMap.find nodeFrom nodeMap in
-        let finMap = (NodeMap.add nodeFrom (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label) nodeMap) in
-        let (toIncoming, toOutgoing, label) = NodeMap.find nodeTo finMap in
-            NodeMap.add nodeTo ( (AdjSet.add nodeFrom toIncoming), toOutgoing, label) finMap
+        (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label) = x in 
+            Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label)) nodeMap)
+        |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing, tolabel) = x in
+            Some ((AdjSet.add nodeFrom toIncoming), (toOutgoing), tolabel))
     ;;
 
     let rec add_all nodeFrom nodeToList nodeMap = match nodeToList with
@@ -79,15 +82,12 @@ module MakeGraph(Unique: Set.OrderedType) = struct
     (** Removes a node from the graph *)
     let remove delnode nodeMap =
         let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
-        (AdjSet.fold ((fun nodelabel updatemap ->
+        NodeMap.remove delnode (AdjSet.fold (fun nodelabel updatemap ->
             NodeMap.update nodelabel (fun x -> 
                 let* (deepinc, deepout, deeplabel) = x in
-                if (Unique.compare delnode deeplabel) = 0 then
-                    None
-                else
                     Some (AdjSet.remove delnode deepinc, AdjSet.remove delnode deepout, deeplabel)
             ) updatemap
-        )) (AdjSet.add delnode (AdjSet.union incoming outgoing)) nodeMap)
+        ) (AdjSet.union incoming outgoing) nodeMap)
     ;;
 
     (* Get adjacency list of a node *)

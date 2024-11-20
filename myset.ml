@@ -261,7 +261,7 @@ struct
             | _ -> true
     ;;
 
-    (* subset other self -> other is subset of self *)
+    (* Subset other self -> other is subset of self *)
     let subset other = function
         | Empty -> is_empty other
         | nodes -> for_all (fun x -> mem x nodes) other
@@ -271,6 +271,12 @@ struct
     let filter f = function
         | Empty -> Empty
         | nodes -> fold (fun elt acc -> if f elt then add elt acc else acc) nodes empty
+    ;;
+
+    (* Map over the elements of a set *)
+    let rec map f = function
+        | Empty -> Empty
+        | Node(x, a, y) -> Node(map f x, f a, map f y)
     ;;
 
     (* set difference *)
