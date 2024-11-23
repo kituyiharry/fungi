@@ -6,7 +6,10 @@
  *                                                                           *
  *****************************************************************************)
 
-(* Caveat Emptor: This implementation is only meant to be simple with a focus on learning *)
+(* Caveat Emptor: This implementation is only meant to be simple with a focus on learning 
+   For reference please cite this repository if you are using it for your own
+   purposes!
+*)
 open Mygraph;;
 open Myset;;
 
@@ -40,11 +43,6 @@ module ParityGame = struct
     let cmprands (Label(_, l)) (Label(_, r)) = (compare l r)
 
     let cmpprios (Priority lp) (Priority rp) = (compare lp rp)
-
-    let export_player = function
-        | Even -> 0
-        | Odd  -> 1
-    ;;
 
     (* Compare only the structural priority part of the nodes relevant to parity games  *)
     let compare  (Label ((Priority lp), _)) (Label ((Priority rp), _)) = (compare rp lp)
@@ -141,7 +139,7 @@ module ParityGame = struct
     (* Checks whether the a play can be added as a strategy for owner into the
      strategy set *)
     let validstrategy owner (protagonist, foreigner) stratset  =
-        if StrSet.mem (protagonist, foreigner) stratset then stratset else
+        (*if StrSet.mem (protagonist, foreigner) stratset then stratset else*)
         if sameplayer (playerof protagonist) foreigner then StrSet.add (protagonist, foreigner) stratset
         else let parity = compare protagonist foreigner in
             if sameplayer owner protagonist then

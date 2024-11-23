@@ -31,6 +31,11 @@ let repr_node (ParityGame.Label (prio, _rand )) =
   repr_prio prio
 ;;
 
+let export_player = function
+    | ParityGame.Even -> 0
+    | ParityGame.Odd  -> 1
+;;
+
 let dump game = 
     let total  = ParityGame.Graph.NodeMap.cardinal game in
     let () = Format.printf "parity %d;\n" total in
@@ -39,7 +44,7 @@ let dump game =
         Format.printf "%d %d %d %s \"%s\";\n" 
             (ParityGame.labelof b)
             (ParityGame.valueof b)
-            (ParityGame.export_player (ParityGame.playerof b))
+            (export_player (ParityGame.playerof b))
             (edges out)
             (repr_node b)
     ) bnds
