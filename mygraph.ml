@@ -29,10 +29,10 @@ module MakeGraph(Unique: Set.OrderedType) = struct
     type t = (Vertex.t) Map.Make(Unique).t
 
     (** Module for manipulating the Set structure holding the Adjacency list *)
-    module AdjSet  = TreeSet (Unique)
+    module AdjSet  = TreeSet(Unique)
 
     (** Module for manipulating the Map (Node -> (set , set , label)) *)
-    module NodeMap = Map.Make (Unique)
+    module NodeMap = Map.Make(Unique)
 
     (** An empty graph **)
     let empty      = NodeMap.empty
