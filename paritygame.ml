@@ -174,9 +174,8 @@ module ParityGame = struct
         @@ AdjSet.to_seq attractor (* from attractor *)
     ;;
 
-    let resolve player stratstate seq =
-        StrSet.fold (validstrategy player) stratstate
-        @@ StrSet.of_seq seq
+    let resolve player (stratstate: (node * node) StrSet.set) (seq: play Seq.t) =
+        Seq.fold_left (fun acc a -> validstrategy player a acc) stratstate seq
 
     (** [playerof identity player]
     Destructure the player from a label and its unique component *)
