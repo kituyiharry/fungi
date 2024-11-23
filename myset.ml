@@ -41,8 +41,7 @@ module type TreeSet = functor(Ord: Set.OrderedType) -> sig
     val to_seq: elt set -> elt Seq.t
 end
 
-module TreeSet(Ord: Set.OrderedType) =
-struct
+module TreeSet(Ord: Set.OrderedType) = struct
 
     type elt = Ord.t
 

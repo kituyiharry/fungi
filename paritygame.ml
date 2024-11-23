@@ -274,17 +274,17 @@ module ParityGame = struct
         if ofprio mod 2 == 0 then Even else Odd
     ;;
 
-    (* Cluster max priority nodes (same player and priority) *)
-    let cluster (Label ((Priority (l, pl)),_)) game =
-        let nodes = Nodes.filter (fun (Label ((Priority (r, pr)), _)) _  -> ((r = l) && (pl = pr))) game in
-        Nodes.fold (fun x _y acc -> AdjSet.add x acc) nodes AdjSet.empty
-    ;;
-
     (* Collect nodes forming the game into a set *)
     let collective game =
         (Nodes.fold
             (fun node _ neighbours -> AdjSet.add node neighbours) 
         game) AdjSet.empty
+    ;;
+
+    (* Cluster max priority nodes (same player and priority) *)
+    let cluster (Label ((Priority (l, pl)),_)) game =
+        (Nodes.filter (fun (Label ((Priority (r, pr)), _)) _  -> ((r = l) && (pl = pr))) game)
+        |> collective
     ;;
 
     (*let bindings nodeMap: (AdjSet.t * AdjSet.t * node) Nodes.t =*)
