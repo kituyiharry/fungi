@@ -340,9 +340,9 @@ let pp_solution:(ParityGame.solution) -> unit = fun sol ->
 #install_printer pp_parity_game;;
 #install_printer pp_parity_game_redundant;;
 #install_printer pp_adjset;;
-(*#install_printer pp_prio;;*)
+#install_printer pp_prio;;
 #install_printer pp_node;;
-(*#install_printer pp_strat;;*)
+#install_printer pp_strat;;
 #install_printer pp_solution;;
 #install_printer pp_adjset_depth;;
 

@@ -39,6 +39,7 @@ module type TreeSet = functor(Ord: Set.OrderedType) -> sig
     val subset: elt set -> elt set -> bool
     val diff: elt set -> elt set -> elt set
     val to_seq: elt set -> elt Seq.t
+    val singleton: elt -> elt set
 end
 
 module TreeSet(Ord: Set.OrderedType) = struct
@@ -283,5 +284,11 @@ module TreeSet(Ord: Set.OrderedType) = struct
         | Empty -> other
         | nodes -> filter (fun x -> not (mem x nodes)) other
     ;;
+
+
+    (* singleton *)
+    let singleton v = Node(Empty, v, Empty)
+    ;;
+
 
 end

@@ -90,6 +90,38 @@ module MakeGraph(Unique: Set.OrderedType) = struct
         ) (AdjSet.union incoming outgoing) nodeMap)
     ;;
 
+    (*breadth first search starting from start node applying f until returns true*)
+    let bfs f start game = 
+        let que     = Queue.create () in
+        let _       = Queue.add start que in
+        let visited = AdjSet.singleton start in
+        let rec iter vis nxt =
+            let* label = Queue.take_opt nxt in
+            if f label then
+                Some true
+            else
+                let out =  outgoingof label game in 
+                let _   = AdjSet.iter_inorder (fun x -> Queue.add x nxt) (AdjSet.diff out vis) in
+                iter (AdjSet.union out vis) nxt
+        in iter visited que
+    ;;
+
+    (*depth first search starting from start node applying f until returns true*)
+    let dfs f start game = 
+        let stck    = Stack.create () in
+        let _       = Stack.push start stck in
+        let visited = AdjSet.singleton start in
+        let rec iter vis nxt =
+            let* label = Stack.pop_opt nxt in
+            if f label then
+                Some true
+            else
+                let out = outgoingof label game in 
+                let _   = AdjSet.iter_inorder (fun x -> Stack.push x nxt) (AdjSet.diff out vis) in
+                iter (AdjSet.union out vis) nxt
+        in iter visited stck
+    ;;
+
     (* Get adjacency list of a node *)
     let adj_list_of node nodeMap =
         let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
