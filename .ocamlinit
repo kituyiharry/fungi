@@ -176,7 +176,10 @@ let print_player_prio_dir (_, (ParityGame.Priority (value,pplayer)))  = match pp
 | ParityGame.Odd  -> Format.printf " (Odd %d) " value
 ;;
 
-let pp_parity_game:(ParityGame.AdjSet.t * ParityGame.AdjSet.t * ParityGame.node) ParityGame.Nodes.t -> unit = fun game ->
+type adj = ParityGame.node ParityGame.AdjSet.set;;
+type edg = ParityGame.play ParityGame.StrSet.set;;
+
+let pp_parity_game:(adj * adj * ParityGame.node) ParityGame.Nodes.t -> unit = fun game ->
   Format.printf "G: {";
    List.iter (print_player_prio)
    (
@@ -185,7 +188,7 @@ let pp_parity_game:(ParityGame.AdjSet.t * ParityGame.AdjSet.t * ParityGame.node)
   Format.printf "} "
 ;;
 
-let pp_adjset_depth (set: ParityGame.AdjSet.t) =
+let pp_adjset_depth (set: adj) =
   Format.printf "{$ A: {";
   if ParityGame.AdjSet.is_empty set then
     Format.printf " ∅ "
@@ -211,8 +214,7 @@ let pp_adjset set =
 
 let terseness = 30
 
-let pp_parity_game_terse:(ParityGame.AdjSet.t * ParityGame.AdjSet.t *
-    ParityGame.node) ParityGame.Nodes.t -> unit =
+let pp_parity_game_terse:(adj * adj * ParityGame.node) ParityGame.Nodes.t -> unit =
   fun game ->
   let card = ParityGame.Nodes.cardinal game in
   if  card <= terseness then
@@ -262,7 +264,7 @@ let pp_player_adjlist: (ParityGame.node * ParityGame.node list) -> unit =
 ;;
 
 
-let pp_parity_game_adjacency:(ParityGame.AdjSet.t * ParityGame.AdjSet.t * ParityGame.node) ParityGame.Nodes.t -> unit
+let pp_parity_game_adjacency:(adj * adj * ParityGame.node) ParityGame.Nodes.t -> unit
 = fun game ->
   Format.printf "{\n";
    List.iter (pp_player_adjlist)
@@ -285,7 +287,7 @@ let pp_adjset_prefix set prefix =
   Format.printf "} "
 ;;
 
-let pp_player_inc_out: (ParityGame.node * ParityGame.AdjSet.t * ParityGame.AdjSet.t) -> unit =
+let pp_player_inc_out: (ParityGame.node * adj * adj) -> unit =
   fun  (n, i, o)->
     let () = Format.printf "    " in
     let () = pp_node n in
@@ -295,8 +297,7 @@ let pp_player_inc_out: (ParityGame.node * ParityGame.AdjSet.t * ParityGame.AdjSe
     Format.printf "]\n"
 ;;
 
-let pp_parity_game_redundant:(ParityGame.AdjSet.t * ParityGame.AdjSet.t *
-    ParityGame.node) ParityGame.Nodes.t -> unit
+let pp_parity_game_redundant:(adj * adj * ParityGame.node) ParityGame.Nodes.t -> unit
 = fun game ->
   Format.printf "{\n";
    List.iter (pp_player_inc_out)
@@ -314,7 +315,7 @@ let ppluck fromset =
   | _ -> None
 ;;
 
-let rec pp_strat: ParityGame.StrSet.t ->  unit = fun strat ->
+let rec pp_strat: edg -> unit = fun strat ->
   if ParityGame.StrSet.is_empty strat then
     Format.printf " ∅ "
   else

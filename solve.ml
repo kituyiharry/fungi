@@ -18,9 +18,9 @@ let (~~) = Seq.append
     Recursive algorithm which produces winning sets of the game
     https://en.wikipedia.org/wiki/Parity_game#:~:text=color%20is%20even.-,Recursive%20algorithm%20for%20solving%20parity%20games,-%5Bedit%5D
 *)
-let rec zielonka:ParityGame.t -> ParityGame.solution = fun game ->
+let rec zielonka = fun game ->
     if ParityGame.Nodes.is_empty game then
-        { regions=empty_region; strategy=empty_strategy; }
+        { ParityGame.regions=empty_region; strategy=empty_strategy; }
     else
         let node         = ParityGame.max_elt game in
         let i            = ParityGame.omega node in
@@ -53,9 +53,9 @@ let rec zielonka:ParityGame.t -> ParityGame.solution = fun game ->
 (** [lazy_zielonka PGame.t PGame.solution]
     Same as zielonka but exploits lazyness when building strategies
 *)
-let rec lazy_zielonka:ParityGame.t -> ParityGame.solution = fun game ->
+let rec lazy_zielonka = fun game ->
     if ParityGame.Nodes.is_empty game then
-        { regions=empty_region; strategy=empty_strategy; }
+        { ParityGame.regions=empty_region; strategy=empty_strategy; }
     else
         let node         = ParityGame.max_elt game in
         let i            = ParityGame.omega node in

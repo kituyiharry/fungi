@@ -53,13 +53,13 @@ module ParityGame = struct
     end
 
     (* label -> [(incominglabels * outgoinglabels * (player, priority)),...] .. *)
-    module Graph  = MakeGraph(GraphNode)
+    module Graph  = MakeGraph(GraphNode) 
 
     module AdjSet = Graph.AdjSet
 
     module Nodes  = Graph.NodeMap
 
-    type t        = Graph.t
+    type t        = node Graph.t
 
     (* Empty Game is just an empty Graph *)
     let empty     = Graph.empty
@@ -84,8 +84,8 @@ module ParityGame = struct
     (* A parity game solution is a product of the winning regions and
      corresponding strategies for each player *)
     type solution = {
-        regions:  (AdjSet.t * AdjSet.t); (* W0 , W1 *)
-        strategy: (StrSet.t * StrSet.t); (* [0 x -> x+1 -> ... ], [1 y -> y+1 -> ... ] *)
+        regions:  (GraphNode.t AdjSet.set * GraphNode.t AdjSet.set); (* W0 , W1 *)
+        strategy: (play StrSet.set * play StrSet.set); (* [0 x -> x+1 -> ... ], [1 y -> y+1 -> ... ] *)
     }
 
     (** [ add_node player int PGame.t]

@@ -10,48 +10,47 @@
 *                                                                             *
 *******************************************************************************)
 
-module type TreeSet = functor(Ord: Set.OrderedType) -> sig
+module type TSet = sig
     type t
-    type elt
-    type 'a set
-    val empty: elt set
-    val add: elt -> elt set -> elt set
-    val member: elt -> elt set -> bool
-    val cardinality: elt set -> int
-    val tailcardinality: elt set -> int
-    val of_list: elt list -> elt set
-    val root: elt set -> elt option
-    val take_min: elt set -> elt option * elt set
-    val invert: elt set-> elt set
-    val inorder: elt list -> elt set -> elt list
-    val iter_inorder: (elt -> unit) -> elt set -> unit
-    val preorder: elt list -> elt set -> elt list
-    val iter_preorder: (elt -> unit) -> elt set -> unit
-    val postorder: elt list -> elt set -> elt list
-    val iter_postorder: (elt -> unit) -> elt set ->  unit
-    val fold: (elt -> 'b -> 'b) -> elt set -> 'b -> 'b
-    val remove: elt -> elt set -> elt set
-    val union: elt set -> elt set -> elt set
-    val is_empty: elt set -> bool
-    val elements: elt set -> elt list
-    val filter: (elt -> bool) -> elt set -> elt set
-    val for_all: (elt -> bool) -> elt set -> bool
-    val subset: elt set -> elt set -> bool
-    val diff: elt set -> elt set -> elt set
-    val to_seq: elt set -> elt Seq.t
-    val singleton: elt -> elt set
+    type +'a set
+    val empty: t set
+    val add: t -> t set -> t set
+    val mem: t -> t set -> bool
+    val cardinal: t set -> int
+    val of_list: t list -> t set
+    val root: t set -> t option
+    val take_min: t set -> t option * t set
+    val take_max: t set -> t option * t set
+    val invert: t set-> t set
+    val inorder: t list -> t set -> t list
+    val iter_inorder: (t -> unit) -> t set -> unit
+    val preorder: t list -> t set -> t list
+    val iter_preorder: (t -> unit) -> t set -> unit
+    val postorder: t list -> t set -> t list
+    val iter_postorder: (t -> unit) -> t set ->  unit
+    val fold: (t -> 'b -> 'b) -> t set -> 'b -> 'b
+    val remove: t -> t set -> t set
+    val union: t set -> t set -> t set
+    val is_empty: t set -> bool
+    val elements: t set -> t list
+    val filter: (t -> bool) -> t set -> t set
+    val for_all: (t -> bool) -> t set -> bool
+    val subset: t set -> t set -> bool
+    val diff: t set -> t set -> t set
+    val to_seq: t set -> t Seq.t
+    val singleton: t -> t set
+    val min_elt_opt: t set -> t option
+    val max_elt_opt: t set -> t option
+    val of_seq: t Seq.t -> t set
+    val map: (t -> 'b) -> t set -> 'b set
 end
 
-module TreeSet(Ord: Set.OrderedType) = struct
-
-    type elt = Ord.t
+module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
 
     type 'a set =
         | Empty
         | Node of 'a set * 'a * 'a set
     ;;
-
-    type t = elt set
 
     let empty = Empty
 
@@ -103,6 +102,15 @@ module TreeSet(Ord: Set.OrderedType) = struct
         | Empty -> None
         | Node(_l, v, Empty) -> Some v
         | Node(_l, _v, r) -> max_elt_opt r
+    ;;
+
+    (** [min_elt_opt 'a set]
+      Returns some maximum element in the set and the remaining set
+   *)
+    let rec min_elt_opt = function
+        | Empty -> None
+        | Node(Empty, v, _r) -> Some v
+        | Node(l, _v, _r) -> min_elt_opt l
     ;;
 
     (** [root 'a set] Root element of the Set *)

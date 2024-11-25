@@ -13,23 +13,41 @@ open Myset;;
 
 let (let*) = Option.bind
 
-module MakeGraph(Unique: Set.OrderedType) = struct
+module type Graph = sig 
+    type 'a t
+    type elt
+    module NodeMap: Map.S with type key := elt
+    module AdjSet: TSet with type t := elt
+    module Vertex: Set.OrderedType with type t := (elt AdjSet.set * elt AdjSet.set * elt)
+    val empty: (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
+    val add: elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
+    val add_edge: elt -> elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
+    val add_all: elt -> elt list -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
+    val of_list: (elt * elt list) list -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
+    val incomingof: elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set)
+    val outgoingof: elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set)
+    val remove: elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
+    val bfs: (elt -> bool) -> elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> bool option
+    val dfs: (elt -> bool) -> elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> bool option
+    val adj_list_of: elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> elt list 
+end
 
-    (* A given adjacency set of nodes *)
-    type adj = TreeSet (Unique).t
+module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
+
+    type elt = Unique.t
+
+    (** Module for manipulating the Set structure holding the Adjacency list *)
+    module AdjSet  = TreeSet(Unique)
 
     (*  Incoming nodes  Outgoing nodes data *)
     module Vertex = struct 
-        type t      = (adj * adj * Unique.t)
+        type t      = (elt AdjSet.set * elt AdjSet.set * elt)
         let compare = fun (_, _, lnode) (_, _, rnode) -> Unique.compare lnode rnode
     end
 
     (** Adjacency list graph definition **)
     (* Map from NodeType.t to (incoming outgoing label) *)
-    type t = (Vertex.t) Map.Make(Unique).t
-
-    (** Module for manipulating the Set structure holding the Adjacency list *)
-    module AdjSet  = TreeSet(Unique)
+    type 'a t = (Vertex.t) Map.Make(Unique).t
 
     (** Module for manipulating the Map (Node -> (set , set , label)) *)
     module NodeMap = Map.Make(Unique)
