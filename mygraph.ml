@@ -30,7 +30,8 @@ module type Graph = sig
     val remove: elt -> adj NodeMap.t -> adj NodeMap.t
     val bfs: (elt -> bool) -> elt -> adj NodeMap.t -> bool option
     val dfs: (elt -> bool) -> elt -> adj NodeMap.t -> bool option
-    val adj_list_of: elt -> adj NodeMap.t -> elt list 
+    val adj_list_of: elt -> adj NodeMap.t -> elt list
+    val transpose: adj NodeMap.t -> adj NodeMap.t
 end
 
 module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
@@ -148,6 +149,10 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         AdjSet.fold (
             fun anode alist -> anode :: alist
         )  (AdjSet.union incoming outgoing) []
+    ;;
+
+    let transpose nodeMap = 
+        NodeMap.map (fun (inc, out, label) -> (out, inc, label)) nodeMap
     ;;
 
 end;;
