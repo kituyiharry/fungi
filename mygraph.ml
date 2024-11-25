@@ -18,18 +18,19 @@ module type Graph = sig
     type elt
     module NodeMap: Map.S with type key := elt
     module AdjSet: TSet with type t := elt
-    module Vertex: Set.OrderedType with type t := (elt AdjSet.set * elt AdjSet.set * elt)
-    val empty: (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
-    val add: elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
-    val add_edge: elt -> elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
-    val add_all: elt -> elt list -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
-    val of_list: (elt * elt list) list -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
-    val incomingof: elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set)
-    val outgoingof: elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set)
-    val remove: elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t
-    val bfs: (elt -> bool) -> elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> bool option
-    val dfs: (elt -> bool) -> elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> bool option
-    val adj_list_of: elt -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t -> elt list 
+    type adj := (elt AdjSet.set * elt AdjSet.set * elt)
+    module Vertex: Set.OrderedType with type t := adj
+    val empty: adj NodeMap.t
+    val add: elt -> adj NodeMap.t -> adj NodeMap.t
+    val add_edge: elt -> elt -> adj NodeMap.t -> adj NodeMap.t
+    val add_all: elt -> elt list -> adj NodeMap.t -> adj NodeMap.t
+    val of_list: (elt * elt list) list -> adj NodeMap.t -> adj NodeMap.t
+    val incomingof: elt -> adj NodeMap.t -> (elt AdjSet.set)
+    val outgoingof: elt -> adj NodeMap.t -> (elt AdjSet.set)
+    val remove: elt -> adj NodeMap.t -> adj NodeMap.t
+    val bfs: (elt -> bool) -> elt -> adj NodeMap.t -> bool option
+    val dfs: (elt -> bool) -> elt -> adj NodeMap.t -> bool option
+    val adj_list_of: elt -> adj NodeMap.t -> elt list 
 end
 
 module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
@@ -38,10 +39,11 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
 
     (** Module for manipulating the Set structure holding the Adjacency list *)
     module AdjSet  = TreeSet(Unique)
+    type   adj     = (elt AdjSet.set * elt AdjSet.set * elt)
 
     (*  Incoming nodes  Outgoing nodes data *)
     module Vertex = struct 
-        type t      = (elt AdjSet.set * elt AdjSet.set * elt)
+        type t      = adj
         let compare = fun (_, _, lnode) (_, _, rnode) -> Unique.compare lnode rnode
     end
 
