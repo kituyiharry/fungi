@@ -34,7 +34,7 @@ module type Graph = sig
     val transpose: adj NodeMap.t -> adj NodeMap.t
 end
 
-module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
+module MakeGraph(Unique: Set.OrderedType): Graph with type elt = Unique.t = struct
 
     type elt = Unique.t
 
@@ -43,14 +43,14 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     type   adj     = (elt AdjSet.set * elt AdjSet.set * elt)
 
     (*  Incoming nodes  Outgoing nodes data *)
-    module Vertex = struct 
+    module Vertex  = struct 
         type t      = adj
         let compare = fun (_, _, lnode) (_, _, rnode) -> Unique.compare lnode rnode
     end
 
     (** Adjacency list graph definition **)
     (* Map from NodeType.t to (incoming outgoing label) *)
-    type 'a t = (Vertex.t) Map.Make(Unique).t
+    type 'a t      = (Vertex.t) Map.Make(Unique).t
 
     (** Module for manipulating the Map (Node -> (set , set , label)) *)
     module NodeMap = Map.Make(Unique)
@@ -128,7 +128,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     ;;
 
     (*depth first search starting from start node applying f until returns true*)
-    let dfs f start game = 
+    let dfs f start game =
         let stck    = Stack.create () in
         let _       = Stack.push start stck in
         let visited = AdjSet.singleton start in
@@ -151,8 +151,36 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         )  (AdjSet.union incoming outgoing) []
     ;;
 
-    let transpose nodeMap = 
+    let transpose nodeMap =
         NodeMap.map (fun (inc, out, label) -> (out, inc, label)) nodeMap
+    ;;
+
+    type state = { label: Unique.t; mutable slot: Unique.t option };;
+
+    (** Tarjans SCC algorithm *)
+    let tarjan nodeMap =
+        let visited    = AdjSet.empty in
+        let invar      = Stack.create () in
+        NodeMap.fold (fun key (_inc, out, _label) visit ->
+            if (AdjSet.mem key visit) then visit else  
+                let space = AdjSet.add key out in
+                (** why is a postorder traversal recommended ?? *)
+                let _     = AdjSet.iter_postorder (fun elt ->
+                    let c = AdjSet.(singleton elt |> AdjSet.union @@ AdjSet.of_seq 
+                        (Seq.map (fun { label;_ } -> label) (Stack.to_seq invar))) in
+                    let _ = dfs (fun x -> let loop = (AdjSet.mem x c) in
+                        if loop then
+                            (** Cycle found - iter and update mins and halt dfs *)
+                            (*backtrack*)
+                            (*Stack.iter (fun { slot; _ } -> slot := () )*)
+                            true
+                        else
+                            (** Update the stack *)
+                            let _ = Stack.push {label=x; slot=Some x} invar in
+                            false
+                    ) elt nodeMap in ()
+                ) space in AdjSet.union space visit
+        ) nodeMap visited
     ;;
 
 end;;

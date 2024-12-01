@@ -179,7 +179,8 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     let rec iter_preorder g = function
         | Empty -> ()
         | Node (Empty, a, Empty) ->  (g a)
-        | Node (x, a, y) -> let _ = g a in
+        | Node (x, a, y) -> 
+            let _ = g a in
             let _ = iter_preorder g x in
             iter_preorder g y
     ;; (* Preorder traversal - Root - left - Right*)
@@ -197,7 +198,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | Node (Empty, a, Empty) ->  (g a)
         | Node (x, a, y) ->
             let _ = iter_postorder g x in
-            let _ =  iter_postorder g y in
+            let _ = iter_postorder g y in
             g a
     ;; (* Postorder traversal Left - Right - Root *)
 
@@ -293,10 +294,8 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | nodes -> filter (fun x -> not (mem x nodes)) other
     ;;
 
-
     (* singleton *)
     let singleton v = Node(Empty, v, Empty)
     ;;
-
 
 end
