@@ -1,0 +1,13 @@
+version = 1
+[workspace]
+root = "main.sml"
+[workspace.path-vars]
+#FOO = { value = "woof" }
+#BAR = { path = "bork" }
+#QUZ = { workspace-path = "pant" }
+[diagnostics]
+#5011.severity = "warning"
+4015.severity = "ignore"
+#5029.severity = "ignore"
+[language]
+fixity-across-files = true
