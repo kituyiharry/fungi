@@ -21,6 +21,7 @@ let (l_7, p)  = ParityGame.add_node  ParityGame.Odd  7  p;;
 let (l_9, p)  = ParityGame.add_node  ParityGame.Odd  9  p;;
 let (l_11,p)  = ParityGame.add_node  ParityGame.Odd  11 p;;
 let (l_13,p)  = ParityGame.add_node  ParityGame.Odd  13 p;;
+let (l_99,p)  = ParityGame.add_node  ParityGame.Odd  99 p;;
 
 (** Effect of opposer-controlled but supportive priority *)
 
@@ -68,13 +69,38 @@ let p_adjlist =
     (l_3,  [l_2;  l_4]);
     (l_5,  [l_7;  l_9]);
     (l_7,  [l_10]);
-    (l_9,  [l_3;  l_5;  l_10]);
+    (l_9,  [l_3;  l_5;  l_10; l_99]);
     (l_11, [l_8]);
     (l_13, [l_15]);
     (l_15, [l_13])
 ]
 
 let p = ParityGame.Graph.of_list p_adjlist p;;
+
+let t = ParityGame.empty;;
+
+let (t_1, t)  = ParityGame.add_node  ParityGame.Even 1  t;;
+let (t_2, t)  = ParityGame.add_node  ParityGame.Odd  2  t;;
+let (t_3, t)  = ParityGame.add_node  ParityGame.Even 3  t;;
+let (t_4, t)  = ParityGame.add_node  ParityGame.Even 4  t;;
+let (t_5, t)  = ParityGame.add_node  ParityGame.Even 5  t;;
+let (t_6, t)  = ParityGame.add_node  ParityGame.Even 6 t;;
+let (t_7, t)  = ParityGame.add_node  ParityGame.Odd  7  t;;
+let (t_8, t)  = ParityGame.add_node  ParityGame.Odd  8  t;;
+
+let t_adjlist =
+  [
+    (t_1,  [t_2;t_3]);
+    (t_2,  [t_1;t_4]);
+    (t_3,  [t_4;]);
+    (t_4,  [t_5;t_6]);
+    (t_5,  [t_6;t_3;t_7]);
+    (t_6,  [t_8]);
+    (t_7,  [t_6]);
+    (t_8,  [t_7]);
+]
+
+let t = ParityGame.Graph.of_list t_adjlist t;;
 
 (** Effect of opposer-controlled but supportive priority *)
 
@@ -338,6 +364,21 @@ let pp_solution:(ParityGame.solution) -> unit = fun sol ->
   Format.printf "\n\t|\n\t+ ---  ---  --- --- --- --- --- --- --- --- --- --- ---"
 ;;
 
+let visitor eq x y = let _ = Format.printf "Visit " in let _ = pp_node x in
+    let _ = Format.printf "\t" in let _ = pp_adjset_depth y in let _ =
+        Format.printf "\n" in ParityGame.Graph.equal eq x
+;;
+
+let tables g =   
+    ParityGame.Graph.MultiMap.iter (fun {lowlink=link;node=x} y -> 
+        let _ = Format.printf "lowlink: %d\t" link in
+        let _ = Format.printf ">-> node value: " in
+        let _ = pp_node y in
+        Format.printf "\n"
+    ) g
+;;
+
+
 #install_printer pp_parity_game;;
 #install_printer pp_parity_game_redundant;;
 #install_printer pp_adjset;;
@@ -346,6 +387,7 @@ let pp_solution:(ParityGame.solution) -> unit = fun sol ->
 #install_printer pp_strat;;
 #install_printer pp_solution;;
 #install_printer pp_adjset_depth;;
+#install_printer tables;;
 
 (*#trace ParityGame.zielonka;;*)
 (*#trace ParityGame.attr;;*)

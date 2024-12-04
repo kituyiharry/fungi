@@ -5,8 +5,8 @@
 *******************************************************************************)
 open Paritygame
 
-let empty_strategy    = (ParityGame.StrSet.empty, ParityGame.StrSet.empty)
-let empty_region      = (ParityGame.AdjSet.empty, ParityGame.AdjSet.empty)
+let empty_strategy = (ParityGame.StrSet.empty, ParityGame.StrSet.empty)
+let empty_region   = (ParityGame.AdjSet.empty, ParityGame.AdjSet.empty)
 
 (* infix Union shorthand *)
 let (<->) x y = ParityGame.StrSet.union x y

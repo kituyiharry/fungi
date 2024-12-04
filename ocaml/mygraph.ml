@@ -14,13 +14,16 @@ open Myset;;
 let (let*) = Option.bind
 
 module type Graph = sig 
-    type 'a t
+    type +'a t
     type elt
-    module NodeMap: Map.S with type key := elt
     module AdjSet: TSet with type t := elt
     type adj := (elt AdjSet.set * elt AdjSet.set * elt)
     module Vertex: Set.OrderedType with type t := adj
+    module NodeMap: Map.S with type key := elt
+    type sccNode = { mutable lowlink: int; node: elt };;
+    module MultiMap: Hashtbl.S with type key := sccNode
     val empty: adj NodeMap.t
+    val equal: elt -> elt -> bool
     val add: elt -> adj NodeMap.t -> adj NodeMap.t
     val add_edge: elt -> elt -> adj NodeMap.t -> adj NodeMap.t
     val add_all: elt -> elt list -> adj NodeMap.t -> adj NodeMap.t
@@ -28,13 +31,14 @@ module type Graph = sig
     val incomingof: elt -> adj NodeMap.t -> (elt AdjSet.set)
     val outgoingof: elt -> adj NodeMap.t -> (elt AdjSet.set)
     val remove: elt -> adj NodeMap.t -> adj NodeMap.t
-    val bfs: (elt -> bool) -> elt -> adj NodeMap.t -> bool option
-    val dfs: (elt -> bool) -> elt -> adj NodeMap.t -> bool option
+    val bfs: (elt -> elt AdjSet.set -> bool) -> elt -> adj NodeMap.t -> bool option
+    val dfs: (elt -> elt AdjSet.set -> bool) -> elt -> adj NodeMap.t -> bool option
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose: adj NodeMap.t -> adj NodeMap.t
+    val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt MultiMap.t
 end
 
-module MakeGraph(Unique: Set.OrderedType): Graph with type elt = Unique.t = struct
+module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
 
     type elt = Unique.t
 
@@ -48,12 +52,15 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt = Unique.t = stru
         let compare = fun (_, _, lnode) (_, _, rnode) -> Unique.compare lnode rnode
     end
 
+    (** compare 2 nodes in the graph *)
+    let equal lnode rnode = (Unique.compare lnode rnode) = 0
+
     (** Adjacency list graph definition **)
     (* Map from NodeType.t to (incoming outgoing label) *)
     type 'a t      = (Vertex.t) Map.Make(Unique).t
 
     (** Module for manipulating the Map (Node -> (set , set , label)) *)
-    module NodeMap = Map.Make(Unique)
+    module NodeMap = Map.Make(Unique) 
 
     (** An empty graph **)
     let empty      = NodeMap.empty
@@ -115,10 +122,10 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt = Unique.t = stru
     let bfs f start game = 
         let que     = Queue.create () in
         let _       = Queue.add start que in
-        let visited = AdjSet.singleton start in
+        let visited = AdjSet.empty in
         let rec iter vis nxt =
             let* label = Queue.take_opt nxt in
-            if f label then
+            if f label vis then
                 Some true
             else
                 let out =  outgoingof label game in 
@@ -131,10 +138,10 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt = Unique.t = stru
     let dfs f start game =
         let stck    = Stack.create () in
         let _       = Stack.push start stck in
-        let visited = AdjSet.singleton start in
+        let visited = AdjSet.empty in
         let rec iter vis nxt =
             let* label = Stack.pop_opt nxt in
-            if f label then
+            if f label vis then
                 Some true
             else
                 let out = outgoingof label game in 
@@ -155,32 +162,62 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt = Unique.t = stru
         NodeMap.map (fun (inc, out, label) -> (out, inc, label)) nodeMap
     ;;
 
-    type state = { label: Unique.t; mutable slot: Unique.t option };;
+    (**************************************************************************
+    *                    Strongly connected Components                        *
+    ***************************************************************************)
+
+    type sccNode = { mutable lowlink: int; node: Unique.t };;
+
+    let cmpscc {lowlink=left;_} {lowlink=right;_} = Int.compare left right
+
+    module MultiMapNode = struct
+        type t      = sccNode
+        let equal   = fun x y -> (cmpscc x y) = 0
+        let hash    = fun x ->  x.lowlink
+    end
+
+    module MultiMap: Hashtbl.S with type key := sccNode = Hashtbl.Make(MultiMapNode)
 
     (** Tarjans SCC algorithm *)
-    let tarjan nodeMap =
-        let visited    = AdjSet.empty in
-        let invar      = Stack.create () in
-        NodeMap.fold (fun key (_inc, out, _label) visit ->
-            if (AdjSet.mem key visit) then visit else  
-                let space = AdjSet.add key out in
-                (** why is a postorder traversal recommended ?? *)
-                let _     = AdjSet.iter_postorder (fun elt ->
-                    let c = AdjSet.(singleton elt |> AdjSet.union @@ AdjSet.of_seq 
-                        (Seq.map (fun { label;_ } -> label) (Stack.to_seq invar))) in
-                    let _ = dfs (fun x -> let loop = (AdjSet.mem x c) in
-                        if loop then
-                            (** Cycle found - iter and update mins and halt dfs *)
-                            (*backtrack*)
-                            (*Stack.iter (fun { slot; _ } -> slot := () )*)
-                            true
-                        else
-                            (** Update the stack *)
-                            let _ = Stack.push {label=x; slot=Some x} invar in
-                            false
-                    ) elt nodeMap in ()
-                ) space in AdjSet.union space visit
-        ) nodeMap visited
+    let tarjan nodeMap  =
+        let visited     = AdjSet.empty in
+        let invar       = Stack.create () in
+        let sccs        = MultiMap.create (NodeMap.cardinal nodeMap) in
+        let lowlink     = ref 0 in
+        let monotonic x = let () = x := !x+1 in !x+1 in
+        let stcked n s  = Seq.find (fun {node=m;_} -> equal n m) @@ (Stack.to_seq s) in
+        let _           = NodeMap.fold (
+            fun key (_inc, out, _label) visit ->
+                if (AdjSet.mem key visit) then visit else
+                    let space = AdjSet.add key out in
+                    (* why is a postorder traversal recommended ?? *)
+                    let _     = AdjSet.iter_postorder (fun elt ->
+                        let _ = dfs (fun x dfsvis -> 
+                            if AdjSet.mem x dfsvis then
+                                (* TODO: Self edges ?? *)
+                                match stcked x invar with
+                                (* basically we should pop until we find our own
+                                   low-link when we started - this shows that it
+                                   is an SCC on backtrack *)
+                                | Some {lowlink=tslot;_} -> 
+                                    let sseq = Stack.to_seq invar in
+                                    let _    = Seq.take_while (
+                                        fun pp -> 
+                                            let _ = (pp.lowlink <- (min pp.lowlink tslot)) in 
+                                            let _ = MultiMap.add sccs pp pp.node in
+                                            not (equal x pp.node)
+                                    ) sseq () in
+                                    true
+                                | None ->
+                                     false
+                                    (*raise (BrokenLink "Visited but not in stack!")*)
+                            else
+                                (* Update the stack *)
+                                let _ = Stack.push {node=x;lowlink=(monotonic lowlink)} invar in
+                                false
+                        ) elt nodeMap in ()
+                    ) space in AdjSet.union space visit) nodeMap visited
+        in sccs
     ;;
 
 end;;

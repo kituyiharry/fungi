@@ -12,7 +12,7 @@
 
 module type TSet = sig
     type t
-    type +'a set
+    type 'a set
     val empty: t set
     val add: t -> t set -> t set
     val mem: t -> t set -> bool
