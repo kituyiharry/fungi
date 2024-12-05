@@ -21,7 +21,7 @@ module type Graph = sig
     module Vertex: Set.OrderedType with type t := adj
     module NodeMap: Map.S with type key := elt
     type sccNode = { mutable lowlink: int; node: elt };;
-    module MultiMap: Hashtbl.S with type key := sccNode
+    module SccState: Hashtbl.S with type key := sccNode
     val empty: adj NodeMap.t
     val equal: elt -> elt -> bool
     val add: elt -> adj NodeMap.t -> adj NodeMap.t
@@ -35,7 +35,7 @@ module type Graph = sig
     val dfs: (elt -> elt AdjSet.set -> bool) -> elt -> adj NodeMap.t -> bool option
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose: adj NodeMap.t -> adj NodeMap.t
-    val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt MultiMap.t
+    val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt SccState.t
 end
 
 module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
@@ -146,7 +146,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             else
                 let out = outgoingof label game in 
                 let _   = AdjSet.iter_inorder (fun x -> Stack.push x nxt) (AdjSet.diff out vis) in
-                iter (AdjSet.union out vis) nxt
+                iter (AdjSet.union out  vis) nxt
         in iter visited stck
     ;;
 
@@ -162,62 +162,51 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         NodeMap.map (fun (inc, out, label) -> (out, inc, label)) nodeMap
     ;;
 
-    (**************************************************************************
-    *                    Strongly connected Components                        *
-    ***************************************************************************)
+    (*************************************************************************
+    *                    Strongly connected Components                       *
+    **************************************************************************)
 
     type sccNode = { mutable lowlink: int; node: Unique.t };;
 
     let cmpscc {lowlink=left;_} {lowlink=right;_} = Int.compare left right
 
-    module MultiMapNode = struct
+    module SccNode = struct
         type t      = sccNode
         let equal   = fun x y -> (cmpscc x y) = 0
-        let hash    = fun x ->  x.lowlink
+        let hash    = fun {lowlink=low;_} ->  low
     end
 
-    module MultiMap: Hashtbl.S with type key := sccNode = Hashtbl.Make(MultiMapNode)
+    module SccState: Hashtbl.S with type key := sccNode = Hashtbl.Make(SccNode)
 
-    (** Tarjans SCC algorithm *)
-    let tarjan nodeMap  =
-        let visited     = AdjSet.empty in
-        let invar       = Stack.create () in
-        let sccs        = MultiMap.create (NodeMap.cardinal nodeMap) in
-        let lowlink     = ref 0 in
-        let monotonic x = let () = x := !x+1 in !x+1 in
-        let stcked n s  = Seq.find (fun {node=m;_} -> equal n m) @@ (Stack.to_seq s) in
-        let _           = NodeMap.fold (
-            fun key (_inc, out, _label) visit ->
-                if (AdjSet.mem key visit) then visit else
-                    let space = AdjSet.add key out in
-                    (* why is a postorder traversal recommended ?? *)
-                    let _     = AdjSet.iter_postorder (fun elt ->
-                        let _ = dfs (fun x dfsvis -> 
-                            if AdjSet.mem x dfsvis then
-                                (* TODO: Self edges ?? *)
-                                match stcked x invar with
-                                (* basically we should pop until we find our own
-                                   low-link when we started - this shows that it
-                                   is an SCC on backtrack *)
-                                | Some {lowlink=tslot;_} -> 
-                                    let sseq = Stack.to_seq invar in
-                                    let _    = Seq.take_while (
-                                        fun pp -> 
-                                            let _ = (pp.lowlink <- (min pp.lowlink tslot)) in 
-                                            let _ = MultiMap.add sccs pp pp.node in
-                                            not (equal x pp.node)
-                                    ) sseq () in
-                                    true
-                                | None ->
-                                     false
-                                    (*raise (BrokenLink "Visited but not in stack!")*)
-                            else
-                                (* Update the stack *)
-                                let _ = Stack.push {node=x;lowlink=(monotonic lowlink)} invar in
-                                false
-                        ) elt nodeMap in ()
-                    ) space in AdjSet.union space visit) nodeMap visited
-        in sccs
+    (** Tarjans SCC algorithm 
+         basically we should pop until we find our own
+        low-link when we started - this shows that it
+        is an SCC on backtrack - otherwise we keep pushing on to the stack
+    *)
+    let tarjan nodeMap   =
+        let invar        = Stack.create () in
+        let sccs         = SccState.create (NodeMap.cardinal nodeMap) in
+        let lowlink      = ref 0 in
+        let monotonic x  = let () = x := !x+1 in !x+1 in
+        let contains n s = Seq.find (fun {node=m;_} -> equal n m) @@ (Stack.to_seq s) in
+        let _ = NodeMap.iter (
+            fun key _ -> let _    = dfs (fun x dfsvis ->
+                if AdjSet.mem x dfsvis then
+                    match contains x invar with
+                    | Some {lowlink=tslot;_} ->
+                        let _     = Seq.take_while (fun pp ->
+                            let _ = (pp.lowlink <- (min pp.lowlink tslot)) in 
+                            let _ = SccState.add sccs pp pp.node in
+                            not (equal x pp.node)
+                        ) (Stack.to_seq invar) () in
+                        true
+                    | None ->
+                        false
+                else
+                    let _ = Stack.push {node=x;lowlink=(monotonic lowlink)} invar in
+                    false
+            ) key nodeMap in ()
+        ) nodeMap in sccs
     ;;
 
 end;;

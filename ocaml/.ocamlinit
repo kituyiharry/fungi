@@ -72,6 +72,7 @@ let p_adjlist =
     (l_9,  [l_3;  l_5;  l_10; l_99]);
     (l_11, [l_8]);
     (l_13, [l_15]);
+    (l_99, [l_99]);
     (l_15, [l_13])
 ]
 
@@ -370,7 +371,7 @@ let visitor eq x y = let _ = Format.printf "Visit " in let _ = pp_node x in
 ;;
 
 let tables g =   
-    ParityGame.Graph.MultiMap.iter (fun {lowlink=link;node=x} y -> 
+    ParityGame.Graph.SccState.iter (fun {lowlink=link;node=x} y -> 
         let _ = Format.printf "lowlink: %d\t" link in
         let _ = Format.printf ">-> node value: " in
         let _ = pp_node y in
