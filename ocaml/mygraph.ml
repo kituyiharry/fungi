@@ -182,6 +182,10 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
 
     module SccState: Hashtbl.S with type key := sccNode = Hashtbl.Make(SccNode)
 
+    let estbuckts size = 
+        int_of_float (ceil (float_of_int(size) /. 2.))
+    ;;
+
     (** Tarjans SCC algorithm 
          basically we should pop until we find our own
         low-link when we started - this shows that it
@@ -189,7 +193,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     *)
     let tarjan nodeMap   =
         let invar        = Stack.create () in
-        let sccs         = SccState.create (NodeMap.cardinal nodeMap) in
+        let sccs         = SccState.create (estbuckts (NodeMap.cardinal nodeMap)) in
         let lowlink      = ref 0 in
         let monotonic x  = let () = x := !x+1 in !x+1 in
         let contains n s = Seq.find (fun {node=m;_} -> equal n m) @@ (Stack.to_seq s) in
