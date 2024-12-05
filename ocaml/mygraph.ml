@@ -20,8 +20,10 @@ module type Graph = sig
     type adj := (elt AdjSet.set * elt AdjSet.set * elt)
     module Vertex: Set.OrderedType with type t := adj
     module NodeMap: Map.S with type key := elt
-    type sccNode = { mutable lowlink: int; node: elt };;
-    module SccState: Hashtbl.S with type key := sccNode
+    type sccNode = { mutable link: int; node: elt };;
+    module SccTbl: Hashtbl.S with type key := sccNode
+    module SccSet: TSet with type t := sccNode
+    module SccMap: Map.S with type key := int
     val empty: adj NodeMap.t
     val equal: elt -> elt -> bool
     val add: elt -> adj NodeMap.t -> adj NodeMap.t
@@ -35,7 +37,9 @@ module type Graph = sig
     val dfs: (elt -> elt AdjSet.set -> bool) -> elt -> adj NodeMap.t -> bool option
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose: adj NodeMap.t -> adj NodeMap.t
-    val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt SccState.t
+    val to_scc_set: elt SccTbl.t -> sccNode SccSet.set
+    val to_induced_graphs: elt SccTbl.t -> adj NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t SccMap.t
+    val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt SccTbl.t
 end
 
 module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
@@ -50,6 +54,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     module Vertex  = struct 
         type t      = adj
         let compare = fun (_, _, lnode) (_, _, rnode) -> Unique.compare lnode rnode
+        let empty lbl = (AdjSet.empty, AdjSet.empty, lbl)
     end
 
     (** compare 2 nodes in the graph *)
@@ -67,7 +72,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
 
     (** Add a new node with its label -> ( ... , nodedata) *)
     let add nodekey nodeMap =
-        NodeMap.add nodekey (AdjSet.empty, AdjSet.empty, nodekey) nodeMap
+        NodeMap.add nodekey (Vertex.empty nodekey) nodeMap
     ;;
 
     (**
@@ -162,57 +167,95 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         NodeMap.map (fun (inc, out, label) -> (out, inc, label)) nodeMap
     ;;
 
-    (* Induce a Subgraph from a give nodeset *)
-    (*let induce nodeSet nodeMap = *)
-    (*;;*)
-
     (*************************************************************************
     *                    Strongly connected Components                       *
     **************************************************************************)
 
-    type sccNode = { mutable lowlink: int; node: Unique.t };;
+    type sccNode = { mutable link: int; node: elt };;
 
-    let cmpscc {lowlink=left;_} {lowlink=right;_} = Int.compare left right
+    let cmpscc {link=left;_} {link=right;_} = Int.compare left right
+    ;;
 
     module SccNode = struct
         type t      = sccNode
+        let compare = fun x y -> (Unique.compare x.node y.node)
         let equal   = fun x y -> (cmpscc x y) = 0
-        let hash    = fun {lowlink=low;_} ->  low
+        let hash    = fun x   -> x.link
     end
 
-    module SccState: Hashtbl.S with type key := sccNode = Hashtbl.Make(SccNode)
+    (* Hashtbl creation here is not deterministic when you iter or fold *)
+    module SccTbl: Hashtbl.S with type key := sccNode = Hashtbl.Make(SccNode)
+    module SccSet: TSet with type t := sccNode = TreeSet(SccNode)
+    module SccMap: Map.S with type key := int = Map.Make(Int)
 
-    let estbuckts size = 
+    (** Collect all members into a set *)
+    let to_scc_set state =
+        SccTbl.to_seq_keys state
+        |> Seq.fold_left (fun acc el -> SccSet.add el acc) SccSet.empty
+    ;;
+
+    (* creates a Map of ints -> Graph.t where the int is the low-link value. -1
+       is used to show Disconnected nodes from the Sccs 
+
+       if the graph is just 'linear' then apparently it is its own SCC but
+       that may not be capture by tarjan so we main a "disconnected" entry
+       as -1 
+    *)
+    let to_induced_graphs sccs nodeMap = 
+        SccTbl.fold (fun {link=lowlink;_} elt acc -> 
+            SccMap.update lowlink (fun nodeEl -> match nodeEl with
+                (* TODO: update internal edges *)
+                (* TODO: intergraph edges ?? *)
+                | Some v -> Some (NodeMap.add elt (NodeMap.find elt nodeMap) v)
+                | None ->   Some (NodeMap.singleton elt (NodeMap.find elt nodeMap))
+            )
+        acc) sccs SccMap.empty
+    ;;
+
+    (* save some memory reserves when creating the SccState *)
+    let buckets size =
         int_of_float (ceil (float_of_int(size) /. 2.))
     ;;
 
     (** Tarjans SCC algorithm 
-         basically we should pop until we find our own
+        basically we should pop until we find our own
         low-link when we started - this shows that it
         is an SCC on backtrack - otherwise we keep pushing on to the stack
+        The stack is there to maintain an invariance over the visited nodes
+        during Depth first search
+
+        In the end remaining elements in the Stack are their own SCCs this way
+        All elements always belong to an SCC
     *)
     let tarjan nodeMap   =
         let invar        = Stack.create () in
-        let sccs         = SccState.create (estbuckts (NodeMap.cardinal nodeMap)) in
+        let sccs         = SccTbl.create (buckets (NodeMap.cardinal nodeMap)) in
         let lowlink      = ref 0 in
         let monotonic x  = let () = x := !x+1 in !x+1 in
         let contains n s = Seq.find (fun {node=m;_} -> equal n m) @@ (Stack.to_seq s) in
-        let _ = NodeMap.iter (fun key _ -> let _ = dfs (fun x dfsvis ->
+        let _            = NodeMap.iter (fun key _ -> let _ = dfs (fun x dfsvis ->
             if AdjSet.mem x dfsvis then
                 match contains x invar with
-                | Some {lowlink=tslot;_} ->
-                    let _     = Seq.take_while (fun pp ->
-                        let _ = (pp.lowlink <- (min pp.lowlink tslot)) in 
-                        let _ = SccState.add sccs pp pp.node in
+                | Some {link=tslot;_} -> 
+                        let _ = Seq.take_while (fun pp ->
+                        let _ = (pp.link <- (min pp.link tslot)) in
+                        let _ = SccTbl.add sccs pp pp.node in
                         not (equal x pp.node)
                     ) (Stack.to_seq invar) () in
                     true
                 | None ->
                     false
             else
-                let _ = Stack.push {node=x;lowlink=(monotonic lowlink)} invar in
+                let _ = Stack.push {node=x;link=(monotonic lowlink)} invar in
                 false
-        ) key nodeMap in ()) nodeMap in sccs
+        ) key nodeMap in ()) nodeMap in 
+        let _ = Seq.iter (fun x -> SccTbl.add sccs x x.node) (Stack.to_seq invar) in
+        sccs
     ;;
+
+    (*************************************************************************
+     *                           Clique Algos                                *
+    **************************************************************************)
+    
 
 end;;
