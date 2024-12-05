@@ -8,6 +8,8 @@ open Libparity.Utils;;
 
 let p = ParityGame.empty;;
 
+(* <> is Odd, () is Even *)
+
 (* I also assume there are no same priority nodes to make life easy *)
 let (l_2, p)  = ParityGame.add_node  ParityGame.Even 2  p;;
 let (l_15,p)  = ParityGame.add_node  ParityGame.Odd  15 p;;
@@ -119,7 +121,6 @@ let t = ParityGame.Graph.of_list t_adjlist t;;
 
 (*let p = ParityGame.add_edge l_99 l_99  p;;*)
 
-
 (**
 
 parity 10;
@@ -186,6 +187,22 @@ let r_adjlist =
 
 let r = ParityGame.Graph.of_list r_adjlist r;;
 
+let x = ParityGame.empty
+
+let (x_1, x)  = ParityGame.add_node ParityGame.Even 1 x;;
+let (x_2, x)  = ParityGame.add_node ParityGame.Even 0 x;;
+let (x_3, x)  = ParityGame.add_node ParityGame.Even 0 x;;
+let (x_4, x)  = ParityGame.add_node ParityGame.Even 0 x;;
+
+let x_adjlist =
+  [
+    (x_1,   [x_2;]);
+    (x_2,   [x_3;]);
+    (x_3,   [x_4;]);
+  ]
+
+let x = ParityGame.Graph.of_list x_adjlist x;;
+
 (* Convenience functions for printing in the REPl *)
 (** [asplayerprio ParityGame.t (node * priority)]
 helper to show parity game as a graph without the random generated ids *)
@@ -194,13 +211,13 @@ let asplayerprio (ParityGame.Label (ParityGame.Priority (value, player) as prio 
 ;;
 
 let print_player_prio (ParityGame.Label(ParityGame.Priority (value,pplayer),_))  = match pplayer with
-| ParityGame.Even -> Format.printf " (Even %d) " value
-| ParityGame.Odd  -> Format.printf " (Odd %d) " value
+| ParityGame.Even -> Format.printf " (%02d) " value
+| ParityGame.Odd  -> Format.printf " <%02d> " value
 ;;
 
 let print_player_prio_dir (_, (ParityGame.Priority (value,pplayer)))  = match pplayer with
-| ParityGame.Even -> Format.printf " (Even %d) " value
-| ParityGame.Odd  -> Format.printf " (Odd %d) " value
+| ParityGame.Even -> Format.printf " (%02d) " value
+| ParityGame.Odd  -> Format.printf " <%02d> " value
 ;;
 
 type adj = ParityGame.node ParityGame.AdjSet.set;;
@@ -273,12 +290,12 @@ let pp_adjset_terse set =
 ;;
 
 let pp_prio (ParityGame.Priority (value, pplayer)) = match pplayer with
-  | ParityGame.Even -> Format.printf " (Even %d) " value
-  | ParityGame.Odd  -> Format.printf " (Odd  %d) " value
+  | ParityGame.Even -> Format.printf " (%02d) " value
+  | ParityGame.Odd  -> Format.printf " <%02d> " value
 ;;
 
 let pp_node (ParityGame.Label (prio, rand )) =
-    let () =    Format.printf "%d:" rand in
+    let () =    Format.printf "%03d:" rand in
         pp_prio prio
 ;;
 
@@ -318,7 +335,7 @@ let pp_player_inc_out: (ParityGame.node * adj * adj) -> unit =
   fun  (n, i, o)->
     let () = Format.printf "    " in
     let () = pp_node n in
-    let () = Format.printf "\t-> [" in
+    let () = Format.printf "--> [" in
     let () = pp_adjset_prefix i "In" in
     let () = pp_adjset_prefix o "Out" in
     Format.printf "]\n"
@@ -371,14 +388,33 @@ let visitor eq x y = let _ = Format.printf "Visit " in let _ = pp_node x in
 ;;
 
 let tables g =   
-    ParityGame.Graph.SccState.iter (fun {lowlink=link;node=x} y -> 
-        let _ = Format.printf "lowlink: %d\t" link in
+    ParityGame.Graph.SccTbl.iter (fun {link=link;node=x} y -> 
+        let _ = Format.printf "lowlink: %03d\t" link in
         let _ = Format.printf ">-> node value: " in
         let _ = pp_node y in
         Format.printf "\n"
     ) g
 ;;
 
+let sccsets g =   
+    ParityGame.Graph.SccSet.iter_inorder (fun {link=link;node=x} -> 
+        let _ = Format.printf "lowlink: %03d\t" link in
+        let _ = Format.printf ">-> node value: " in
+        let _ = pp_node x in
+        Format.printf "\n"
+    ) g
+;;
+
+let sccgraphs g  =   
+    ParityGame.Graph.SccMap.iter (fun index elts -> 
+        let _ = Format.printf "+------------------------------------- Scc Low Link: %03d -------------------------------------+\n"  index in
+        let _ = Format.printf "|                                                                                             |\n"  in
+        let _ = pp_parity_game_redundant elts in
+        let _ = Format.printf "\n|                                                                                             |\n"  in
+        let _ = Format.printf "+---------------------------------------------------------------------------------------------+\n"  in
+        Format.printf "\n"
+    ) g
+;;
 
 #install_printer pp_parity_game;;
 #install_printer pp_parity_game_redundant;;
@@ -389,6 +425,8 @@ let tables g =
 #install_printer pp_solution;;
 #install_printer pp_adjset_depth;;
 #install_printer tables;;
+#install_printer sccsets;;
+#install_printer sccgraphs;;
 
 (*#trace ParityGame.zielonka;;*)
 (*#trace ParityGame.attr;;*)
