@@ -162,6 +162,10 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         NodeMap.map (fun (inc, out, label) -> (out, inc, label)) nodeMap
     ;;
 
+    (* Induce a Subgraph from a give nodeset *)
+    (*let induce nodeSet nodeMap = *)
+    (*;;*)
+
     (*************************************************************************
     *                    Strongly connected Components                       *
     **************************************************************************)
@@ -189,24 +193,22 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         let lowlink      = ref 0 in
         let monotonic x  = let () = x := !x+1 in !x+1 in
         let contains n s = Seq.find (fun {node=m;_} -> equal n m) @@ (Stack.to_seq s) in
-        let _ = NodeMap.iter (
-            fun key _ -> let _    = dfs (fun x dfsvis ->
-                if AdjSet.mem x dfsvis then
-                    match contains x invar with
-                    | Some {lowlink=tslot;_} ->
-                        let _     = Seq.take_while (fun pp ->
-                            let _ = (pp.lowlink <- (min pp.lowlink tslot)) in 
-                            let _ = SccState.add sccs pp pp.node in
-                            not (equal x pp.node)
-                        ) (Stack.to_seq invar) () in
-                        true
-                    | None ->
-                        false
-                else
-                    let _ = Stack.push {node=x;lowlink=(monotonic lowlink)} invar in
+        let _ = NodeMap.iter (fun key _ -> let _ = dfs (fun x dfsvis ->
+            if AdjSet.mem x dfsvis then
+                match contains x invar with
+                | Some {lowlink=tslot;_} ->
+                    let _     = Seq.take_while (fun pp ->
+                        let _ = (pp.lowlink <- (min pp.lowlink tslot)) in 
+                        let _ = SccState.add sccs pp pp.node in
+                        not (equal x pp.node)
+                    ) (Stack.to_seq invar) () in
+                    true
+                | None ->
                     false
-            ) key nodeMap in ()
-        ) nodeMap in sccs
+            else
+                let _ = Stack.push {node=x;lowlink=(monotonic lowlink)} invar in
+                false
+        ) key nodeMap in ()) nodeMap in sccs
     ;;
 
 end;;
