@@ -53,30 +53,32 @@ module Utils = struct
 
     let add_node g (pl, pr) = Paritygame.ParityGame.add pl pr g
 
-    let rec pick bindings total output = 
+    let rec pick bindings total output count maxno = 
         if total <= 2 then
             output
+        else if count >= maxno then
+            output
         else
-            let bound = Random.int total in
+            let bound = (Random.int total) in
             match List.nth_opt bindings bound with
-            | Some v -> v :: (pick bindings bound output)
+            | Some v -> v :: (pick bindings bound output (count+1) maxno)
             | None ->   output
     ;;
 
-    let makerandomgame num_nodes max_prio = 
+    let makerandomgame num_nodes max_prio maxno = 
         let game =
             Seq.fold_left (add_node) Paritygame.ParityGame.empty
             @@ Seq.init num_nodes (randnode max_prio) 
         in 
             let bindings = Paritygame.ParityGame.bindings game in
             let adj_list_desc =
-                List.map (fun x -> (x, pick bindings num_nodes [])) bindings
+                List.map (fun x -> (x, pick bindings num_nodes [] 0 maxno)) bindings
             in
                 Paritygame.ParityGame.Graph.of_list adj_list_desc game
     ;;
 
     (* use seeded random *)
-    let smakerandomgame seed num_nodes max_prio = 
+    let smakerandomgame seed num_nodes max_prio maxno =
         let _ = Random.init seed in
         let game =
             Seq.fold_left (add_node) Paritygame.ParityGame.empty
@@ -84,7 +86,7 @@ module Utils = struct
         in 
             let bindings = Paritygame.ParityGame.bindings game in
             let adj_list_desc =
-                List.map (fun x -> (x, pick bindings num_nodes [])) bindings
+                List.map (fun x -> (x, pick bindings num_nodes [] 0 maxno)) bindings
             in
                 Paritygame.ParityGame.Graph.of_list adj_list_desc game
     ;;
