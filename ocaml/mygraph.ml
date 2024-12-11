@@ -241,49 +241,35 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         In the end remaining elements in the Stack are their own SCCs this way
         All elements always belong to an SCC
     *)
-    let tarjan nodeMap   =
+    let tarjan graph   =
         let invar        = Stack.create () in
-        let sccs         = SccTbl.create (buckets (NodeMap.cardinal nodeMap)) in
-        let stackset     = ref SccSet.empty in
-        let indexset     = ref AdjSet.empty in
-        let htbl       = Hashtbl.create 10 in
+        let sccs         = SccTbl.create (buckets (NodeMap.cardinal graph)) in
+        let stack        = ref SccSet.empty in
+        let index        = ref AdjSet.empty in
         let lowlink      = ref 0 in
-        let index        = ref 0 in
+        let count        = ref 0 in
         let monotonic x  = let () = x := !x+1 in !x+1 in
-        let mksccnode n  = {node=n;link=(monotonic lowlink);index=(monotonic index)} in
-        let rec popto f s= let l = Stack.pop s in if f l then () else popto f s in
-        let hasnode e x  = equal x.node e in
+        let mksccnode n  = {node=n;link=(monotonic lowlink);index=(monotonic count)} in
+        let rec popto s f= let l = Stack.pop s in if f l then () else popto s f in
+        let ithasnode e x= equal x.node e in
         let rec strongconnect n g =
             let root     = mksccnode n in
             let _        = Stack.push root invar in
-            let _        = stackset := SccSet.add root (!stackset) in
-            let _        = indexset := AdjSet.add root.node (!indexset) in
-            let _        = AdjSet.iter_postorder (fun elt ->
-                if not (AdjSet.mem elt !indexset) then
-                    let _ = strongconnect elt g in
-                    match (SccSet.find_first_opt (hasnode elt) !stackset) with
-                    | Some v ->
-                        root.link <- min root.link v.link
-                    | None -> ()
-                else match (SccSet.find_first_opt (hasnode elt) !stackset) with
-                    | Some v ->
-                        root.link <- min root.link v.link
-                    | None -> ()
+            let _        = stack := SccSet.add root (!stack) in
+            let _        = index := AdjSet.add root.node (!index) in
+            let _        = AdjSet.iter_inorder (fun elt ->
+                let _ = if not (AdjSet.mem elt !index) then strongconnect elt g in
+                match (SccSet.find_first_opt (ithasnode elt) !stack) with
+                | Some v -> root.link <- min root.link v.link
+                | None   -> ()
             ) (outgoingof n g) in
-            if root.link = root.index then
-                popto (fun elt ->
-                    let _ = SccTbl.add sccs elt elt.node in
-                    let _ = stackset := SccSet.remove elt (!stackset) in
-                    let _ = Hashtbl.add htbl elt.node elt.link in
-                    (equal root.node elt.node)
-                ) invar 
-        in 
-        let _ = NodeMap.iter (fun key _ ->
-            if (Hashtbl.mem htbl key) then () else
-            let _ = Format.printf "Strongconnecting!!\n" in
-            strongconnect key nodeMap
-        ) nodeMap in 
-        sccs
+            if root.link = root.index then popto invar (fun elt -> 
+                let _ = SccTbl.add sccs elt elt.node in
+                let _ = stack := SccSet.remove elt (!stack) in
+                (equal root.node elt.node))
+        in let _ = NodeMap.iter (fun key _ ->
+            if (AdjSet.mem key !index) then () else strongconnect key graph
+        ) graph in sccs
     ;;
 
     (*************************************************************************
