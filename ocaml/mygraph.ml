@@ -38,7 +38,7 @@ module type Graph = sig
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose: adj NodeMap.t -> adj NodeMap.t
     val to_scc_set: elt SccTbl.t -> sccNode SccSet.set
-    val to_induced_graphs: elt SccTbl.t -> adj NodeMap.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t SccMap.t
+    val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t SccMap.t
     val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt SccTbl.t
 end
 
@@ -201,7 +201,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
        that may not be capture by tarjan so we main a "disconnected" entry
        as -1 
     *)
-    let to_induced_graphs sccs nodeMap = 
+    let to_induced_graphs nodeMap sccs = 
         SccTbl.fold (fun {link=lowlink;_} elt acc -> 
             SccMap.update lowlink (fun nodeEl -> match nodeEl with
                 (* TODO: update internal edges *)
