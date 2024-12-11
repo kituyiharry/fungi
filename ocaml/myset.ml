@@ -309,7 +309,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | Node (l, v, r) -> (f v) || (exists f l) || (exists f r)
     ;;
 
-    (** elt in set by function - NB: Relies on short circuit behaviour *)
+    (** find first element matching predicate f *)
     let rec find_first_opt f = function
         | Empty -> None
         | nodes -> let (sel, rest) = take_min nodes in

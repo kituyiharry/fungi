@@ -447,3 +447,4 @@ let sccgraphs g  =
 (*#trace ParityGame.stack;;*)
 (*#trace ParityGame.StrSet.of_list;;*)
 (*#trace ParityGame.cmpplays;;*)
+#trace ParityGame.Graph.debug;;

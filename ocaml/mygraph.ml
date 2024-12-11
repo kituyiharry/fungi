@@ -20,7 +20,7 @@ module type Graph = sig
     type adj := (elt AdjSet.set * elt AdjSet.set * elt)
     module Vertex: Set.OrderedType with type t := adj
     module NodeMap: Map.S with type key := elt
-    type sccNode = { mutable link: int; node: elt };;
+    type sccNode = { mutable link: int; node: elt; index: int };;
     module SccTbl: Hashtbl.S with type key := sccNode
     module SccSet: TSet with type t := sccNode
     module SccMap: Map.S with type key := int
@@ -40,6 +40,7 @@ module type Graph = sig
     val to_scc_set: elt SccTbl.t -> sccNode SccSet.set
     val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t SccMap.t
     val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt SccTbl.t
+    val debug: elt -> elt
 end
 
 module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
@@ -182,7 +183,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     *                    Strongly connected Components                       *
     **************************************************************************)
 
-    type sccNode = { mutable link: int; node: elt };;
+    type sccNode = { mutable link: int; node: elt; index: int };;
 
     let cmpscc {link=left;_} {link=right;_} = Int.compare left right
     ;;
@@ -228,6 +229,8 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         int_of_float (ceil (float_of_int(size) /. 2.))
     ;;
 
+    let debug x = x
+
     (** Tarjans SCC algorithm 
         basically we should pop until we find our own
         low-link when we started - this shows that it
@@ -241,28 +244,51 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     let tarjan nodeMap   =
         let invar        = Stack.create () in
         let sccs         = SccTbl.create (buckets (NodeMap.cardinal nodeMap)) in
-        let htbl         = Hashtbl.create 10 in
+        let stackset     = ref SccSet.empty in
+        let indexset     = ref AdjSet.empty in
+        let htbl       = Hashtbl.create 10 in
         let lowlink      = ref 0 in
+        let index        = ref 0 in
         let monotonic x  = let () = x := !x+1 in !x+1 in
-        let onvisit n v  = 
-            if AdjSet.mem n v then
-                let _ = Hashtbl.add htbl n lowlink in
-                false
-            else
-                let _ = Stack.push {node=n;link=(monotonic lowlink)} invar in
-                false
-        in
-        let backtrack l = ignore in
-        let _            = NodeMap.iter (fun key _ -> 
-            if Hashtbl.mem htbl key then () else
-                let _ = dfs (onvisit) (backtrack) key nodeMap in ()) nodeMap in 
-        let _ = Seq.iter (fun x -> SccTbl.add sccs x x.node) (Stack.to_seq invar) in
+        let mksccnode n  = {node=n;link=(monotonic lowlink);index=(monotonic index)} in
+        let rec popto f s= let l = Stack.pop s in if f l then () else popto f s in
+        let hasnode e x  = equal x.node e in
+        let rec strongconnect n g =
+            let root     = mksccnode n in
+            let _        = Stack.push root invar in
+            let _        = stackset := SccSet.add root (!stackset) in
+            let _        = indexset := AdjSet.add root.node (!indexset) in
+            let _        = AdjSet.iter_postorder (fun elt ->
+                if not (AdjSet.mem elt !indexset) then
+                    let _ = strongconnect elt g in
+                    match (SccSet.find_first_opt (hasnode elt) !stackset) with
+                    | Some v ->
+                        root.link <- min root.link v.link
+                    | None -> ()
+                else match (SccSet.find_first_opt (hasnode elt) !stackset) with
+                    | Some v ->
+                        root.link <- min root.link v.link
+                    | None -> ()
+            ) (outgoingof n g) in
+            if root.link = root.index then
+                popto (fun elt ->
+                    let _ = SccTbl.add sccs elt elt.node in
+                    let _ = stackset := SccSet.remove elt (!stackset) in
+                    let _ = Hashtbl.add htbl elt.node elt.link in
+                    (equal root.node elt.node)
+                ) invar 
+        in 
+        let _ = NodeMap.iter (fun key _ ->
+            if (Hashtbl.mem htbl key) then () else
+            let _ = Format.printf "Strongconnecting!!\n" in
+            strongconnect key nodeMap
+        ) nodeMap in 
         sccs
     ;;
 
     (*************************************************************************
      *                           Clique Algos                                *
     **************************************************************************)
-    
+
 
 end;;
