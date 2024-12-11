@@ -244,17 +244,18 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         let htbl         = Hashtbl.create 10 in
         let lowlink      = ref 0 in
         let monotonic x  = let () = x := !x+1 in !x+1 in
+        let onvisit n v  = 
+            if AdjSet.mem n v then
+                let _ = Hashtbl.add htbl n lowlink in
+                false
+            else
+                let _ = Stack.push {node=n;link=(monotonic lowlink)} invar in
+                false
+        in
+        let backtrack l = ignore in
         let _            = NodeMap.iter (fun key _ -> 
             if Hashtbl.mem htbl key then () else
-                let _ = dfs (fun x dfsvis ->
-                    if AdjSet.mem x dfsvis then
-                        let _ = Format.printf "already visited \n" in
-                        let _ = Hashtbl.add htbl x lowlink in
-                        false
-                    else
-                        let _ = Stack.push {node=x;link=(monotonic lowlink)} invar in
-                        false
-                ) (ignore) key nodeMap in ()) nodeMap in 
+                let _ = dfs (onvisit) (backtrack) key nodeMap in ()) nodeMap in 
         let _ = Seq.iter (fun x -> SccTbl.add sccs x x.node) (Stack.to_seq invar) in
         sccs
     ;;
