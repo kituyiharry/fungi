@@ -13,6 +13,21 @@ open Myset;;
 
 let (let*) = Option.bind
 
+
+module type SccImpl = sig 
+    type elt
+    type adj
+    module NodeMap: Map.S with type key := elt
+    module AdjSet: TSet with type t := elt
+    type sccnode = { mutable link: int; node: elt; index: int };;
+    module SccTbl: Hashtbl.S with type key := sccnode
+    module SccSet: TSet with type t := sccnode
+    module SccMap: Map.S with type key := int
+    val to_scc_set: elt SccTbl.t -> sccnode SccSet.set
+    val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t SccMap.t
+    val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt SccTbl.t
+end
+
 module type Graph = sig 
     type +'a t
     type elt
@@ -20,10 +35,10 @@ module type Graph = sig
     type adj := (elt AdjSet.set * elt AdjSet.set * elt)
     module Vertex: Set.OrderedType with type t := adj
     module NodeMap: Map.S with type key := elt
-    type sccNode = { mutable link: int; node: elt; index: int };;
-    module SccTbl: Hashtbl.S with type key := sccNode
-    module SccSet: TSet with type t := sccNode
-    module SccMap: Map.S with type key := int
+    module Scc: SccImpl with type elt := elt 
+        and type adj := adj 
+        and module NodeMap := NodeMap
+        and module AdjSet := AdjSet
     val empty: adj NodeMap.t
     val equal: elt -> elt -> bool
     val add: elt -> adj NodeMap.t -> adj NodeMap.t
@@ -37,10 +52,6 @@ module type Graph = sig
     val dfs: (elt -> elt AdjSet.set -> bool) -> (elt -> unit) -> elt -> adj NodeMap.t -> bool option
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose: adj NodeMap.t -> adj NodeMap.t
-    val to_scc_set: elt SccTbl.t -> sccNode SccSet.set
-    val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t SccMap.t
-    val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt SccTbl.t
-    val debug: elt -> elt
 end
 
 module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
@@ -119,7 +130,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         NodeMap.remove delnode (AdjSet.fold (fun nodelabel updatemap ->
             NodeMap.update nodelabel (fun x -> 
                 let* (deepinc, deepout, deeplabel) = x in
-                    Some (AdjSet.remove delnode deepinc, AdjSet.remove delnode deepout, deeplabel)
+                Some (AdjSet.remove delnode deepinc, AdjSet.remove delnode deepout, deeplabel)
             ) updatemap
         ) (AdjSet.union incoming outgoing) nodeMap)
     ;;
@@ -154,16 +165,16 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 let _   = b label in 
                 Some true
             else
-                if AdjSet.mem label vis then
-                    let res = iter (vis) nxt in
-                    let _   = b label in
-                    res
-                else
-                    let out = outgoingof label game in 
-                    let _   = AdjSet.iter_inorder (fun x -> Stack.push x nxt) (out) in
-                    let res = iter (AdjSet.add label vis) nxt in 
-                    let _   = b label in 
-                    res
+            if AdjSet.mem label vis then
+                let res = iter (vis) nxt in
+                let _   = b label in
+                res
+            else
+                let out = outgoingof label game in 
+                let _   = AdjSet.iter_inorder (fun x -> Stack.push x nxt) (out) in
+                let res = iter (AdjSet.add label vis) nxt in 
+                let _   = b label in 
+                res
         in iter visited stck
     ;;
 
@@ -183,55 +194,52 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     *                    Strongly connected Components                       *
     **************************************************************************)
 
-    type sccNode = { mutable link: int; node: elt; index: int };;
+    module Scc = struct
 
-    let cmpscc {link=left;_} {link=right;_} = Int.compare left right
-    ;;
+        type sccnode = { mutable link: int; node: elt; index: int };;
 
-    module SccNode = struct
-        type t      = sccNode
-        let compare = fun x y -> (Unique.compare x.node y.node)
-        let equal   = fun x y -> (cmpscc x y) = 0
-        let hash    = fun x   -> x.link
-    end
+        module SccNode = struct
+            type t      = sccnode
+            let compare = fun x y -> (Unique.compare x.node y.node)
+            let equal   = fun {link=left;_} {link=right;_} -> (Int.compare left right) = 0
+            let hash    = fun x   -> x.link
+        end
 
-    (* Hashtbl creation here is not deterministic when you iter or fold *)
-    module SccTbl: Hashtbl.S with type key := sccNode = Hashtbl.Make(SccNode)
-    module SccSet: TSet with type t := sccNode = TreeSet(SccNode)
-    module SccMap: Map.S with type key := int = Map.Make(Int)
+        (* Hashtbl creation here is not deterministic when you iter or fold *)
+        module SccTbl: Hashtbl.S with type key := sccnode = Hashtbl.Make(SccNode)
+        module SccSet: TSet with type t := sccnode = TreeSet(SccNode)
+        module SccMap: Map.S with type key := int = Map.Make(Int)
 
-    (** Collect all members into a set *)
-    let to_scc_set state =
-        SccTbl.to_seq_keys state
-        |> Seq.fold_left (fun acc el -> SccSet.add el acc) SccSet.empty
-    ;;
+        (** Collect all members into a set *)
+        let to_scc_set state =
+            SccTbl.to_seq_keys state
+            |> Seq.fold_left (fun acc el -> SccSet.add el acc) SccSet.empty
+        ;;
 
-    (* creates a Map of ints -> Graph.t where the int is the low-link value. -1
+        (* creates a Map of ints -> Graph.t where the int is the low-link value. -1
        is used to show Disconnected nodes from the Sccs 
 
-       if the graph is just 'linear' then apparently it is its own SCC but
-       that may not be capture by tarjan so we main a "disconnected" entry
-       as -1 
-    *)
-    let to_induced_graphs nodeMap sccs = 
-        SccTbl.fold (fun {link=lowlink;_} elt acc -> 
-            SccMap.update lowlink (fun nodeEl -> match nodeEl with
-                (* TODO: update internal edges *)
-                (* TODO: intergraph edges ?? *)
-                | Some v -> Some (NodeMap.add elt (NodeMap.find elt nodeMap) v)
-                | None ->   Some (NodeMap.singleton elt (NodeMap.find elt nodeMap))
-            )
-        acc) sccs SccMap.empty
-    ;;
+        if the graph is just 'linear' then apparently it is its own SCC but
+        that may not be capture by tarjan so we main a "disconnected" entry
+        as -1 
+        *)
+        let to_induced_graphs nodeMap sccs = 
+            SccTbl.fold (fun {link=lowlink;_} elt acc -> 
+                SccMap.update lowlink (fun nodeEl -> match nodeEl with
+                    (* TODO: update internal edges *)
+                    (* TODO: intergraph edges ?? *)
+                    | Some v -> Some (NodeMap.add elt (NodeMap.find elt nodeMap) v)
+                    | None ->   Some (NodeMap.singleton elt (NodeMap.find elt nodeMap))
+                )
+            acc) sccs SccMap.empty
+        ;;
 
-    (* save some memory reserves when creating the SccState *)
-    let buckets size =
-        int_of_float (ceil (float_of_int(size) /. 2.))
-    ;;
+        (* save some memory reserves when creating the SccState *)
+        let buckets size =
+            int_of_float (ceil (float_of_int(size) /. 2.))
+        ;;
 
-    let debug x = x
-
-    (** Tarjans SCC algorithm 
+        (** Tarjans SCC algorithm 
         basically we should pop until we find our own
         low-link when we started - this shows that it
         is an SCC on backtrack - otherwise we keep pushing on to the stack
@@ -240,37 +248,38 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
 
         In the end remaining elements in the Stack are their own SCCs this way
         All elements always belong to an SCC
-    *)
-    let tarjan graph   =
-        let invar        = Stack.create () in
-        let sccs         = SccTbl.create (buckets (NodeMap.cardinal graph)) in
-        let stack        = ref SccSet.empty in
-        let index        = ref AdjSet.empty in
-        let lowlink      = ref 0 in
-        let count        = ref 0 in
-        let monotonic x  = let () = x := !x+1 in !x+1 in
-        let mksccnode n  = {node=n;link=(monotonic lowlink);index=(monotonic count)} in
-        let rec popto s f= let l = Stack.pop s in if f l then () else popto s f in
-        let ithasnode e x= equal x.node e in
-        let rec strongconnect n g =
-            let root     = mksccnode n in
-            let _        = Stack.push root invar in
-            let _        = stack := SccSet.add root (!stack) in
-            let _        = index := AdjSet.add root.node (!index) in
-            let _        = AdjSet.iter_inorder (fun elt ->
-                let _ = if not (AdjSet.mem elt !index) then strongconnect elt g in
-                match (SccSet.find_first_opt (ithasnode elt) !stack) with
-                | Some v -> root.link <- min root.link v.link
-                | None   -> ()
-            ) (outgoingof n g) in
-            if root.link = root.index then popto invar (fun elt -> 
-                let _ = SccTbl.add sccs elt elt.node in
-                let _ = stack := SccSet.remove elt (!stack) in
-                (equal root.node elt.node))
-        in let _ = NodeMap.iter (fun key _ ->
-            if (AdjSet.mem key !index) then () else strongconnect key graph
-        ) graph in sccs
-    ;;
+        *)
+        let tarjan graph   =
+            let invar        = Stack.create () in
+            let sccs         = SccTbl.create (buckets (NodeMap.cardinal graph)) in
+            let stack        = ref SccSet.empty in
+            let index        = ref AdjSet.empty in
+            let lowlink      = ref 0 in
+            let count        = ref 0 in
+            let monotonic x  = let () = x := !x+1 in !x+1 in
+            let mksccnode n  = {node=n;link=(monotonic lowlink);index=(monotonic count)} in
+            let rec popto s f= let l = Stack.pop s in if f l then () else popto s f in
+            let ithasnode e x= equal x.node e in
+            let rec strongconnect n g =
+                let root     = mksccnode n in
+                let _        = Stack.push root invar in
+                let _        = stack := SccSet.add root (!stack) in
+                let _        = index := AdjSet.add root.node (!index) in
+                let _        = AdjSet.iter_inorder (fun elt ->
+                    let _ = if not (AdjSet.mem elt !index) then strongconnect elt g in
+                    match (SccSet.find_first_opt (ithasnode elt) !stack) with
+                    | Some v -> root.link <- min root.link v.link
+                    | None   -> ()
+                ) (outgoingof n g) in
+                if root.link = root.index then popto invar (fun elt -> 
+                    let _ = SccTbl.add sccs elt elt.node in
+                    let _ = stack := SccSet.remove elt (!stack) in
+                    (equal root.node elt.node))
+            in let _ = NodeMap.iter (fun key _ ->
+                if (AdjSet.mem key !index) then () else strongconnect key graph
+            ) graph in sccs
+        ;;
+    end
 
     (*************************************************************************
      *                           Clique Algos                                *

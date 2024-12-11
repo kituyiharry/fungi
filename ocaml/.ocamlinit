@@ -388,7 +388,7 @@ let visitor eq x y = let _ = Format.printf "Visit " in let _ = pp_node x in
 ;;
 
 let tables g =   
-    ParityGame.Graph.SccTbl.iter (fun {link=link;node=x} y -> 
+    ParityGame.Graph.Scc.SccTbl.iter (fun {link=link;node=x} y -> 
         let _ = Format.printf "lowlink: %03d\t" link in
         let _ = Format.printf ">-> node value: " in
         let _ = pp_node y in
@@ -397,7 +397,7 @@ let tables g =
 ;;
 
 let sccsets g =   
-    ParityGame.Graph.SccSet.iter_inorder (fun {link=link;node=x} -> 
+    ParityGame.Graph.Scc.SccSet.iter_inorder (fun {link=link;node=x} -> 
         let _ = Format.printf "lowlink: %03d\t" link in
         let _ = Format.printf ">-> node value: " in
         let _ = pp_node x in
@@ -406,7 +406,7 @@ let sccsets g =
 ;;
 
 let sccgraphs g  =   
-    ParityGame.Graph.SccMap.iter (fun index elts -> 
+    ParityGame.Graph.Scc.SccMap.iter (fun index elts -> 
         let _ = Format.printf "+------------------------------------- Scc Low Link: %03d -------------------------------------+\n"  index in
         let _ = Format.printf "|                                                                                             |\n"  in
         let _ = pp_parity_game_redundant elts in
@@ -447,4 +447,3 @@ let sccgraphs g  =
 (*#trace ParityGame.stack;;*)
 (*#trace ParityGame.StrSet.of_list;;*)
 (*#trace ParityGame.cmpplays;;*)
-#trace ParityGame.Graph.debug;;
