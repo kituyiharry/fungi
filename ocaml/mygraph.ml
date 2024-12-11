@@ -241,25 +241,20 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     let tarjan nodeMap   =
         let invar        = Stack.create () in
         let sccs         = SccTbl.create (buckets (NodeMap.cardinal nodeMap)) in
+        let htbl         = Hashtbl.create 10 in
         let lowlink      = ref 0 in
         let monotonic x  = let () = x := !x+1 in !x+1 in
-        let contains n s = Seq.find (fun {node=m;_} -> equal n m) @@ (Stack.to_seq s) in
-        let _            = NodeMap.iter (fun key _ -> let _ = dfs (fun x dfsvis ->
-            if AdjSet.mem x dfsvis then
-                match contains x invar with
-                | Some {link=tslot;_} -> 
-                        let _ = Seq.take_while (fun pp ->
-                        let _ = (pp.link <- (min pp.link tslot)) in
-                        let _ = SccTbl.add sccs pp pp.node in
-                        not (equal x pp.node)
-                    ) (Stack.to_seq invar) () in
-                    true
-                | None ->
-                    false
-            else
-                let _ = Stack.push {node=x;link=(monotonic lowlink)} invar in
-                false
-        ) (ignore) key nodeMap in ()) nodeMap in 
+        let _            = NodeMap.iter (fun key _ -> 
+            if Hashtbl.mem htbl key then () else
+                let _ = dfs (fun x dfsvis ->
+                    if AdjSet.mem x dfsvis then
+                        let _ = Format.printf "already visited \n" in
+                        let _ = Hashtbl.add htbl x lowlink in
+                        false
+                    else
+                        let _ = Stack.push {node=x;link=(monotonic lowlink)} invar in
+                        false
+                ) (ignore) key nodeMap in ()) nodeMap in 
         let _ = Seq.iter (fun x -> SccTbl.add sccs x x.node) (Stack.to_seq invar) in
         sccs
     ;;
