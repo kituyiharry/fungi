@@ -33,8 +33,8 @@ module type Graph = sig
     val incomingof: elt -> adj NodeMap.t -> (elt AdjSet.set)
     val outgoingof: elt -> adj NodeMap.t -> (elt AdjSet.set)
     val remove: elt -> adj NodeMap.t -> adj NodeMap.t
-    val bfs: (elt -> elt AdjSet.set -> bool) -> elt -> adj NodeMap.t -> bool option
-    val dfs: (elt -> elt AdjSet.set -> bool) -> elt -> adj NodeMap.t -> bool option
+    val bfs: (elt -> elt AdjSet.set -> bool) -> (elt -> unit) -> elt -> adj NodeMap.t -> bool option
+    val dfs: (elt -> elt AdjSet.set -> bool) -> (elt -> unit) -> elt -> adj NodeMap.t -> bool option
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose: adj NodeMap.t -> adj NodeMap.t
     val to_scc_set: elt SccTbl.t -> sccNode SccSet.set
@@ -124,34 +124,45 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     ;;
 
     (*breadth first search starting from start node applying f until returns true*)
-    let bfs f start game = 
+    let bfs f b start game = 
         let que     = Queue.create () in
         let _       = Queue.add start que in
         let visited = AdjSet.empty in
         let rec iter vis nxt =
             let* label = Queue.take_opt nxt in
             if f label vis then
+                let _   = b label in
                 Some true
             else
-                let out =  outgoingof label game in 
+                let out =  outgoingof label game in
                 let _   = AdjSet.iter_inorder (fun x -> Queue.add x nxt) (AdjSet.diff out vis) in
-                iter (AdjSet.union out vis) nxt
+                let res = iter (AdjSet.union out vis) nxt in 
+                let _   = b label in
+                res
         in iter visited que
     ;;
 
     (*depth first search starting from start node applying f until returns true*)
-    let dfs f start game =
+    let dfs f b start game =
         let stck    = Stack.create () in
         let _       = Stack.push start stck in
         let visited = AdjSet.empty in
         let rec iter vis nxt =
             let* label = Stack.pop_opt nxt in
             if f label vis then
+                let _   = b label in 
                 Some true
             else
-                let out = outgoingof label game in 
-                let _   = AdjSet.iter_inorder (fun x -> Stack.push x nxt) (AdjSet.diff out vis) in
-                iter (AdjSet.union out  vis) nxt
+                if AdjSet.mem label vis then
+                    let res = iter (vis) nxt in
+                    let _   = b label in
+                    res
+                else
+                    let out = outgoingof label game in 
+                    let _   = AdjSet.iter_inorder (fun x -> Stack.push x nxt) (out) in
+                    let res = iter (AdjSet.add label vis) nxt in 
+                    let _   = b label in 
+                    res
         in iter visited stck
     ;;
 
@@ -248,7 +259,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             else
                 let _ = Stack.push {node=x;link=(monotonic lowlink)} invar in
                 false
-        ) key nodeMap in ()) nodeMap in 
+        ) (ignore) key nodeMap in ()) nodeMap in 
         let _ = Seq.iter (fun x -> SccTbl.add sccs x x.node) (Stack.to_seq invar) in
         sccs
     ;;
