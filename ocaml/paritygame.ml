@@ -15,7 +15,7 @@ open Myset;;
 
 let precision         = 1     (* Set to precision of the universe if necessary :-) *)
 let entropy           = ref 0
-let strictmonotonic x = let () = x := !x+precision in !x+precision;;
+let strictmonotonic x = let () = x := !x+precision in !x;;
 
 module ParityGame = struct
 

@@ -42,8 +42,12 @@ module type TSet = sig
     val min_elt_opt: t set -> t option
     val max_elt_opt: t set -> t option
     val of_seq: t Seq.t -> t set
-    val map: (t -> 'b) -> t set -> 'b set
+    val inter: t set -> t set -> t set
+    val exists: (t -> bool) -> t set -> bool
+    val find_first_opt: (t -> bool) -> t set -> t option
 end
+
+let (let*) = Option.bind
 
 module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
 
@@ -270,32 +274,47 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
             | _ -> true
     ;;
 
-    (* Subset other self -> other is subset of self *)
+    (** Subset other self -> other is subset of self *)
     let subset other = function
         | Empty -> is_empty other
         | nodes -> for_all (fun x -> mem x nodes) other
     ;;
 
-    (* Filter the elements of a set *)
+    (** Filter the elements of a set *)
     let filter f = function
         | Empty -> Empty
         | nodes -> fold (fun elt acc -> if f elt then add elt acc else acc) nodes empty
     ;;
 
-    (* Map over the elements of a set *)
-    let rec map f = function
-        | Empty -> Empty
-        | Node(x, a, y) -> Node(map f x, f a, map f y)
-    ;;
-
-    (* set difference *)
+    (** set difference - filter all elements of other not in self *)
     let diff other = function
         | Empty -> other
         | nodes -> filter (fun x -> not (mem x nodes)) other
     ;;
 
-    (* singleton *)
+    (** singleton *)
     let singleton v = Node(Empty, v, Empty)
+    ;;
+
+    (** set intersection *)
+    let inter other = function
+            | Empty -> Empty
+            | self  -> if is_empty other then Empty else
+                filter (fun x -> mem x self) other
+    ;;
+
+    (** elt in set by function - NB: Relies on short circuit behaviour *)
+    let rec exists f = function
+        | Empty -> false
+        | Node (l, v, r) -> (f v) || (exists f l) || (exists f r)
+    ;;
+
+    (** elt in set by function - NB: Relies on short circuit behaviour *)
+    let rec find_first_opt f = function
+        | Empty -> None
+        | nodes -> let (sel, rest) = take_min nodes in
+            let* el = sel in
+            if f el then Some el else find_first_opt f rest
     ;;
 
 end
