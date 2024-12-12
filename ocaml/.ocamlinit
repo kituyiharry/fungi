@@ -6,6 +6,8 @@ open Libparity.Paritygame;;
 open Libparity.Myset;;
 open Libparity.Utils;;
 
+open Libparity.Paritygame.ParityGame.Graph.Scc;;
+
 let p = ParityGame.empty;;
 
 (* <> is Odd, () is Even *)
@@ -420,6 +422,23 @@ let sccgraphs g  =
 let scc g = (ParityGame.Graph.Scc.to_induced_graphs g (ParityGame.Graph.Scc.tarjan g))
 ;;
 
+let pp_scc (sccnode: ParityGame.Graph.Scc.sccnode) =
+    let _ = Format.printf " Link %d " sccnode.link in
+    let _ = pp_node sccnode.node in
+    Format.printf " Index: %d " sccnode.index
+;;
+
+let pp_sccset set =
+  Format.printf "{$ SCC: {";
+  if ParityGame.Graph.Scc.SccSet.is_empty set then
+  Format.printf " ∅ "
+      else
+  ParityGame.Graph.Scc.SccSet.iter_inorder (pp_scc) (set);
+    Format.printf "} $} "
+;;
+
+
+
 #install_printer pp_parity_game;;
 #install_printer pp_parity_game_redundant;;
 #install_printer pp_adjset;;
@@ -431,6 +450,8 @@ let scc g = (ParityGame.Graph.Scc.to_induced_graphs g (ParityGame.Graph.Scc.tarj
 #install_printer tables;;
 #install_printer sccsets;;
 #install_printer sccgraphs;;
+#install_printer pp_scc;;
+#install_printer pp_sccset;;
 
 (*#trace ParityGame.zielonka;;*)
 (*#trace ParityGame.attr;;*)
@@ -451,3 +472,4 @@ let scc g = (ParityGame.Graph.Scc.to_induced_graphs g (ParityGame.Graph.Scc.tarj
 (*#trace ParityGame.stack;;*)
 (*#trace ParityGame.StrSet.of_list;;*)
 (*#trace ParityGame.cmpplays;;*)
+(*#trace ParityGame.Graph.Scc.SccSet.find_first_opt ;;*)
