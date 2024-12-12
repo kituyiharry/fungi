@@ -24,7 +24,7 @@ module type SccImpl = sig
     module SccSet: TSet with type t := sccnode
     module SccMap: Map.S with type key := int
     val to_scc_set: elt SccTbl.t -> sccnode SccSet.set
-    val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t SccMap.t
+    val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (int list * (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t) SccMap.t
     val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt SccTbl.t
 end
 
@@ -35,7 +35,8 @@ module type Graph = sig
     type adj := (elt AdjSet.set * elt AdjSet.set * elt)
     module Vertex: Set.OrderedType with type t := adj
     module NodeMap: Map.S with type key := elt
-    module Scc: SccImpl with type elt := elt 
+    module Scc: SccImpl with
+        type elt := elt
         and type adj := adj 
         and module NodeMap := NodeMap
         and module AdjSet := AdjSet
@@ -216,22 +217,22 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             |> Seq.fold_left (fun acc el -> SccSet.add el acc) SccSet.empty
         ;;
 
-        (* creates a Map of ints -> Graph.t where the int is the low-link value. -1
-       is used to show Disconnected nodes from the Sccs 
-
-        if the graph is just 'linear' then apparently it is its own SCC but
-        that may not be capture by tarjan so we main a "disconnected" entry
-        as -1 
+        (* creates a Map of ints -> ([], Graph.t) where the int is the low-link value. 
         *)
         let to_induced_graphs nodeMap sccs = 
             SccTbl.fold (fun {link=lowlink;_} elt acc -> 
+                let edges = NodeMap.find elt nodeMap in
+                let (_, out, _) = edges in
+                let exit = (AdjSet.fold (fun e ac ->
+                    match (SccTbl.to_seq_keys sccs) |> Seq.find (fun sc -> equal sc.node e) with
+                    | Some v -> if v.link != lowlink then  [v.link] @ ac else ac
+                    | None   -> ac
+                ) out []) in
                 SccMap.update lowlink (fun nodeEl -> match nodeEl with
-                    (* TODO: update internal edges *)
-                    (* TODO: intergraph edges ?? *)
-                    | Some v -> Some (NodeMap.add elt (NodeMap.find elt nodeMap) v)
-                    | None ->   Some (NodeMap.singleton elt (NodeMap.find elt nodeMap))
-                )
-            acc) sccs SccMap.empty
+                    | Some (l, v) -> Some ((l @ exit), (NodeMap.add elt (edges) v))
+                    | None        -> Some (exit,   NodeMap.singleton elt (edges))
+                ) acc) sccs SccMap.empty 
+            |> SccMap.map (fun (v, m) -> (List.sort_uniq (Int.compare) v, m))
         ;;
 
         (* save some memory reserves when creating the SccState *)
@@ -256,7 +257,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             let index        = ref AdjSet.empty in
             let lowlink      = ref 0 in
             let count        = ref 0 in
-            let monotonic x  = let () = x := !x+1 in !x+1 in
+            let monotonic x  = (let _ = x := !x+1 in !x) in
             let mksccnode n  = {node=n;link=(monotonic lowlink);index=(monotonic count)} in
             let rec popto s f= let l = Stack.pop s in if f l then () else popto s f in
             let ithasnode e x= equal x.node e in

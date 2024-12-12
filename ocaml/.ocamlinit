@@ -406,14 +406,18 @@ let sccsets g =
 ;;
 
 let sccgraphs g  =   
-    ParityGame.Graph.Scc.SccMap.iter (fun index elts -> 
+    ParityGame.Graph.Scc.SccMap.iter (fun index (out, elts) -> 
         let _ = Format.printf "+------------------------------------- Scc Low Link: %03d -------------------------------------+\n"  index in
-        let _ = Format.printf "|                                                                                             |\n"  in
+        let _ = List.iter (fun x -> Format.printf " %d " x) out in
+        let _ = Format.printf "\n|                                                                                             |\n"  in
         let _ = pp_parity_game_redundant elts in
         let _ = Format.printf "\n|                                                                                             |\n"  in
         let _ = Format.printf "+---------------------------------------------------------------------------------------------+\n"  in
         Format.printf "\n"
     ) g
+;;
+
+let scc g = (ParityGame.Graph.Scc.to_induced_graphs g (ParityGame.Graph.Scc.tarjan g))
 ;;
 
 #install_printer pp_parity_game;;
