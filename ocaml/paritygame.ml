@@ -222,7 +222,7 @@ module ParityGame = struct
     attractorset is the current state of the attractor
     nodeset are the unvisited nodes*)
     let rec attractor player game attractorset nodeset strats =
-        match (AdjSet.take_max nodeset) with
+        match (AdjSet.take_max_opt nodeset) with
         | (Some(node), rest) ->
             (*
                 Concatenate the attractive non-visited incoming neighbours
@@ -239,7 +239,7 @@ module ParityGame = struct
     (** [lazy_attractor player PGame.t AdjSet.t AdjSet.t AdjSet.t]
     same as attractor but lazy on getting strategies *)
     let rec lazy_attractor player game attractorset nodeset strats =
-        match (AdjSet.take_max nodeset) with
+        match (AdjSet.take_max_opt nodeset) with
         | (Some(node), rest) ->
             (*
                 Concatenate the attractive non-visited incoming neighbours

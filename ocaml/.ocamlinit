@@ -419,13 +419,13 @@ let sccgraphs g  =
     ) g
 ;;
 
-let scc g = (ParityGame.Graph.Scc.to_induced_graphs g (ParityGame.Graph.Scc.tarjan g))
+let scc g = (ParityGame.Graph.Scc.to_induced_graphs g (ParityGame.Graph.Scc.tarjan g).sccs)
 ;;
 
 let pp_scc (sccnode: ParityGame.Graph.Scc.sccnode) =
-    let _ = Format.printf " Link %d " sccnode.link in
+    let _ = Format.printf "\n (~ %d) -> [" sccnode.link in
     let _ = pp_node sccnode.node in
-    Format.printf " Index: %d " sccnode.index
+    Format.printf "] | Index: %d" sccnode.indx
 ;;
 
 let pp_sccset set =
@@ -434,7 +434,7 @@ let pp_sccset set =
   Format.printf " ∅ "
       else
   ParityGame.Graph.Scc.SccSet.iter_inorder (pp_scc) (set);
-    Format.printf "} $} "
+    Format.printf "} $}\n "
 ;;
 
 

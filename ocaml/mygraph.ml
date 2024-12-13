@@ -17,15 +17,22 @@ let (let*) = Option.bind
 module type SccImpl = sig 
     type elt
     type adj
+    type sccnode = { link: int; node: elt; indx: int };;
     module NodeMap: Map.S with type key := elt
     module AdjSet: TSet with type t := elt
-    type sccnode = { mutable link: int; node: elt; index: int };;
     module SccTbl: Hashtbl.S with type key := sccnode
     module SccSet: TSet with type t := sccnode
     module SccMap: Map.S with type key := int
+    type tarjansolution =  {
+        disc: sccnode SccSet.set;
+        indx: elt     AdjSet.set;
+        onst: elt     AdjSet.set;
+        stck: sccnode list;
+        sccs: elt     SccTbl.t;
+    }
     val to_scc_set: elt SccTbl.t -> sccnode SccSet.set
-    val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (int list * (elt AdjSet.set * elt AdjSet.set * elt) NodeMap.t) SccMap.t
-    val tarjan: ('a * elt AdjSet.set * 'b) NodeMap.t ->  elt SccTbl.t
+    val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (int list * adj NodeMap.t) SccMap.t
+    val tarjan: adj NodeMap.t -> tarjansolution
 end
 
 module type Graph = sig 
@@ -197,13 +204,13 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
 
     module Scc = struct
 
-        type sccnode = { mutable link: int; node: elt; index: int };;
+        type sccnode = { link: int; node: elt; indx: int };;
 
         module SccNode = struct
             type t      = sccnode
             let compare = fun x y -> (Unique.compare x.node y.node)
             let equal   = fun {link=left;_} {link=right;_} -> (Int.compare left right) = 0
-            let hash    = fun x   -> x.link
+            let hash    = fun x   -> x.indx
         end
 
         (* Hashtbl creation here is not deterministic when you iter or fold *)
@@ -250,35 +257,103 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         In the end remaining elements in the Stack are their own SCCs this way
         All elements always belong to an SCC
         *)
-        let tarjan graph   =
-            let invar        = Stack.create () in
-            let sccs         = SccTbl.create (buckets (NodeMap.cardinal graph)) in
-            let stack        = ref SccSet.empty in
-            let index        = ref AdjSet.empty in
+
+
+        type tarjansolution =
+            {
+                disc: sccnode SccSet.set;
+                indx: elt     AdjSet.set;
+                onst: elt     AdjSet.set;
+                stck: sccnode list;
+                sccs: elt     SccTbl.t;
+            }
+        ;;
+
+        let empty (size: int) =
+            {
+                disc = SccSet.empty;
+                indx = AdjSet.empty;
+                onst = AdjSet.empty;
+                stck = [];
+                sccs = SccTbl.create (buckets (size));
+            }
+        ;;
+
+        let add (n: sccnode) (s: tarjansolution) =
+            {
+                s with
+                disc = (SccSet.add n      s.disc);
+                indx = (AdjSet.add n.node s.indx);
+                onst = (AdjSet.add n.node s.onst);
+                stck = (n :: s.stck);
+            }
+        ;;
+
+        let ithasnode e x = equal x.node e
+        ;;
+
+        let where edg tarj = SccSet.find_first (ithasnode edg) tarj.disc
+        ;;
+
+        let update root edg tarj =
+            let v = where (edg) tarj in
+            { tarj
+                with disc = (SccSet.add ({
+                    root with link = (min root.link v.link)
+                }) tarj.disc)
+            }
+        ;;
+
+
+        let rec connect pred tarj =
+            match tarj.stck with
+            | sccel :: rest ->
+                let tarj' = {
+                    tarj with stck = rest;
+                    onst = AdjSet.remove (sccel.node) tarj.onst;
+                } in
+                    let x = (where (sccel.node) tarj') in
+                    if pred sccel then
+                        let _ = SccTbl.add tarj'.sccs x x.node in
+                        tarj'
+                    else
+                        let _ = SccTbl.add tarj'.sccs x x.node in
+                        connect pred tarj'
+            | [] -> tarj
+        ;;
+
+        let visit apply g n edg tarj =
+            let ngbr = SccSet.find_first (ithasnode n) tarj.disc in
+            if not (AdjSet.mem edg tarj.indx) then
+                update ngbr edg (apply edg g tarj)
+            else if (AdjSet.mem edg tarj.onst) then
+                update ngbr edg tarj
+            else
+                tarj
+        ;;
+
+        let tarjan graph =
+
+            let monotonic x  = (let _ = x := !x+1 in !x) in
             let lowlink      = ref 0 in
             let count        = ref 0 in
-            let monotonic x  = (let _ = x := !x+1 in !x) in
-            let mksccnode n  = {node=n;link=(monotonic lowlink);index=(monotonic count)} in
-            let rec popto s f= let l = Stack.pop s in if f l then () else popto s f in
-            let ithasnode e x= equal x.node e in
-            let rec strongconnect n g =
-                let root     = mksccnode n in
-                let _        = Stack.push root invar in
-                let _        = stack := SccSet.add root (!stack) in
-                let _        = index := AdjSet.add root.node (!index) in
-                let _        = AdjSet.iter_inorder (fun elt ->
-                    let _ = if not (AdjSet.mem elt !index) then strongconnect elt g in
-                    match (SccSet.find_first_opt (ithasnode elt) !stack) with
-                    | Some v -> root.link <- min root.link v.link
-                    | None   -> ()
-                ) (outgoingof n g) in
-                if root.link = root.index then popto invar (fun elt -> 
-                    let _ = SccTbl.add sccs elt elt.node in
-                    let _ = stack := SccSet.remove elt (!stack) in
-                    (equal root.node elt.node))
-            in let _ = NodeMap.iter (fun key _ ->
-                if (AdjSet.mem key !index) then () else strongconnect key graph
-            ) graph in sccs
+            let mksccnode n  = {node=n;link=(monotonic lowlink);indx=(monotonic count)} in
+
+            let rec strongconnect n g s =
+                let ngbr  = (mksccnode n) in
+                let r     = (add ngbr  s) in
+                let out   = (outgoingof n g) in
+                let s'    = AdjSet.fold (visit (strongconnect) g n) (out) r in
+                let ngbr' = SccSet.find_first (ithasnode n) s'.disc in
+                if  ngbr'.link = ngbr'.indx then
+                    connect (ithasnode ngbr'.node) s'
+                else
+                    s'
+            in
+
+            NodeMap.fold (fun elt _ acc ->
+                if (AdjSet.mem elt acc.indx) then acc else (strongconnect elt graph acc)
+            ) graph (empty (NodeMap.cardinal graph))
         ;;
     end
 

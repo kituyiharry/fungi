@@ -19,8 +19,9 @@ module type TSet = sig
     val cardinal: t set -> int
     val of_list: t list -> t set
     val root: t set -> t option
-    val take_min: t set -> t option * t set
-    val take_max: t set -> t option * t set
+    val take: t set -> t * t set
+    val take_min_opt: t set -> t option * t set
+    val take_max_opt: t set -> t option * t set
     val invert: t set-> t set
     val inorder: t list -> t set -> t list
     val iter_inorder: (t -> unit) -> t set -> unit
@@ -45,6 +46,7 @@ module type TSet = sig
     val inter: t set -> t set -> t set
     val exists: (t -> bool) -> t set -> bool
     val find_first_opt: (t -> bool) -> t set -> t option
+    val find_first: (t -> bool) -> t set -> t
 end
 
 let (let*) = Option.bind
@@ -58,6 +60,8 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
 
     let empty = Empty
 
+    exception Not_found
+
     (** [add 'a 'a set] Adds a node 'a to a given set *)
     let rec add aval = function
         | Empty -> Node(Empty, aval, Empty)
@@ -68,7 +72,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
             else if p > 0 then
                 Node (left, v, add aval right)
             else
-                Node(left, v, right)
+                Node(left, aval, right)
     ;;
 
     (** [member 'a 'a set] Checks whether 'a is a member of the set *)
@@ -82,20 +86,30 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     (** [take_min 'a set]
       Returns a pair of some minimum element in the set and the remaining set
    *)
-    let rec take_min = function
+    let rec take_min_opt = function
         | Empty -> (None, Empty)
         | Node(Empty, v, r) -> (Some v, r)
-        | Node(l, v, r) -> let (el, rest) = take_min l in
+        | Node(l, v, r) -> let (el, rest) = take_min_opt l in
             (el, Node(rest, v, r))
+    ;;
+
+    (** [take_min 'a set]
+      Returns a pair of some minimum element in the set and the remaining set
+   *)
+    let rec take = function
+        | Empty -> raise Not_found
+        | Node(Empty, v, r) -> (v, r)
+        | Node(l, v, r) -> let (el, rest) =
+            take l in (el, Node(rest, v, r))
     ;;
 
     (** [take_max 'a set]
       Returns a pair of some maximum element in the set and the remaining set
    *)
-    let rec take_max = function
+    let rec take_max_opt = function
         | Empty -> (None, Empty)
         | Node(l, v, Empty) -> (Some v, l)
-        | Node(l, v, r) -> let (el, rest) = take_max r in
+        | Node(l, v, r) -> let (el, rest) = take_max_opt r in
             (el, Node(l, v, rest))
     ;;
 
@@ -127,7 +141,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     let take_root = function
         | Empty ->  (None, Empty)
         | Node (x, v, y) -> 
-            let g = let min, rest = take_min y in 
+            let g = let min, rest = take_min_opt y in 
                 match min with
                 | Some next -> Node(x, next, rest)
                 | None -> x
@@ -225,7 +239,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | Node (x, a, y) -> 
             let p = Ord.compare el a in
             if p = 0 then
-                let min, rest = take_min y in
+                let min, rest = take_min_opt y in
                 match min with
                 | Some v -> Node(x, v, rest)
                 | None -> x
@@ -268,7 +282,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     let rec for_all f = function
         | Empty -> true
         | nodes -> 
-            let (max, rest) = take_min nodes in 
+            let (max, rest) = take_min_opt nodes in 
             match max with
             | Some v -> if f v then for_all f rest else false
             | _ -> true
@@ -312,9 +326,16 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     (** find first element matching predicate f *)
     let rec find_first_opt f = function
         | Empty -> None
-        | nodes -> let (sel, rest) = take_min nodes in
+        | nodes -> let (sel, rest) = take_min_opt nodes in
             let* el = sel in
             if f el then Some el else find_first_opt f rest
+    ;;
+
+    (** find first element matching predicate f *)
+    let rec find_first f = function
+        | Empty -> raise Not_found
+        | nodes -> let (el, rest) = take nodes in
+            if f el then el else find_first f rest
     ;;
 
 end
