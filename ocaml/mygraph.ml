@@ -33,6 +33,7 @@ module type SccImpl = sig
     val to_scc_set: elt SccTbl.t -> sccnode SccSet.set
     val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (int list * adj NodeMap.t) SccMap.t
     val tarjan: adj NodeMap.t -> tarjansolution
+    val whereis: elt -> tarjansolution -> sccnode
 end
 
 module type Graph = sig 
@@ -295,14 +296,32 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         let whereis edg tarj = SccSet.find_first (ithasnode edg) tarj.disc
         ;;
 
-        let update root edg tarj =
-            let v = whereis (edg) tarj in
-            { tarj
-                with disc = (SccSet.add ({
-                    root with link = (min root.link v.link)
-                }) tarj.disc)
-            }
+        (**  visit function graph  root-node  neighbour-node solution*)
+        let visit apply g root visited tarj =
+            if not (AdjSet.mem visited tarj.indx) then
+                (* unvisited edge - recurse and update *)
+                let tarj' = apply visited g tarj    in
+                let ngbr' = whereis (root)    tarj' in
+                let uss'  = whereis (visited) tarj' in
+                { tarj'
+                    with disc = (SccSet.add ({
+                        ngbr' with link = (min ngbr'.link uss'.link)
+                    }) tarj'.disc)
+                }
+            else if (AdjSet.mem visited tarj.onst) then
+                (* the visited is on the stack *)
+                (* update roots lowlink to visiteds index *)
+                let ngbr = whereis (root) tarj in
+                let usss = whereis (visited) tarj in
+                { tarj
+                    with disc = (SccSet.add ({
+                        ngbr with link = (min ngbr.link usss.link)
+                    }) tarj.disc)
+                }
+            else
+                tarj
         ;;
+
 
         let rec popscc pred tarj =
             match tarj.stck with
@@ -319,18 +338,6 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                         let _ = SccTbl.add tarj'.sccs x x.node in
                         popscc pred tarj'
             | [] ->
-                tarj
-        ;;
-
-        let visit apply g n edg tarj =
-            let ngbr = whereis (n) tarj in
-            if not (AdjSet.mem edg tarj.indx) then
-                let tarj' = apply edg g tarj  in
-                let ngbr' = whereis (n) tarj' in
-                update ngbr' edg (tarj')
-            else if (AdjSet.mem edg tarj.onst) then
-                update ngbr edg tarj
-            else
                 tarj
         ;;
 
