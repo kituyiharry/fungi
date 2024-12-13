@@ -292,11 +292,11 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         let ithasnode e x = equal x.node e
         ;;
 
-        let where edg tarj = SccSet.find_first (ithasnode edg) tarj.disc
+        let whereis edg tarj = SccSet.find_first (ithasnode edg) tarj.disc
         ;;
 
         let update root edg tarj =
-            let v = where (edg) tarj in
+            let v = whereis (edg) tarj in
             { tarj
                 with disc = (SccSet.add ({
                     root with link = (min root.link v.link)
@@ -304,28 +304,30 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             }
         ;;
 
-
-        let rec connect pred tarj =
+        let rec popscc pred tarj =
             match tarj.stck with
             | sccel :: rest ->
                 let tarj' = {
                     tarj with stck = rest;
                     onst = AdjSet.remove (sccel.node) tarj.onst;
                 } in
-                    let x = (where (sccel.node) tarj') in
+                    let x = (whereis (sccel.node) tarj') in
                     if pred sccel then
                         let _ = SccTbl.add tarj'.sccs x x.node in
                         tarj'
                     else
                         let _ = SccTbl.add tarj'.sccs x x.node in
-                        connect pred tarj'
-            | [] -> tarj
+                        popscc pred tarj'
+            | [] ->
+                tarj
         ;;
 
         let visit apply g n edg tarj =
-            let ngbr = SccSet.find_first (ithasnode n) tarj.disc in
+            let ngbr = whereis (n) tarj in
             if not (AdjSet.mem edg tarj.indx) then
-                update ngbr edg (apply edg g tarj)
+                let tarj' = apply edg g tarj  in
+                let ngbr' = whereis (n) tarj' in
+                update ngbr' edg (tarj')
             else if (AdjSet.mem edg tarj.onst) then
                 update ngbr edg tarj
             else
@@ -334,19 +336,18 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
 
         let tarjan graph =
 
-            let monotonic x  = (let _ = x := !x+1 in !x) in
+            let monotonic x  = (incr x; !x) in
             let lowlink      = ref 0 in
             let count        = ref 0 in
             let mksccnode n  = {node=n;link=(monotonic lowlink);indx=(monotonic count)} in
 
             let rec strongconnect n g s =
-                let ngbr  = (mksccnode n) in
-                let r     = (add ngbr  s) in
-                let out   = (outgoingof n g) in
+                let r     = (add (mksccnode n) s) in
+                let out   = (outgoingof     n  g) in
                 let s'    = AdjSet.fold (visit (strongconnect) g n) (out) r in
-                let ngbr' = SccSet.find_first (ithasnode n) s'.disc in
+                let ngbr' = whereis (n) s' in
                 if  ngbr'.link = ngbr'.indx then
-                    connect (ithasnode ngbr'.node) s'
+                    popscc (ithasnode ngbr'.node) s'
                 else
                     s'
             in
