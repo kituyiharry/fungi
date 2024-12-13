@@ -79,7 +79,7 @@ functor TreeSet(structure Ord: OrderedType) :> TSet where type t = Ord.t  = stru
                 case Ord.compare x v of
                     LESS => Node(add x left, v, right)
                   | GREATER => Node(left, v, add x right)
-                  | EQUAL => Node(left, v, right)
+                  | EQUAL => Node(left, x, right)
 
     (** [member 'a 'a set] Checks whether 'a is a member of the set *)
     fun mem (aval: Ord.t) (s: t set) = case s of
