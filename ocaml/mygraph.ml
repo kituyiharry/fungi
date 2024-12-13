@@ -29,6 +29,7 @@ module type SccImpl = sig
         onst: elt     AdjSet.set;
         stck: sccnode list;
         sccs: elt     SccTbl.t;
+        time: int;
     }
     val to_scc_set: elt SccTbl.t -> sccnode SccSet.set
     val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (int list * adj NodeMap.t) SccMap.t
@@ -211,7 +212,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             type t      = sccnode
             let compare = fun x y -> (Unique.compare x.node y.node)
             let equal   = fun {link=left;_} {link=right;_} -> (Int.compare left right) = 0
-            let hash    = fun x   -> x.indx
+            let hash    = fun x   -> x.link
         end
 
         (* Hashtbl creation here is not deterministic when you iter or fold *)
@@ -259,7 +260,6 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         All elements always belong to an SCC
         *)
 
-
         type tarjansolution =
             {
                 disc: sccnode SccSet.set;
@@ -267,6 +267,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 onst: elt     AdjSet.set;
                 stck: sccnode list;
                 sccs: elt     SccTbl.t;
+                time: int;
             }
         ;;
 
@@ -277,6 +278,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 onst = AdjSet.empty;
                 stck = [];
                 sccs = SccTbl.create (buckets (size));
+                time = 0
             }
         ;;
 
@@ -287,6 +289,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 indx = (AdjSet.add n.node s.indx);
                 onst = (AdjSet.add n.node s.onst);
                 stck = (n :: s.stck);
+                time = s.time + 1
             }
         ;;
 
@@ -300,28 +303,27 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         let visit apply g root visited tarj =
             if not (AdjSet.mem visited tarj.indx) then
                 (* unvisited edge - recurse and update *)
-                let tarj' = apply visited g tarj    in
-                let ngbr' = whereis (root)    tarj' in
-                let uss'  = whereis (visited) tarj' in
+                let tarj' = apply   visited g tarj  in
+                let uss'  = whereis visited   tarj' in
+                let ngbr  = whereis  root     tarj' in
                 { tarj'
                     with disc = (SccSet.add ({
-                        ngbr' with link = (min ngbr'.link uss'.link)
+                        ngbr with link = (min ngbr.link uss'.link)
                     }) tarj'.disc)
                 }
             else if (AdjSet.mem visited tarj.onst) then
                 (* the visited is on the stack *)
-                (* update roots lowlink to visiteds index *)
-                let ngbr = whereis (root) tarj in
+                (* update roots lowlink to visiteds lowlink *)
+                let ngbr = whereis (root)    tarj in
                 let usss = whereis (visited) tarj in
                 { tarj
                     with disc = (SccSet.add ({
-                        ngbr with link = (min ngbr.link usss.link)
-                    }) tarj.disc)
+                        ngbr with link = (min ngbr.link usss.link) 
+                    }) tarj.disc);
                 }
             else
                 tarj
         ;;
-
 
         let rec popscc pred tarj =
             match tarj.stck with
@@ -342,14 +344,9 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         ;;
 
         let tarjan graph =
-
-            let monotonic x  = (incr x; !x) in
-            let lowlink      = ref 0 in
-            let count        = ref 0 in
-            let mksccnode n  = {node=n;link=(monotonic lowlink);indx=(monotonic count)} in
-
+            let mksccnode n time = {node=n;link=time;indx=time} in
             let rec strongconnect n g s =
-                let r     = (add (mksccnode n) s) in
+                let r     = (add (mksccnode n s.time) s) in
                 let out   = (outgoingof     n  g) in
                 let s'    = AdjSet.fold (visit (strongconnect) g n) (out) r in
                 let ngbr' = whereis (n) s' in
@@ -358,7 +355,6 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 else
                     s'
             in
-
             NodeMap.fold (fun elt _ acc ->
                 if (AdjSet.mem elt acc.indx) then acc else (strongconnect elt graph acc)
             ) graph (empty (NodeMap.cardinal graph))

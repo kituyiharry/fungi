@@ -23,12 +23,12 @@ let edges outgoing =
 ;;
 
 let repr_prio (ParityGame.Priority (value, pplayer)) = match pplayer with
-  | ParityGame.Even -> Printf.sprintf "(Even %d)" value
-  | ParityGame.Odd  -> Printf.sprintf "(Odd  %d)" value
+  | ParityGame.Even -> Printf.sprintf "(Even %d)"  value
+  | ParityGame.Odd  -> Printf.sprintf "(Odd  %d)"  value
 ;;
 
-let repr_node (ParityGame.Label (prio, _rand )) =
-  repr_prio prio
+let repr_node (ParityGame.Label (prio, rand )) =
+  Printf.sprintf "%d: %s" rand (repr_prio prio)
 ;;
 
 let export_player = function

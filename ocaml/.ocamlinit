@@ -419,8 +419,12 @@ let sccgraphs g  =
     ) g
 ;;
 
+
 let scc g = (ParityGame.Graph.Scc.to_induced_graphs g (ParityGame.Graph.Scc.tarjan g).sccs)
 ;;
+
+(*a test ame with known edge cases *)
+let g = Utils.smakerandomgame 42 20 6 4;;
 
 let pp_scc (sccnode: ParityGame.Graph.Scc.sccnode) =
     let _ = Format.printf "\n (~ %d) -> [" sccnode.link in
