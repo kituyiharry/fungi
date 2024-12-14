@@ -25,7 +25,6 @@ module type SccImpl = sig
     module SccMap: Map.S with type key := int
     type tarjansolution =  {
         disc: sccnode SccSet.set;
-        indx: elt     AdjSet.set;
         onst: elt     AdjSet.set;
         stck: sccnode list;
         sccs: elt     SccTbl.t;
@@ -263,7 +262,6 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         type tarjansolution =
             {
                 disc: sccnode SccSet.set;
-                indx: elt     AdjSet.set;
                 onst: elt     AdjSet.set;
                 stck: sccnode list;
                 sccs: elt     SccTbl.t;
@@ -274,7 +272,6 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         let empty (size: int) =
             {
                 disc = SccSet.empty;
-                indx = AdjSet.empty;
                 onst = AdjSet.empty;
                 stck = [];
                 sccs = SccTbl.create (buckets (size));
@@ -286,7 +283,6 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             {
                 s with
                 disc = (SccSet.add n      s.disc);
-                indx = (AdjSet.add n.node s.indx);
                 onst = (AdjSet.add n.node s.onst);
                 stck = (n :: s.stck);
                 time = s.time + 1
@@ -301,7 +297,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
 
         (**  visit function graph  root-node  neighbour-node solution*)
         let visit apply g root visited tarj =
-            if not (AdjSet.mem visited tarj.indx) then
+            if not (Option.is_some (SccSet.find_first_opt (ithasnode visited) tarj.disc)) then
                 (* unvisited edge - recurse and update *)
                 let tarj' = apply   visited g tarj  in
                 let uss'  = whereis visited   tarj' in
@@ -318,45 +314,51 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 let usss = whereis (visited) tarj in
                 { tarj
                     with disc = (SccSet.add ({
-                        ngbr with link = (min ngbr.link usss.link) 
+                        ngbr with link = (min ngbr.link usss.indx)
                     }) tarj.disc);
                 }
             else
                 tarj
         ;;
 
-        let rec popscc pred tarj =
+        let rec popscc pred tarj id =
             match tarj.stck with
             | sccel :: rest ->
                 let tarj' = {
                     tarj with stck = rest;
                     onst = AdjSet.remove (sccel.node) tarj.onst;
                 } in
-                    let x = (whereis (sccel.node) tarj') in
+                    let x = { sccel with link=id } in
                     if pred sccel then
                         let _ = SccTbl.add tarj'.sccs x x.node in
                         tarj'
                     else
                         let _ = SccTbl.add tarj'.sccs x x.node in
-                        popscc pred tarj'
+                        popscc pred tarj' id
             | [] ->
                 tarj
         ;;
 
+        let mksccnode n time = {node=n;link=time;indx=time}
+        ;;
+
         let tarjan graph =
-            let mksccnode n time = {node=n;link=time;indx=time} in
+            let count = ref 0 in
             let rec strongconnect n g s =
                 let r     = (add (mksccnode n s.time) s) in
                 let out   = (outgoingof     n  g) in
                 let s'    = AdjSet.fold (visit (strongconnect) g n) (out) r in
                 let ngbr' = whereis (n) s' in
                 if  ngbr'.link = ngbr'.indx then
-                    popscc (ithasnode ngbr'.node) s'
+                    let _ = incr count in
+                    popscc (ithasnode ngbr'.node) s' !count
                 else
                     s'
             in
             NodeMap.fold (fun elt _ acc ->
-                if (AdjSet.mem elt acc.indx) then acc else (strongconnect elt graph acc)
+                if Option.is_some (SccSet.find_first_opt (ithasnode elt) acc.disc) 
+                then acc
+                else (strongconnect elt graph acc)
             ) graph (empty (NodeMap.cardinal graph))
         ;;
     end
