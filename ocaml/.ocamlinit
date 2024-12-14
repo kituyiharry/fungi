@@ -420,7 +420,7 @@ let sccgraphs g  =
 ;;
 
 
-let scc g = (ParityGame.Graph.Scc.to_induced_graphs g (ParityGame.Graph.Scc.tarjan g).sccs)
+let scc g = (ParityGame.Graph.Scc.subgraphs g (ParityGame.Graph.Scc.tarjan g).sccs)
 ;;
 
 (*a test ame with known edge cases *)

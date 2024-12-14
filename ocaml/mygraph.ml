@@ -15,39 +15,52 @@ let (let*) = Option.bind
 
 
 module type SccImpl = sig 
+
     type elt
     type adj
-    type sccnode = { link: int; node: elt; indx: int };;
-    module NodeMap: Map.S with type key := elt
-    module AdjSet: TSet with type t := elt
+
+    type sccnode = {
+        link: int;
+        node: elt;
+        indx: int
+    };;
+
+    module NodeMap: Map.S    with type key := elt
+    module AdjSet: TSet      with type t   := elt
     module SccTbl: Hashtbl.S with type key := sccnode
-    module SccSet: TSet with type t := sccnode
-    module SccMap: Map.S with type key := int
-    type tarjansolution =  {
+    module SccSet: TSet      with type t   := sccnode
+    module SccMap: Map.S     with type key := int
+
+    type solution =  {
         disc: sccnode SccSet.set;
         onst: elt     AdjSet.set;
         stck: sccnode list;
         sccs: elt     SccTbl.t;
         time: int;
     }
-    val to_scc_set: elt SccTbl.t -> sccnode SccSet.set
-    val to_induced_graphs: adj NodeMap.t -> elt SccTbl.t -> (int list * adj NodeMap.t) SccMap.t
-    val tarjan: adj NodeMap.t -> tarjansolution
-    val whereis: elt -> tarjansolution -> sccnode
+
+    val subgraphs: adj NodeMap.t -> elt SccTbl.t -> (int list * adj NodeMap.t) SccMap.t
+    val tarjan: adj NodeMap.t -> solution
+    val whereis: elt -> solution -> sccnode
 end
 
 module type Graph = sig 
+
     type +'a t
     type elt
+
     module AdjSet: TSet with type t := elt
     type adj := (elt AdjSet.set * elt AdjSet.set * elt)
-    module Vertex: Set.OrderedType with type t := adj
-    module NodeMap: Map.S with type key := elt
+
+    module Vertex:  Set.OrderedType with type t   := adj
+    module NodeMap: Map.S           with type key := elt
+
     module Scc: SccImpl with
         type elt := elt
-        and type adj := adj 
+        and type adj := adj
         and module NodeMap := NodeMap
         and module AdjSet := AdjSet
+
     val empty: adj NodeMap.t
     val equal: elt -> elt -> bool
     val add: elt -> adj NodeMap.t -> adj NodeMap.t
@@ -214,25 +227,22 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             let hash    = fun x   -> x.link
         end
 
-        (* Hashtbl creation here is not deterministic when you iter or fold *)
         module SccTbl: Hashtbl.S with type key := sccnode = Hashtbl.Make(SccNode)
-        module SccSet: TSet with type t := sccnode = TreeSet(SccNode)
-        module SccMap: Map.S with type key := int = Map.Make(Int)
+        module SccSet: TSet      with type t   := sccnode = TreeSet(SccNode)
+        module SccMap: Map.S     with type key := int     = Map.Make(Int)
 
-        (** Collect all members into a set *)
-        let to_scc_set state =
-            SccTbl.to_seq_keys state
-            |> Seq.fold_left (fun acc el -> SccSet.add el acc) SccSet.empty
+        let ithasnode e x = equal x.node e
         ;;
 
-        (* creates a Map of ints -> ([], Graph.t) where the int is the low-link value. 
+        (* creates a Map of ints -> ([], Graph.t) where the int is the link value.
+           it computes its neighbours into the list section of the Map value
         *)
-        let to_induced_graphs nodeMap sccs = 
+        let subgraphs nodeMap sccs = 
             SccTbl.fold (fun {link=lowlink;_} elt acc -> 
                 let edges = NodeMap.find elt nodeMap in
                 let (_, out, _) = edges in
                 let exit = (AdjSet.fold (fun e ac ->
-                    match (SccTbl.to_seq_keys sccs) |> Seq.find (fun sc -> equal sc.node e) with
+                    match (SccTbl.to_seq_keys sccs) |> Seq.find (ithasnode e) with
                     | Some v -> if v.link != lowlink then  [v.link] @ ac else ac
                     | None   -> ac
                 ) out []) in
@@ -259,7 +269,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         All elements always belong to an SCC
         *)
 
-        type tarjansolution =
+        type solution =
             {
                 disc: sccnode SccSet.set;
                 onst: elt     AdjSet.set;
@@ -279,7 +289,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             }
         ;;
 
-        let add (n: sccnode) (s: tarjansolution) =
+        let add (n: sccnode) (s: solution) =
             {
                 s with
                 disc = (SccSet.add n      s.disc);
@@ -287,9 +297,6 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 stck = (n :: s.stck);
                 time = s.time + 1
             }
-        ;;
-
-        let ithasnode e x = equal x.node e
         ;;
 
         let whereis edg tarj = SccSet.find_first (ithasnode edg) tarj.disc
@@ -301,7 +308,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 (* unvisited edge - recurse and update *)
                 let tarj' = apply   visited g tarj  in
                 let uss'  = whereis visited   tarj' in
-                let ngbr  = whereis  root     tarj' in
+                let ngbr  = whereis root      tarj' in
                 { tarj'
                     with disc = (SccSet.add ({
                         ngbr with link = (min ngbr.link uss'.link)
@@ -356,7 +363,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     s'
             in
             NodeMap.fold (fun elt _ acc ->
-                if Option.is_some (SccSet.find_first_opt (ithasnode elt) acc.disc) 
+                if Option.is_some (SccSet.find_first_opt (ithasnode elt) acc.disc)
                 then acc
                 else (strongconnect elt graph acc)
             ) graph (empty (NodeMap.cardinal graph))
