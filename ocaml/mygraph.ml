@@ -40,8 +40,8 @@ module type SccImpl = sig
     }
 
     val subgraphs: adj NodeMap.t -> elt SccTbl.t -> (int list * adj NodeMap.t) SccMap.t
-    val tarjan: adj NodeMap.t -> solution
-    val whereis: elt -> solution -> sccnode
+    val tarjan:    adj NodeMap.t -> solution
+    val kosaraju:  adj NodeMap.t -> solution
 end
 
 module type Graph = sig
@@ -61,19 +61,19 @@ module type Graph = sig
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
 
-    val empty: adj NodeMap.t
-    val equal: elt -> elt -> bool
-    val add: elt -> adj NodeMap.t -> adj NodeMap.t
-    val add_edge: elt -> elt -> adj NodeMap.t -> adj NodeMap.t
-    val add_all: elt -> elt list -> adj NodeMap.t -> adj NodeMap.t
-    val of_list: (elt * elt list) list -> adj NodeMap.t -> adj NodeMap.t
-    val incomingof: elt -> adj NodeMap.t -> (elt AdjSet.set)
-    val outgoingof: elt -> adj NodeMap.t -> (elt AdjSet.set)
-    val remove: elt -> adj NodeMap.t -> adj NodeMap.t
-    val bfs: (elt -> elt AdjSet.set -> 'a -> (bool * 'a)) -> (elt -> 'a -> 'a) -> elt -> 'a -> adj NodeMap.t -> 'a
-    val dfs: (elt -> elt AdjSet.set -> 'a -> (bool * 'a)) -> (elt -> 'a -> 'a) -> elt -> 'a -> adj NodeMap.t -> 'a
+    val empty:       adj NodeMap.t
+    val equal:       elt -> elt -> bool
+    val add:         elt -> adj NodeMap.t -> adj NodeMap.t
+    val add_edge:    elt -> elt -> adj NodeMap.t -> adj NodeMap.t
+    val add_all:     elt -> elt list -> adj NodeMap.t -> adj NodeMap.t
+    val of_list:     (elt * elt list) list -> adj NodeMap.t -> adj NodeMap.t
+    val incomingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
+    val outgoingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
+    val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
+    val bfs:         (elt -> elt AdjSet.set -> 'a -> (bool * 'a)) -> (elt -> 'a -> 'a) -> adj NodeMap.t -> elt -> 'a -> 'a
+    val dfs:         (elt -> elt AdjSet.set -> 'a -> (bool * 'a)) -> (elt -> 'a -> 'a) -> adj NodeMap.t -> elt -> 'a -> 'a
     val adj_list_of: elt -> adj NodeMap.t -> elt list
-    val transpose: adj NodeMap.t -> adj NodeMap.t
+    val transpose:   adj NodeMap.t -> adj NodeMap.t
 end
 
 module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
@@ -158,7 +158,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     ;;
 
     (*breadth first search starting from start node applying f until returns true*)
-    let bfs f b start init game =
+    let bfs f b game start init =
         let que     = Queue.create () in
         let _       = Queue.add start que in
         let visited = AdjSet.empty in
@@ -167,21 +167,20 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 acc
             else
                 let label = Queue.take nxt in
-                let (cont, acc') = f label vis acc in
-                if not cont then
+                let (stop, acc') = f label vis acc in
+                if stop then
                     b label acc'
                 else
                     let out =  outgoingof label game in
                     let diff = AdjSet.diff out vis in
                     let _   = AdjSet.iter_inorder (fun x -> Queue.add x nxt) (diff) in
-                    let _   = Format.printf "added %d els\n" (AdjSet.cardinal out) in
                     let acc'' = iter (AdjSet.union diff vis) nxt acc' in
                     b label acc''
         in iter visited que init
     ;;
 
     (*depth first search starting from start node applying f until returns true*)
-    let dfs f b start init game =
+    let dfs f b game start init =
         let stck    = Stack.create () in
         let _       = Stack.push start stck in
         let visited = AdjSet.empty in
@@ -190,8 +189,8 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 acc
             else
                 let  label = Stack.pop nxt in
-                let (cont, acc') = f label vis acc in
-                if not cont then
+                let (stop, acc') = f label vis acc in
+                if stop then
                     b label acc'
                 else
                 if AdjSet.mem label vis then
@@ -307,9 +306,12 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         let whereis edg tarj = SccSet.find_first (ithasnode edg) tarj.disc
         ;;
 
+        let findby pred dset = Option.is_some (SccSet.find_first_opt (pred) dset)
+        ;;
+
         (**  visit function graph  root-node  neighbour-node solution*)
         let visit apply g root visited tarj =
-            if not (Option.is_some (SccSet.find_first_opt (ithasnode visited) tarj.disc)) then
+            if not (findby (ithasnode visited) tarj.disc) then
                 (* unvisited edge - recurse and update *)
                 let tarj' = apply   visited g tarj  in
                 let uss'  = whereis visited   tarj' in
@@ -341,11 +343,10 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     onst = AdjSet.remove (sccel.node) tarj.onst;
                 } in
                     let x = { sccel with link=id } in
+                    let _ = SccTbl.add tarj'.sccs x x.node in
                     if pred sccel then
-                        let _ = SccTbl.add tarj'.sccs x x.node in
                         tarj'
                     else
-                        let _ = SccTbl.add tarj'.sccs x x.node in
                         popscc pred tarj' id
             | [] ->
                 tarj
@@ -373,11 +374,34 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 else (strongconnect elt graph acc)
             ) graph (empty (NodeMap.cardinal graph))
         ;;
+
+        let kosaraju graph =
+            let gsize = NodeMap.cardinal graph in
+            let state = NodeMap.fold (fun g _ h ->
+                if (h.time = gsize) || AdjSet.mem g h.onst then
+                    h
+                else
+                    dfs (fun _x _y a -> (a.time = (gsize), a))
+                        (fun x a -> if AdjSet.mem x a.onst then a else {
+                                a with stck = ((mksccnode x a.time) :: a.stck);
+                                       onst = (AdjSet.add x a.onst);
+                                       time = (a.time + 1)
+                        }) graph g h
+            ) graph (empty gsize) in
+            let tgraph = transpose graph in
+            NodeMap.fold (fun g _ h ->
+                dfs (fun _x _y a -> (true, a)) (fun _x a -> a) (tgraph) g h
+            ) (tgraph) state
+        ;;
+
     end
 
     (*************************************************************************
      *                           Clique Algos                                *
     **************************************************************************)
 
+    (*************************************************************************
+    *                             Path Algos                                 *
+    **************************************************************************)
 
 end;;

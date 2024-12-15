@@ -13,40 +13,40 @@
 module type TSet = sig
     type t
     type 'a set
-    val empty: t set
-    val add: t -> t set -> t set
-    val mem: t -> t set -> bool
-    val cardinal: t set -> int
-    val of_list: t list -> t set
-    val root: t set -> t option
-    val take: t set -> t * t set
-    val take_min_opt: t set -> t option * t set
-    val take_max_opt: t set -> t option * t set
-    val invert: t set-> t set
-    val inorder: t list -> t set -> t list
-    val iter_inorder: (t -> unit) -> t set -> unit
-    val preorder: t list -> t set -> t list
-    val iter_preorder: (t -> unit) -> t set -> unit
-    val postorder: t list -> t set -> t list
+    val empty:          t set
+    val add:            t -> t set -> t set
+    val mem:            t -> t set -> bool
+    val cardinal:       t set -> int
+    val of_list:        t list -> t set
+    val root:           t set -> t option
+    val take:           t set -> t * t set
+    val take_min_opt:   t set -> t option * t set
+    val take_max_opt:   t set -> t option * t set
+    val invert:         t set-> t set
+    val inorder:        t list -> t set -> t list
+    val iter_inorder:   (t -> unit) -> t set -> unit
+    val preorder:       t list -> t set -> t list
+    val iter_preorder:  (t -> unit) -> t set -> unit
+    val postorder:      t list -> t set -> t list
     val iter_postorder: (t -> unit) -> t set ->  unit
-    val fold: (t -> 'b -> 'b) -> t set -> 'b -> 'b
-    val remove: t -> t set -> t set
-    val union: t set -> t set -> t set
-    val is_empty: t set -> bool
-    val elements: t set -> t list
-    val filter: (t -> bool) -> t set -> t set
-    val for_all: (t -> bool) -> t set -> bool
-    val subset: t set -> t set -> bool
-    val diff: t set -> t set -> t set
-    val to_seq: t set -> t Seq.t
-    val singleton: t -> t set
-    val min_elt_opt: t set -> t option
-    val max_elt_opt: t set -> t option
-    val of_seq: t Seq.t -> t set
-    val inter: t set -> t set -> t set
-    val exists: (t -> bool) -> t set -> bool
+    val fold:           (t -> 'b -> 'b) -> t set -> 'b -> 'b
+    val remove:         t -> t set -> t set
+    val union:          t set -> t set -> t set
+    val is_empty:       t set -> bool
+    val elements:       t set -> t list
+    val filter:         (t -> bool) -> t set -> t set
+    val for_all:        (t -> bool) -> t set -> bool
+    val subset:         t set -> t set -> bool
+    val diff:           t set -> t set -> t set
+    val to_seq:         t set -> t Seq.t
+    val singleton:      t -> t set
+    val min_elt_opt:    t set -> t option
+    val max_elt_opt:    t set -> t option
+    val of_seq:         t Seq.t -> t set
+    val inter:          t set -> t set -> t set
+    val exists:         (t -> bool) -> t set -> bool
     val find_first_opt: (t -> bool) -> t set -> t option
-    val find_first: (t -> bool) -> t set -> t
+    val find_first:     (t -> bool) -> t set -> t
 end
 
 let (let*) = Option.bind
