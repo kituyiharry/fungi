@@ -286,16 +286,6 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             }
         ;;
 
-        let add n s =
-            {
-                s with
-                disc = (SccSet.add n      s.disc);
-                onst = (AdjSet.add n.node s.onst);
-                stck = (n :: s.stck);
-                time = s.time + 1
-            }
-        ;;
-
         let whereis edg tarj = SccSet.find_first (ithasnode edg) tarj.disc
         ;;
 
@@ -350,6 +340,17 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         ;;
 
 
+        (* how tarjan creates a link for later use *)
+        let tarjanadd n s =
+            {
+                s with
+                disc = (SccSet.add n      s.disc);
+                onst = (AdjSet.add n.node s.onst);
+                stck = (n :: s.stck);
+                time = s.time + 1
+            }
+        ;;
+
         (** Tarjans SCC algorithm 
         basically we should pop until we find our own
         low-link when we started (lowlink = index) - this shows that it
@@ -364,7 +365,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             let count = ref 0 in
             let rec strongconnect n g s =
                 (* mark as discovered and add onto the stack *)
-                let r     = (add (mksccnode n s.time) s) in
+                let r     = (tarjanadd (mksccnode n s.time) s) in
                 let out   = (outgoingof     n  g) in
                 (* recurse while adding *)
                 let s'    = AdjSet.fold (visit (strongconnect) g n) (out) r in
@@ -378,9 +379,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     s'
             in
             NodeMap.fold (fun elt _ acc ->
-                if Option.is_some (SccSet.find_first_opt (ithasnode elt) acc.disc)
-                then acc
-                else (strongconnect elt graph acc)
+                if findby (ithasnode elt) acc.disc then acc else (strongconnect elt graph acc)
             ) graph (empty (NodeMap.cardinal graph))
         ;;
 
@@ -400,61 +399,54 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             | [] -> t
         ;;
 
+        (* how kosaraju creates a postorder for later use *)
+        let kosaradd elt scc scc' = 
+            (* if already on the stack then already discovered again *)
+            if AdjSet.mem elt scc'.onst then
+                scc'
+            else
+                (* not on the stack after recursion, stack and mark discovered *)
+                {
+                    scc'  with
+                    stck = (mksccnode elt scc.time) :: scc.stck;
+                    onst = AdjSet.add elt scc.onst;
+                }
+        ;;
+
         (* Kosaraju visits all nodes until the first nodes with all edges going
            back into the discovered or has none and builds a stack. After that 
            we transpose the graph and pop from the stack, seeing which elements
            in the stack are still reachable on pop *)
         let kosaraju graph =
-            let init  = (empty (NodeMap.cardinal graph)) in
+            let count  = ref 0 in
             let rec iter node (_, out, _) scc =
                 let scc'' = 
                     (* If already on the stack it has been discovered *)
-                    if AdjSet.mem node scc.onst then
-                        scc
-                    else
-                    (* If all out edges are a subset of the discovered elements *)
-                    if AdjSet.for_all (fun el -> findby (ithasnode el) scc.disc) (out) then
-                        (* stack it and move on *)
-                        {
-                            scc with
-                            stck = (mksccnode node scc.time) :: scc.stck;
-                            onst = AdjSet.add node scc.onst;
-                        }
-                    else
-                        (* Mark this node as discovered at this time *)
-                        let nvst = { scc with disc = SccSet.add (mksccnode node scc.time) scc.disc } in
-                        (* Get the subset of undiscovered elements for recurse *)
-                        let diff = AdjSet.filter (fun oe -> not (findby (ithasnode oe) nvst.disc)) out in
-                        AdjSet.fold (fun elt state ->
-                            (* recurse *)
-                            let scc' = iter elt (NodeMap.find elt graph) state in
-                            (* if already on the stack then already discovered again *)
-                            if AdjSet.mem elt scc'.onst then
-                                scc'
-                            else
-                            (* not on the stack after recursion, pop and mark discovered *)
-                                {
-                                    scc'  with
-                                    stck = (mksccnode elt scc.time) :: scc.stck;
-                                    onst = AdjSet.add elt scc.onst;
-                                }
-                        ) (diff) (nvst)
+                    if AdjSet.mem node scc.onst then scc else
+                        (* If all out edges are a subset of the discovered elements *)
+                        if AdjSet.for_all (fun el -> findby (ithasnode el) scc.disc) (out) then
+                            (* stack it and move on *)
+                            {
+                                scc with
+                                stck = (mksccnode node scc.time) :: scc.stck;
+                                onst = AdjSet.add node scc.onst;
+                            }
+                        else
+                            (* Mark this node as discovered at this time *)
+                            let nvst = { scc with disc = SccSet.add (mksccnode node scc.time) scc.disc } in
+                            (* Get the subset of undiscovered elements for recurse *)
+                            let diff = AdjSet.filter (fun oe -> not (findby (ithasnode oe) nvst.disc)) out in
+                            AdjSet.fold (fun elt state -> 
+                                iter elt (NodeMap.find elt graph) state
+                                |> kosaradd elt scc
+                            ) (diff) (nvst)
                 in
                 (* If already on the stack after first recursion then ok *)
-                if AdjSet.mem node scc''.onst then
-                    scc''
-                else
-                (* not on the stack after recursion, pop  and mark discovered *)
-                    {
-                        scc''  with
-                        stck = (mksccnode node scc.time) :: scc''.stck;
-                        onst = AdjSet.add node scc''.onst;
-                    }
+                kosaradd node scc'' scc''
             in
-            let fscc = NodeMap.fold (iter) graph (init) in 
+            let fscc = NodeMap.fold (iter) graph (empty (NodeMap.cardinal graph)) in 
             (* transpose the graph *)
             let tgraph = transpose graph in
-            let count  = ref 0 in
             (* pop elements while a condition is true *)
             let iter2 scc sccnode =
                 (* if onst the we consider it already a part of an scc *)
@@ -466,8 +458,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     let vstd = dfs (fun _ _ acc -> (false, acc)) (fun _ vis _ -> vis) tgraph sccnode.node AdjSet.empty in
                     (* popelements into an scc while they are visited *)
                     popto (fun e -> AdjSet.mem e.node vstd) scc (!count)
-            in
-            List.fold_left iter2 {fscc with onst = AdjSet.empty;} (fscc.stck)
+            in List.fold_left iter2 {fscc with onst = AdjSet.empty;} (fscc.stck)
         ;;
 
     end
