@@ -442,7 +442,8 @@ let pp_sccset set =
     Format.printf "} $}\n "
 ;;
 
-
+(* show full backtrace *)
+let _ = Printexc.record_backtrace true;;
 
 #install_printer pp_parity_game;;
 #install_printer pp_parity_game_redundant;;
