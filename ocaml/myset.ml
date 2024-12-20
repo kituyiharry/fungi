@@ -265,24 +265,24 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     (** ... list of elements in a set ... *)
     let elements = function
         | Empty -> []
-        | nodes -> fold (fun elt acc -> (elt :: acc)) nodes [] 
+        | self -> fold (fun elt acc -> (elt :: acc)) self [] 
     ;;
 
     (** ... sequence of elements in a set ... *)
     let to_seq = function
-        | nodes ->
+        | self ->
             let rec aux l () = match take_root l with
                 | (None, _) -> Seq.Nil
                 | (Some x, tail) -> Seq.Cons (x, (aux tail))
             in
-                (aux nodes)
+                (aux self)
     ;;
 
     (** ... test whether f is true for_all members of this set ... *)
     let rec for_all f = function
         | Empty -> true
-        | nodes -> 
-            let (max, rest) = take_min_opt nodes in 
+        | self -> 
+            let (max, rest) = take_min_opt self in 
             match max with
             | Some v -> if f v then for_all f rest else false
             | _ -> true
@@ -291,19 +291,19 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     (** Subset other self -> other is subset of self *)
     let subset other = function
         | Empty -> is_empty other
-        | nodes -> for_all (fun x -> mem x nodes) other
+        | self -> for_all (fun x -> mem x self) other
     ;;
 
     (** Filter the elements of a set *)
     let filter f = function
         | Empty -> Empty
-        | nodes -> fold (fun elt acc -> if f elt then add elt acc else acc) nodes empty
+        | self -> fold (fun elt acc -> if f elt then add elt acc else acc) self empty
     ;;
 
     (** set difference - filter all elements of other not in self *)
     let diff other = function
         | Empty -> other
-        | nodes -> filter (fun x -> not (mem x nodes)) other
+        | self -> filter (fun x -> not (mem x self)) other
     ;;
 
     (** singleton *)

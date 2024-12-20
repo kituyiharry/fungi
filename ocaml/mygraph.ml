@@ -27,6 +27,7 @@ module type SccImpl = sig
 
     module NodeMap: Map.S    with type key := elt
     module AdjSet: TSet      with type t   := elt
+
     module SccTbl: Hashtbl.S with type key := sccnode
     module SccSet: TSet      with type t   := sccnode
     module SccMap: Map.S     with type key := int
@@ -44,6 +45,28 @@ module type SccImpl = sig
     val kosaraju:  adj NodeMap.t -> solution
 end
 
+module type ClusterImpl = sig 
+    type elt
+    type adj
+    module NodeMap: Map.S    with type key := elt
+    module AdjSet: TSet      with type t   := elt
+end
+
+module type PathImpl = sig
+    type elt
+    type adj
+    module NodeMap: Map.S    with type key := elt
+    module AdjSet: TSet      with type t   := elt
+end
+
+module type SpanImpl = sig 
+    type elt
+    type adj
+    module NodeMap: Map.S    with type key := elt
+    module AdjSet: TSet      with type t   := elt
+end
+
+
 module type Graph = sig
 
     type +'a t
@@ -56,6 +79,24 @@ module type Graph = sig
     module NodeMap: Map.S           with type key := elt
 
     module Scc: SccImpl with
+        type       elt     := elt
+        and type   adj     := adj
+        and module NodeMap := NodeMap
+        and module AdjSet  := AdjSet
+
+    module Cluster: ClusterImpl with
+        type       elt     := elt
+        and type   adj     := adj
+        and module NodeMap := NodeMap
+        and module AdjSet  := AdjSet
+
+    module Path:    PathImpl with
+        type       elt     := elt
+        and type   adj     := adj
+        and module NodeMap := NodeMap
+        and module AdjSet  := AdjSet
+
+    module Span:    SpanImpl with
         type       elt     := elt
         and type   adj     := adj
         and module NodeMap := NodeMap
@@ -220,8 +261,14 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         NodeMap.map (fun (inc, out, label) -> (out, inc, label)) nodeMap
     ;;
 
+    (* minimum number of vertices we can remove to make it disconnected or
+       trivial *)
+    (*let connectivity = 0*)
+    (*;;*)
+
     (*************************************************************************
     *                    Strongly connected Components                       *
+    *                  Every vertex is reachable in a SCC                    *
     **************************************************************************)
 
     module Scc = struct
@@ -249,14 +296,15 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             SccTbl.fold (fun {link=lowlink;_} elt acc -> 
                 let edges = NodeMap.find elt nodeMap in
                 let (_, out, _) = edges in
-                let exit = (AdjSet.fold (fun e ac ->
-                    match (SccTbl.to_seq_keys sccs) |> Seq.find (ithasnode e) with
-                    | Some v -> if v.link != lowlink then  [v.link] @ ac else ac
+                let keyseq = SccTbl.to_seq_keys sccs in
+                let sccedg = (AdjSet.fold (fun e ac ->
+                    match (keyseq) |> Seq.find (ithasnode e) with
+                    | Some v -> if v.link != lowlink then  v.link :: ac else ac
                     | None   -> ac
                 ) out []) in
                 SccMap.update lowlink (fun nodeEl -> match nodeEl with
-                    | Some (l, v) -> Some ((l @ exit), (NodeMap.add elt (edges) v))
-                    | None        -> Some (exit,   NodeMap.singleton elt (edges))
+                    | Some (l, v) -> Some ((l @ sccedg), (NodeMap.add elt (edges) v))
+                    | None        -> Some (sccedg,   NodeMap.singleton elt (edges))
                 ) acc) sccs SccMap.empty 
             |> SccMap.map (fun (v, m) -> (List.sort_uniq (Int.compare) v, m))
         ;;
@@ -464,20 +512,40 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     end
 
     (*************************************************************************
-     *                           Clique Algos                                *
+     *                           Clusters                                    *
+     * Induced subgraph is fully connected every pair of distinct vertices is*
+     * adjacent with distance 1                                              *
     **************************************************************************)
+    module Cluster = struct 
     (*
-        Bron–Kerbosch algorithm
+        Bron–Kerbosch algorithm  (Clique)
+        k-Clan, k-Club ??
     *)
+    end
 
     (*************************************************************************
     *                             Path Algos                                 *
     **************************************************************************)
+    module Path = struct 
     (*
         Floyd warshall
         Bellman ford
         Djikstra
         Astar
     *)
+    end
+
+    (* Ford-Fulkerson (flow) *)
+
+    (*************************************************************************
+    *                           Spanning Trees                               *
+    **************************************************************************)
+    module Span = struct
+    (**
+      kruskal  
+    *)
+    end
+    
+    
 
 end;;
