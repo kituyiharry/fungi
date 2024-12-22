@@ -1,8 +1,6 @@
 (******************************************************************************
 *                                                                             *
 *                      A Tree Set implementation                              *
-*       Based on upenn lectures: (most of the Interface only)                 *
-*       https://www.seas.upenn.edu/~cis120/archive/16sp/lectures/lec10.pdf    *
 *                                                                             *
 *       The tree will remain mostly unbalanced!                               *
 *       Target is to add some 'laziness' with some functions                  *
@@ -312,9 +310,9 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
 
     (** set intersection *)
     let inter other = function
-            | Empty -> Empty
-            | self  -> if is_empty other then Empty else
-                filter (fun x -> mem x self) other
+        | Empty -> Empty
+        | self  -> if is_empty other then Empty else
+            filter (fun x -> mem x self) other
     ;;
 
     (** elt in set by function - NB: Relies on short circuit behaviour *)

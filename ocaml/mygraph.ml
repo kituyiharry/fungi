@@ -13,7 +13,6 @@ open Myset;;
 
 let (let*) = Option.bind
 
-
 module type SccImpl = sig 
 
     type elt
@@ -40,7 +39,9 @@ module type SccImpl = sig
         time: int;
     }
 
-    val subgraphs: adj NodeMap.t -> elt SccTbl.t -> (int list * adj NodeMap.t) SccMap.t
+    type sccedge = (int list * adj NodeMap.t)
+
+    val subgraphs: adj NodeMap.t -> elt SccTbl.t -> (sccedge) SccMap.t
     val tarjan:    adj NodeMap.t -> solution
     val kosaraju:  adj NodeMap.t -> solution
 end
@@ -50,6 +51,8 @@ module type ClusterImpl = sig
     type adj
     module NodeMap: Map.S    with type key := elt
     module AdjSet: TSet      with type t   := elt
+
+    val bronkerbosch: adj NodeMap.t -> elt AdjSet.set list
 end
 
 module type PathImpl = sig
@@ -90,13 +93,13 @@ module type Graph = sig
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
 
-    module Path:    PathImpl with
+    module Path: PathImpl with
         type       elt     := elt
         and type   adj     := adj
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
 
-    module Span:    SpanImpl with
+    module Span: SpanImpl with
         type       elt     := elt
         and type   adj     := adj
         and module NodeMap := NodeMap
@@ -110,6 +113,8 @@ module type Graph = sig
     val of_list:     (elt * elt list) list -> adj NodeMap.t -> adj NodeMap.t
     val incomingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
     val outgoingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
+    val neighbours:  elt -> adj NodeMap.t -> elt AdjSet.set 
+    val degree:      elt -> adj NodeMap.t -> int
     val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
     val bfs:         (elt -> elt AdjSet.set -> 'a -> bool * 'a) -> (elt -> elt AdjSet.set -> 'a -> 'a) -> adj NodeMap.t -> elt -> 'a -> 'a
     val dfs:         (elt -> elt AdjSet.set -> 'a -> bool * 'a) -> (elt -> elt AdjSet.set -> 'a -> 'a) -> adj NodeMap.t -> elt -> 'a -> 'a
@@ -117,6 +122,7 @@ module type Graph = sig
     val transpose:   adj NodeMap.t -> adj NodeMap.t
 end
 
+(* TODO: To accept weighted edges, use a data record `Graph with type data :='a ` *)
 module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
 
     type elt = Unique.t
@@ -126,6 +132,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     type   adj     = (elt AdjSet.set * elt AdjSet.set * elt)
 
     (*  Incoming nodes  Outgoing nodes data *)
+    (* TODO: To accept weighted edges, use a data record Vertex{data:'a;elt:elt} *)
     module Vertex  = struct 
         type t      = adj
         let compare = fun (_, _, lnode) (_, _, rnode) -> Unique.compare lnode rnode
@@ -186,6 +193,13 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     (** [ incomingof identity (Graph.t) AdjSet.t]
     Outgoing set of nodes *)
     let outgoingof node game = let (_, out, _) = NodeMap.find node game in out
+
+    (* both incoming and outgoing edges of a graph *)
+    let neighbours node game = let (inc, out, _) = NodeMap.find node game in (AdjSet.union inc out)
+
+    let degree node nodeMap = 
+        AdjSet.cardinal  @@ neighbours node nodeMap
+    ;;
 
     (** Removes a node from the graph *)
     let remove delnode nodeMap =
@@ -254,17 +268,12 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
         AdjSet.fold (
             fun anode alist -> anode :: alist
-        )  (AdjSet.union incoming outgoing) []
+        ) (AdjSet.union incoming outgoing) []
     ;;
 
     let transpose nodeMap =
         NodeMap.map (fun (inc, out, label) -> (out, inc, label)) nodeMap
     ;;
-
-    (* minimum number of vertices we can remove to make it disconnected or
-       trivial *)
-    (*let connectivity = 0*)
-    (*;;*)
 
     (*************************************************************************
     *                    Strongly connected Components                       *
@@ -286,7 +295,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         module SccSet: TSet      with type t   := sccnode = TreeSet(SccNode)
         module SccMap: Map.S     with type key := int     = Map.Make(Int)
 
-        let ithasnode e x = equal x.node e
+        let hasnode e x = equal x.node e
         ;;
 
         (* creates a Map of ints -> ([], Graph.t) where the int is the link value.
@@ -298,7 +307,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 let (_, out, _) = edges in
                 let keyseq = SccTbl.to_seq_keys sccs in
                 let sccedg = (AdjSet.fold (fun e ac ->
-                    match (keyseq) |> Seq.find (ithasnode e) with
+                    match (keyseq) |> Seq.find (hasnode e) with
                     | Some v -> if v.link != lowlink then  v.link :: ac else ac
                     | None   -> ac
                 ) out []) in
@@ -324,6 +333,9 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             }
         ;;
 
+        type sccedge = (int list * adj NodeMap.t)
+        ;;
+
         let empty (size: int) =
             {
                 disc = SccSet.empty;
@@ -334,7 +346,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             }
         ;;
 
-        let whereis edg tarj = SccSet.find_first (ithasnode edg) tarj.disc
+        let whereis edg tarj = SccSet.find_first (hasnode edg) tarj.disc
         ;;
 
         let findby pred dset = Option.is_some (SccSet.find_first_opt (pred) dset)
@@ -342,7 +354,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
 
         (**  visit function graph  root-node  neighbour-node solution*)
         let visit apply g root visited tarj =
-            if not (findby (ithasnode visited) tarj.disc) then
+            if not (findby (hasnode visited) tarj.disc) then
                 (* unvisited edge - recurse and update *)
                 let tarj' = apply   visited g tarj  in
                 let uss'  = whereis visited   tarj' in
@@ -418,21 +430,21 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 (* recurse while adding *)
                 let s'    = AdjSet.fold (visit (strongconnect) g n) (out) r in
                 (* get the low link of this node and compare to discovery time *)
-                let ngbr' = whereis (n) s' in
+                let ngbr' = (whereis (n) s') in
                 if  ngbr'.link = ngbr'.indx then
                     let _ = incr count in
                     (* pop elements into an scc until the elt is the same as ours *)
-                    popscc (ithasnode n) s' !count
+                    popscc (hasnode n) s' !count
                 else
                     s'
             in
             NodeMap.fold (fun elt _ acc ->
-                if findby (ithasnode elt) acc.disc then acc else (strongconnect elt graph acc)
+                if findby (hasnode elt) acc.disc then acc else (strongconnect elt graph acc)
             ) graph (empty (NodeMap.cardinal graph))
         ;;
 
         (* How Kosaraju builds an scc within the f (el) constraint *)
-        let rec popto f t id =
+        let rec popwhile f t id =
             match t.stck with
             | el :: rest ->
                 if f el then
@@ -441,13 +453,13 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                         onst = AdjSet.add el.node t.onst; 
                         stck = rest;
                     } in
-                    popto f t' id
+                    popwhile f t' id
                 else
                     t
             | [] -> t
         ;;
 
-        (* how kosaraju creates a postorder for later use *)
+        (* how kosaraju composes a solution for later use *)
         let kosaradd elt scc scc' = 
             (* if already on the stack then already discovered again *)
             if AdjSet.mem elt scc'.onst then
@@ -472,7 +484,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     (* If already on the stack it has been discovered *)
                     if AdjSet.mem node scc.onst then scc else
                         (* If all out edges are a subset of the discovered elements *)
-                        if AdjSet.for_all (fun el -> findby (ithasnode el) scc.disc) (out) then
+                        if AdjSet.for_all (fun el -> findby (hasnode el) scc.disc) (out) then
                             (* stack it and move on *)
                             {
                                 scc with
@@ -483,7 +495,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                             (* Mark this node as discovered at this time *)
                             let nvst = { scc with disc = SccSet.add (mksccnode node scc.time) scc.disc } in
                             (* Get the subset of undiscovered elements for recurse *)
-                            let diff = AdjSet.filter (fun oe -> not (findby (ithasnode oe) nvst.disc)) out in
+                            let diff = AdjSet.filter (fun oe -> not (findby (hasnode oe) nvst.disc)) out in
                             AdjSet.fold (fun elt state -> 
                                 iter elt (NodeMap.find elt graph) state
                                 |> kosaradd elt scc
@@ -503,24 +515,56 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 else
                     let _ = incr count in
                     (* find all reachable nodes *)
-                    let vstd = dfs (fun _ _ acc -> (false, acc)) (fun _ vis _ -> vis) tgraph sccnode.node AdjSet.empty in
+                    let vstd = dfs
+                        (fun _ _ _ -> (false, AdjSet.empty)) 
+                        (fun _ vis _ -> vis)
+                        tgraph sccnode.node (AdjSet.empty) in
                     (* popelements into an scc while they are visited *)
-                    popto (fun e -> AdjSet.mem e.node vstd) scc (!count)
-            in List.fold_left iter2 {fscc with onst = AdjSet.empty;} (fscc.stck)
+                    popwhile (fun e -> AdjSet.mem e.node vstd) scc (!count)
+            in List.fold_left iter2 {fscc with onst = AdjSet.empty} (fscc.stck)
         ;;
 
     end
 
     (*************************************************************************
-     *                           Clusters                                    *
-     * Induced subgraph is fully connected every pair of distinct vertices is*
-     * adjacent with distance 1                                              *
+    *                           Clusters                                     *
+    * Clique: Induced subgraph is fully connected every pair of distinct     *
+    * vertices is* adjacent with distance 1                                  *
+    *                                                                        *
+    * Club: A generalization of a clique, where a set of vertices induces a  *
+    * subgraph with a diameter at most (s)                                   *
+    *                                                                        *
+    * Clan: A subclass of an (n)-clique with diameter (n), which makes       *
+    * it connected                                                           *
     **************************************************************************)
     module Cluster = struct 
-    (*
-        Bron–Kerbosch algorithm  (Clique)
-        k-Clan, k-Club ??
-    *)
+        (*
+            Bron–Kerbosch algorithm  (Maximal Cliques)
+        *)
+        let bronkerbosch graph =
+            (*
+                r: clique being built
+                p: candidate vertices
+                x: exclusion set (already processed) - ensures r is maximal
+            *)
+            let rec bk r p x cqs =
+                if AdjSet.is_empty p && AdjSet.is_empty x then
+                    r :: cqs
+                else
+                    let (v, rest) = AdjSet.take p in
+                    let ngbrs = neighbours v graph in
+                    let rec iter p x cqs =
+                        if AdjSet.is_empty p then
+                            cqs
+                        else
+                            let ncqs = bk (AdjSet.add v r) (AdjSet.inter p ngbrs) (AdjSet.inter x ngbrs) cqs in 
+                            iter (rest) (AdjSet.add v x) ncqs
+                    in
+                    iter (rest) (AdjSet.add v x) cqs
+            in
+            let keys = NodeMap.to_seq graph |> Seq.map (fst) |> AdjSet.of_seq in
+            bk (AdjSet.empty) (keys) (AdjSet.empty) []
+        ;;
     end
 
     (*************************************************************************
@@ -545,7 +589,5 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
       kruskal  
     *)
     end
-    
-    
 
 end;;
