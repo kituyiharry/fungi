@@ -20,6 +20,7 @@ signature TSequence = sig
     val map : ('a -> 'b) -> 'a seq -> 'b seq
     val filter : ('a -> bool) -> 'a seq -> 'a seq
     val append : 'a seq * 'a seq -> 'a seq
+    val fold_left: ('a -> 'b -> 'a) -> 'a -> ('b seq) -> 'a
 
     (* Conversion *)
     val toList : 'a seq -> 'a list
@@ -27,20 +28,20 @@ end
 
 structure Sequence :> TSequence = struct
 
-  datatype 'a front = Nil | Cons of 'a * 'a seq
-    type 'a seq = unit -> 'a front
+  datatype 'a front = Nil | Cons of 'a * (unit -> 'a front)
+  type 'a seq = unit -> 'a front
 
   fun empty () = Nil
 
   fun cons (x, s) () = Cons(x, s)
 
   fun head s = 
-      case s() of
+      case s () of
           Nil => raise Empty
         | Cons(x, _) => x
 
   fun tail s =
-      case s() of
+      case s () of
           Nil => raise Empty
         | Cons(_, s') => s'
 
@@ -61,14 +62,14 @@ structure Sequence :> TSequence = struct
       if n <= 0 then empty
       else
           fn () =>
-              case s() of
+              case s () of
                   Nil => Nil
                 | Cons(x, s') => Cons(x, take(s', n-1))
 
   fun drop (s, n) =
       if n <= 0 then s
       else
-          case s() of
+          case s () of
               Nil => empty
             | Cons(_, s') => drop(s', n-1)
 
@@ -85,21 +86,28 @@ structure Sequence :> TSequence = struct
               else (filter p s')()
 
   fun append (s1, s2) () =
-      case s1() of
-          Nil => s2()
+      case s1 () of
+          Nil => s2 ()
         | Cons(x, s1') => Cons(x, append(s1', s2))
 
   fun toList s =
-      case s() of
+      case s () of
           Nil => []
         | Cons(x, s') => x :: toList s'
 
   fun concat ss () =
-        case ss() of
+        case ss () of
             Nil => Nil
           | Cons(s, rest) =>
-                case s() of
-                    Nil => (concat rest)()
+                case s () of
+                    Nil => (concat rest) ()
                   | Cons(x, xs) => Cons(x, append(xs, concat rest))
+
+  fun fold_left f acc seq = case seq () of
+    Nil => acc
+    | Cons (x, next) =>
+        let val acc = f acc x in
+        fold_left f acc next
+      end
 
 end

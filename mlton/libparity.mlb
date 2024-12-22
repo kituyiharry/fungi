@@ -1,6 +1,7 @@
 (* program files *)
+$(SML_LIB)/basis/basis.mlb
 myseq.sml
 myset.sml
-main.sml
-mygraph.sml
-mymap.sml
+(* main.sml      *)
+(* mygraph.sml   *)
+(* mymap.sml     *)
