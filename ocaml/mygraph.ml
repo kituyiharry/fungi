@@ -77,7 +77,8 @@ module type Graph = sig
     type elt
 
     module AdjSet:  TSet with type t := elt
-    type adj     := (elt AdjSet.set * elt AdjSet.set * elt)
+    module Weights: Hashtbl.S       with type key := elt
+    type adj     := (elt AdjSet.set * elt AdjSet.set * elt * float Weights.t)
 
     module Vertex:  Set.OrderedType with type t   := adj
     module NodeMap: Map.S           with type key := elt
@@ -127,32 +128,40 @@ module type Graph = sig
     val transpose:   adj NodeMap.t -> adj NodeMap.t
 end
 
-(* TODO: To accept weighted edges, use a data record `Graph with type data :='a ` *)
 module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
 
     type elt = Unique.t
 
-    (** Module for manipulating the Set structure holding the Adjacency list *)
-    module AdjSet  = TreeSet(Unique)
-    type   adj     = (elt AdjSet.set * elt AdjSet.set * elt)
-
-    (*  Incoming nodes  Outgoing nodes data *)
-    (* TODO: To accept weighted edges, use a data record Vertex{data:'a;elt:elt} *)
-    module Vertex  = struct 
-        type t      = adj
-        let compare = fun (_, _, lnode) (_, _, rnode) -> Unique.compare lnode rnode
-        let empty lbl = (AdjSet.empty, AdjSet.empty, lbl)
-    end
-
     (** compare 2 nodes in the graph *)
     let equal lnode rnode = (Unique.compare lnode rnode) = 0
 
+    (** Weights hold edge values should they exist. elt is the `to` direction of 
+        the weight, on undirected graphs it may be duplicated on both nodes
+        vertex values as a to in one and a from in another *)
+    module WeightNode = struct
+        type t      = elt 
+        let equal   = fun (left) (right) -> (equal left right)
+        let hash    = fun x -> (Obj.magic x)
+    end
+    module Weights = Hashtbl.Make (WeightNode)
+
+    (** Module for manipulating the Set structure holding the Adjacency list *)
+    module AdjSet  = TreeSet(Unique)
+    type   adj     = (elt AdjSet.set * elt AdjSet.set * elt * float Weights.t)
+
+    (*  Incoming nodes  Outgoing nodes data *)
+    module Vertex  = struct 
+        type t      = adj
+        let compare = fun (_, _, lnode, _) (_, _, rnode, _) -> Unique.compare lnode rnode
+        let empty lbl = (AdjSet.empty, AdjSet.empty, lbl, Weights.create 1)
+    end
+
     (** Adjacency list graph definition **)
     (* Map from NodeType.t to (incoming outgoing label) *)
-    type 'a t      = (Vertex.t) Map.Make(Unique).t
+    type +'a t     = (Vertex.t) Map.Make(Unique).t
 
     (** Module for manipulating the Map (Node -> (set , set , label)) *)
-    module NodeMap = Map.Make(Unique) 
+    module NodeMap = Map.Make(Unique)
 
     (** An empty graph **)
     let empty      = NodeMap.empty
@@ -172,18 +181,25 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
           (*Update with incoming*)
     *)
     let add_edge nodeFrom nodeTo nodeMap =
-        (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label) = x in 
-            Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label)) nodeMap)
-        |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing, tolabel) = x in
-            Some ((AdjSet.add nodeFrom toIncoming), (toOutgoing), tolabel))
+        (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing,
+            label, wgts) = x in 
+            Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label, wgts)) nodeMap)
+        |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing,
+            tolabel, wgts) = x in
+            Some ((AdjSet.add nodeFrom toIncoming), (toOutgoing), tolabel, wgts))
     ;;
+
+    (*let add_weighted nodeFrom nodeTo weightValue nodeMap = *)
+        (*(NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label) = x in *)
+            (*Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label)) nodeMap)*)
+    (*;;*)
 
     let rec add_all nodeFrom nodeToList nodeMap = match nodeToList with
         | [] -> nodeMap
         | nodeTo :: rest -> add_edge nodeFrom nodeTo (add_all nodeFrom rest nodeMap)
     ;;
 
-    (* Creates a graph given a node and outgoing edge, incoming edges will be
+    (** Creates a graph given a node and outgoing edge, incoming edges will be
        resolved naturally. All nodes should already be available in the map  *)
     let rec of_list adjList nodeMap = match adjList with
         | [] -> nodeMap
@@ -193,26 +209,26 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
 
     (** [ incomingof identity (Graph.t) AdjSet.t]
     Incoming set of nodes *)
-    let incomingof node game = let (inc, _, _) = NodeMap.find node game in inc
+    let incomingof node game = let (inc, _, _, _) = NodeMap.find node game in inc
 
     (** [ incomingof identity (Graph.t) AdjSet.t]
     Outgoing set of nodes *)
-    let outgoingof node game = let (_, out, _) = NodeMap.find node game in out
+    let outgoingof node game = let (_, out, _, _) = NodeMap.find node game in out
 
-    (* both incoming and outgoing edges of a graph - self edges included *)
-    let neighbours node game = let (inc, out, _) = NodeMap.find node game in (AdjSet.union inc out)
+    (** both incoming and outgoing edges of a graph - self edges included *)
+    let neighbours node game = let (inc, out, _, _) = NodeMap.find node game in (AdjSet.union inc out)
 
-    (* both incoming and outgoing edges of a graph - self edges NOT included *)
-    let xorneighbors node game = let (inc, out, _) = NodeMap.find node game in 
+    (** both incoming and outgoing edges of a graph - self edges NOT included *)
+    let xorneighbors node game = let (inc, out, _, _) = NodeMap.find node game in 
         AdjSet.remove node (AdjSet.union inc out)
 
-    (* items in both incoming and outgoing edges of a graph - self edges included *)
-    let mutuals node game = let (inc, out, _) = NodeMap.find node game in
+    (** items in both incoming and outgoing edges of a graph - self edges included *)
+    let mutuals node game = let (inc, out, _, _) = NodeMap.find node game in
         (AdjSet.inter inc out)
     ;;
 
-    (* items in both incoming and outgoing edges of a graph - self edges NOT included *)
-    let xormutuals node game = let (inc, out, _) = NodeMap.find node game in
+    (** items in both incoming and outgoing edges of a graph - self edges NOT included *)
+    let xormutuals node game = let (inc, out, _, _) = NodeMap.find node game in
         AdjSet.remove node (AdjSet.inter inc out)
     ;;
 
@@ -223,28 +239,29 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
 
     (** Removes a node from the graph *)
     let remove delnode nodeMap =
-        let (incoming, outgoing, _label) = (NodeMap.find delnode nodeMap) in
+        let (incoming, outgoing, _label, _) = (NodeMap.find delnode nodeMap) in
         NodeMap.remove delnode (AdjSet.fold (fun nodelabel updatemap ->
             NodeMap.update nodelabel (fun x -> 
-                let* (deepinc, deepout, deeplabel) = x in
-                Some (AdjSet.remove delnode deepinc, AdjSet.remove delnode deepout, deeplabel)
+                let* (deepinc, deepout, deeplabel, wgts) = x in
+                Some (AdjSet.remove delnode deepinc, AdjSet.remove delnode
+                    deepout, deeplabel, wgts)
             ) updatemap
         ) (AdjSet.union incoming outgoing) nodeMap)
     ;;
 
-    (* Remove self edges from a graph - TODO: could be more efficient *)
+    (** Remove self edges from a graph - TODO: could be more efficient - perhaps *)
     let cull graph =
         graph
         |> NodeMap.to_seq
-        |> Seq.filter (fun (elt, (_, out, _)) -> AdjSet.mem elt out)
-        |> Seq.fold_left (fun g (elt, (inc, out, lbl)) -> 
+        |> Seq.filter (fun (elt, (_, out, _, _)) -> AdjSet.mem elt out)
+        |> Seq.fold_left (fun g (elt, (inc, out, lbl, wgts)) -> 
             NodeMap.update elt (fun _ ->
-                Some (AdjSet.remove elt inc, AdjSet.remove elt out, lbl)
+                Some (AdjSet.remove elt inc, AdjSet.remove elt out, lbl, wgts)
             ) g
         ) graph
     ;;
 
-    (*breadth first search starting from start node applying f until returns true*)
+    (** breadth first search starting from start node applying f until returns true*)
     let bfs f b game start init =
         let que     = Queue.create () in
         let _       = Queue.add start que in
@@ -268,7 +285,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         acc
     ;;
 
-    (*depth first search starting from start node applying f until returns true*)
+    (** depth first search starting from start node applying f until returns true*)
     let dfs f b game start init =
         let stck    = Stack.create () in
         let _       = Stack.push start stck in
@@ -295,16 +312,17 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         acc
     ;;
 
-    (* Get adjacency list of a node *)
+    (** Get adjacency list of a node *)
     let adj_list_of node nodeMap =
-        let (incoming, outgoing, _label) = NodeMap.find node nodeMap in
+        let (incoming, outgoing, _label, _wgts) = NodeMap.find node nodeMap in
         AdjSet.fold (
             fun anode alist -> anode :: alist
         ) (AdjSet.union incoming outgoing) []
     ;;
 
+    (** swap the incoming and outgoing edge direction *)
     let transpose nodeMap =
-        NodeMap.map (fun (inc, out, label) -> (out, inc, label)) nodeMap
+        NodeMap.map (fun (inc, out, label, wgts) -> (out, inc, label, wgts)) nodeMap
     ;;
 
     (*************************************************************************
@@ -336,7 +354,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         let subgraphs nodeMap sccs =
             SccTbl.fold (fun {link=lowlink;_} elt acc -> 
                 let edges = NodeMap.find elt nodeMap in
-                let (_, out, _) = edges in
+                let (_, out, _, _) = edges in
                 let keyseq = SccTbl.to_seq_keys sccs in
                 let sccedg = (AdjSet.fold (fun e ac ->
                     match (keyseq) |> Seq.find (hasnode e) with
@@ -511,7 +529,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
            in the stack are still reachable on pop *)
         let kosaraju graph =
             let count  = ref 0 in
-            let rec iter node (_, out, _) scc =
+            let rec iter node (_, out, _, _) scc =
                 let scc'' = 
                     (* If already on the stack it has been discovered *)
                     if AdjSet.mem node scc.onst then scc else
@@ -561,13 +579,16 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     (*************************************************************************
     *                           Clusters                                     *
     * Clique: Induced subgraph is fully connected every pair of distinct     *
-    * vertices is* adjacent with distance 1                                  *
+    * vertices is* adjacent with distance 1 or k - paths outside the clique  *
+    * seem to be allowed                                                     *
     *                                                                        *
     * Club: A generalization of a clique, where a set of vertices induces a  *
-    * subgraph with a diameter at most (s)                                   *
+    * subgraph with a diameter at most (s) - the diameter must remain within *
+    * the club!                                                              *
     *                                                                        *
     * Clan: A subclass of an (n)-clique with diameter (n), which makes       *
-    * it connected                                                           *
+    * it connected within the clan - part of the point is whether a clique is*
+    * restricted to be maximal. k-clans have to be k-cliques                 *
     **************************************************************************)
     module Cluster = struct 
         (**
