@@ -424,7 +424,7 @@ let tables g =
 ;;
 
 let sccsets g =   
-    ParityGame.Graph.Scc.SccSet.iter_inorder (fun {link=link;node=x} -> 
+    ParityGame.Graph.Scc.SccSet.iter (fun {link=link;node=x} -> 
         let _ = Format.printf "lowlink: %03d\t" link in
         let _ = Format.printf ">-> node value: " in
         let _ = pp_node x in
@@ -466,7 +466,7 @@ let pp_sccset set =
   if ParityGame.Graph.Scc.SccSet.is_empty set then
   Format.printf " ∅ "
       else
-  ParityGame.Graph.Scc.SccSet.iter_inorder (pp_scc) (set);
+  ParityGame.Graph.Scc.SccSet.iter (pp_scc) (set);
     Format.printf "} $}\n "
 ;;
 

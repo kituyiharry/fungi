@@ -17,12 +17,12 @@ module type TSet = sig
     val cardinal:       t set -> int
     val of_list:        t list -> t set
     val root:           t set -> t option
-    val take:           t set -> t * t set
+    val choose:         t set -> t
     val take_min_opt:   t set -> t option * t set
     val take_max_opt:   t set -> t option * t set
     val invert:         t set-> t set
     val inorder:        t list -> t set -> t list
-    val iter_inorder:   (t -> unit) -> t set -> unit
+    val iter:           (t -> unit) -> t set -> unit
     val preorder:       t list -> t set -> t list
     val iter_preorder:  (t -> unit) -> t set -> unit
     val postorder:      t list -> t set -> t list
@@ -91,14 +91,23 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
             (el, Node(rest, v, r))
     ;;
 
-    (** [take_min 'a set]
+    (** [choose 'a set]
+      Returns a pair of some minimum element in the set
+   *)
+    let rec choose = function
+        | Empty -> raise Not_found
+        | Node(Empty, v, _r) -> v
+        | Node(l, _v, _r) -> choose l
+    ;;
+
+    (** [choose 'a set]
       Returns a pair of some minimum element in the set and the remaining set
    *)
-    let rec take = function
+    let rec choose_rest = function
         | Empty -> raise Not_found
         | Node(Empty, v, r) -> (v, r)
         | Node(l, v, r) -> let (el, rest) =
-            take l in (el, Node(rest, v, r))
+            choose_rest l in (el, Node(rest, v, r))
     ;;
 
     (** [take_max 'a set]
@@ -175,13 +184,13 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | Node (x, a, y) -> inorder ((inorder stack x) @ [a]) y
     ;; (* Inorder traversal - Left - Root - Right *)
 
-    let rec iter_inorder g = function
+    let rec iter g = function
         | Empty -> ()
         | Node (Empty, a, Empty) ->  (g a)
         | Node (x, a, y) ->
-            let _ = iter_inorder g x in
+            let _ = iter g x in
             let _ = g a in
-            iter_inorder g y
+            iter g y
     ;; (* Inorder traversal - Left - Root - Right *)
 
     (** [preorder 'a set] Preorder walk on the set *)
@@ -331,7 +340,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     (** find first element matching predicate f *)
     let rec find_first f = function
         | Empty -> raise Not_found
-        | nodes -> let (el, rest) = take nodes in
+        | nodes -> let (el, rest) = choose_rest nodes in
             if f el then el else find_first f rest
     ;;
 

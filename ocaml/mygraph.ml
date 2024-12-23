@@ -277,7 +277,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 else
                     let out =  outgoingof label game in
                     let diff = AdjSet.diff out vis in
-                    let _   = AdjSet.iter_inorder (fun x -> Queue.add x nxt) (diff) in
+                    let _   = AdjSet.iter (fun x -> Queue.add x nxt) (diff) in
                     iter (AdjSet.union diff vis) nxt acc'
                 in
                 (vis', b label vis' acc'')
@@ -304,7 +304,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                         iter (vis) nxt acc'
                     else
                         let out = outgoingof label game in
-                        let _   = AdjSet.iter_inorder (fun x -> Stack.push x nxt) (out) in
+                        let _   = AdjSet.iter (fun x -> Stack.push x nxt) (out) in
                         iter (AdjSet.add label vis) nxt acc'
                 ) in (vis', b label vis' acc'')
         in
@@ -641,7 +641,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     (r :: cqs)
                 else
                     let _, _, ncqs =
-                        let (u, _ ) = AdjSet.take (AdjSet.union p x) in
+                        let u = AdjSet.choose (AdjSet.union p x) in
                         AdjSet.fold (fun v (np, nx, cqs') ->
                             let ngb = (xormutuals v graph) in
                             (* r + {v} *)
