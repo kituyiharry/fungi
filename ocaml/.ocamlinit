@@ -7,6 +7,7 @@ open Libparity.Myset;;
 open Libparity.Utils;;
 
 open Libparity.Paritygame.ParityGame.Graph.Scc;;
+open Libparity.Paritygame.ParityGame.Graph.Cluster;;
 
 let p = ParityGame.empty;;
 
@@ -205,6 +206,29 @@ let x_adjlist =
 
 let x = ParityGame.Graph.of_list x_adjlist x;;
 
+let c = ParityGame.empty;;
+
+let (c_1, c)  = ParityGame.add_node  ParityGame.Odd  1  c;;
+let (c_2, c)  = ParityGame.add_node  ParityGame.Even 2  c;;
+let (c_3, c)  = ParityGame.add_node  ParityGame.Odd  3  c;;
+let (c_4, c)  = ParityGame.add_node  ParityGame.Even 4  c;;
+let (c_5, c)  = ParityGame.add_node  ParityGame.Odd  5  c;;
+let (c_6, c)  = ParityGame.add_node  ParityGame.Even 6  c;;
+let (c_8, c)  = ParityGame.add_node  ParityGame.Even 8  c;;
+
+let c_adjlist =
+  [
+    (c_1,  [c_2;c_5]);
+    (c_2,  [c_1;c_3;c_5]);
+    (c_3,  [c_2;c_4;]);
+    (c_4,  [c_3;c_6;c_5]);
+    (c_5,  [c_4;c_2;c_1]);
+    (c_6,  [c_4]);
+    (c_8,  [c_8]);
+]
+
+let c = ParityGame.Graph.of_list c_adjlist c;;
+
 (* Convenience functions for printing in the REPl *)
 (** [asplayerprio ParityGame.t (node * priority)]
 helper to show parity game as a graph without the random generated ids *)
@@ -235,7 +259,7 @@ let pp_parity_game:(adj * adj * ParityGame.node) ParityGame.Nodes.t -> unit = fu
 ;;
 
 let pp_adjset_depth (set: adj) =
-  Format.printf "{$ A: {";
+  Format.printf "{$: {";
   if ParityGame.AdjSet.is_empty set then
     Format.printf " ∅ "
       else
@@ -247,7 +271,7 @@ let pp_adjset_depth (set: adj) =
 ;;
 
 let pp_adjset set =
-  Format.printf "{$ A: {";
+  Format.printf "{$: {";
   if ParityGame.AdjSet.is_empty set then
   Format.printf " ∅ "
       else

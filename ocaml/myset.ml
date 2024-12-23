@@ -311,8 +311,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     (** set intersection *)
     let inter other = function
         | Empty -> Empty
-        | self  -> if is_empty other then Empty else
-            filter (fun x -> mem x self) other
+        | self  -> filter (fun x -> mem x self) other
     ;;
 
     (** elt in set by function - NB: Relies on short circuit behaviour *)

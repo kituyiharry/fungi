@@ -114,8 +114,12 @@ module type Graph = sig
     val incomingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
     val outgoingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
     val neighbours:  elt -> adj NodeMap.t -> elt AdjSet.set 
+    val xorneighbors:elt -> adj NodeMap.t -> elt AdjSet.set 
+    val mutuals:     elt -> adj NodeMap.t -> elt AdjSet.set 
+    val xormutuals:  elt -> adj NodeMap.t -> elt AdjSet.set 
     val degree:      elt -> adj NodeMap.t -> int
     val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
+    val cull:        adj NodeMap.t -> adj NodeMap.t
     val bfs:         (elt -> elt AdjSet.set -> 'a -> bool * 'a) -> (elt -> elt AdjSet.set -> 'a -> 'a) -> adj NodeMap.t -> elt -> 'a -> 'a
     val dfs:         (elt -> elt AdjSet.set -> 'a -> bool * 'a) -> (elt -> elt AdjSet.set -> 'a -> 'a) -> adj NodeMap.t -> elt -> 'a -> 'a
     val adj_list_of: elt -> adj NodeMap.t -> elt list
@@ -194,11 +198,26 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     Outgoing set of nodes *)
     let outgoingof node game = let (_, out, _) = NodeMap.find node game in out
 
-    (* both incoming and outgoing edges of a graph *)
+    (* both incoming and outgoing edges of a graph - self edges included *)
     let neighbours node game = let (inc, out, _) = NodeMap.find node game in (AdjSet.union inc out)
 
+    (* both incoming and outgoing edges of a graph - self edges NOT included *)
+    let xorneighbors node game = let (inc, out, _) = NodeMap.find node game in 
+        AdjSet.remove node (AdjSet.union inc out)
+
+    (* items in both incoming and outgoing edges of a graph - self edges included *)
+    let mutuals node game = let (inc, out, _) = NodeMap.find node game in
+        (AdjSet.inter inc out)
+    ;;
+
+    (* items in both incoming and outgoing edges of a graph - self edges NOT included *)
+    let xormutuals node game = let (inc, out, _) = NodeMap.find node game in
+        AdjSet.remove node (AdjSet.inter inc out)
+    ;;
+
+    (*  *)
     let degree node nodeMap = 
-        AdjSet.cardinal  @@ neighbours node nodeMap
+        AdjSet.cardinal @@ neighbours node nodeMap
     ;;
 
     (** Removes a node from the graph *)
@@ -210,6 +229,18 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 Some (AdjSet.remove delnode deepinc, AdjSet.remove delnode deepout, deeplabel)
             ) updatemap
         ) (AdjSet.union incoming outgoing) nodeMap)
+    ;;
+
+    (* Remove self edges from a graph - TODO: could be more efficient *)
+    let cull graph =
+        graph
+        |> NodeMap.to_seq
+        |> Seq.filter (fun (elt, (_, out, _)) -> AdjSet.mem elt out)
+        |> Seq.fold_left (fun g (elt, (inc, out, lbl)) -> 
+            NodeMap.update elt (fun _ ->
+                Some (AdjSet.remove elt inc, AdjSet.remove elt out, lbl)
+            ) g
+        ) graph
     ;;
 
     (*breadth first search starting from start node applying f until returns true*)
@@ -540,6 +571,8 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     module Cluster = struct 
         (*
             Bron–Kerbosch algorithm  (Maximal Cliques)
+            Warning: Self edges will cause p to run into an infinite loop so we
+            have to filter them out with `xormutuals`
         *)
         let bronkerbosch graph =
             (*
@@ -549,19 +582,24 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             *)
             let rec bk r p x cqs =
                 if AdjSet.is_empty p && AdjSet.is_empty x then
-                    r :: cqs
+                    (r :: cqs)
                 else
-                    let (v, rest) = AdjSet.take p in
-                    let ngbrs = neighbours v graph in
-                    let rec iter p x cqs =
-                        if AdjSet.is_empty p then
-                            cqs
-                        else
-                            let ncqs = bk (AdjSet.add v r) (AdjSet.inter p ngbrs) (AdjSet.inter x ngbrs) cqs in 
-                            iter (rest) (AdjSet.add v x) ncqs
-                    in
-                    iter (rest) (AdjSet.add v x) cqs
+                    let _, _, ncqs =
+                        AdjSet.fold (fun v (np, nx, cqs') -> 
+                            let ngb = (xormutuals v graph) in
+                            (* r + {v} *)
+                            let br  = (AdjSet.add v r) in
+                            (* p intersect ngb *)
+                            let bp  = (AdjSet.inter ngb np) in
+                            (* x intersect ngb *)
+                            let bx  = (AdjSet.inter ngb nx) in
+                            (* any new cliques *)
+                            let cqs'' = bk (br) (bp) (bx) cqs' in
+                            ((AdjSet.remove v np), (AdjSet.add v nx), cqs'')
+                        ) (p) (p, x, cqs)
+                    in ncqs
             in
+            (* collect all nodes as candidates *)
             let keys = NodeMap.to_seq graph |> Seq.map (fst) |> AdjSet.of_seq in
             bk (AdjSet.empty) (keys) (AdjSet.empty) []
         ;;
