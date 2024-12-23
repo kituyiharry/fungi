@@ -52,7 +52,8 @@ module type ClusterImpl = sig
     module NodeMap: Map.S    with type key := elt
     module AdjSet: TSet      with type t   := elt
 
-    val bronkerbosch: adj NodeMap.t -> elt AdjSet.set list
+    val bronkerbosch:  adj NodeMap.t -> elt AdjSet.set list
+    val bronkerbosch2: adj NodeMap.t -> elt AdjSet.set list
 end
 
 module type PathImpl = sig
@@ -569,10 +570,12 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     * it connected                                                           *
     **************************************************************************)
     module Cluster = struct 
-        (*
+        (**
             Bron–Kerbosch algorithm  (Maximal Cliques)
-            Warning: Self edges will cause p to run into an infinite loop so we
+            Warning: Self edges can cause p to run into an infinite loop so we
             have to filter them out with `xormutuals`
+            This implementation does not use pivoting, use bronkerbosch2 for
+            that depending on your graph (it does extra computations)
         *)
         let bronkerbosch graph =
             (*
@@ -597,6 +600,39 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                             let cqs'' = bk (br) (bp) (bx) cqs' in
                             ((AdjSet.remove v np), (AdjSet.add v nx), cqs'')
                         ) (p) (p, x, cqs)
+                    in ncqs
+            in
+            (* collect all nodes as candidates *)
+            let keys = NodeMap.to_seq graph |> Seq.map (fst) |> AdjSet.of_seq in
+            bk (AdjSet.empty) (keys) (AdjSet.empty) []
+        ;;
+
+        (** Same as bronkerbosch but with pivoting - can be usefull in some
+           cases! *)
+        let bronkerbosch2 graph =
+            (*
+                r: clique being built
+                p: candidate vertices
+                x: exclusion set (already processed) - ensures r is maximal
+            *)
+            let rec bk r p x cqs =
+                if AdjSet.is_empty p && AdjSet.is_empty x then
+                    (r :: cqs)
+                else
+                    let _, _, ncqs =
+                        let (u, _ ) = AdjSet.take (AdjSet.union p x) in
+                        AdjSet.fold (fun v (np, nx, cqs') ->
+                            let ngb = (xormutuals v graph) in
+                            (* r + {v} *)
+                            let br  = (AdjSet.add v r) in
+                            (* p intersect ngb *)
+                            let bp  = (AdjSet.inter ngb np) in
+                            (* x intersect ngb *)
+                            let bx  = (AdjSet.inter ngb nx) in
+                            (* any new cliques *)
+                            let cqs'' = bk (br) (bp) (bx) cqs' in
+                            ((AdjSet.remove v np), (AdjSet.add v nx), cqs'')
+                        ) (AdjSet.diff p (xormutuals u graph)) (p, x, cqs)
                     in ncqs
             in
             (* collect all nodes as candidates *)
