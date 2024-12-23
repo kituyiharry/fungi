@@ -112,6 +112,8 @@ module type Graph = sig
     val add:         elt -> adj NodeMap.t -> adj NodeMap.t
     val add_edge:    elt -> elt -> adj NodeMap.t -> adj NodeMap.t
     val add_all:     elt -> elt list -> adj NodeMap.t -> adj NodeMap.t
+    val add_weight:  elt -> elt -> float -> adj NodeMap.t -> adj NodeMap.t
+    val add_weight2: elt -> elt -> float -> adj NodeMap.t -> adj NodeMap.t
     val of_list:     (elt * elt list) list -> adj NodeMap.t -> adj NodeMap.t
     val incomingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
     val outgoingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
@@ -189,6 +191,37 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             Some ((AdjSet.add nodeFrom toIncoming), (toOutgoing), tolabel, wgts))
     ;;
 
+    (*Find the tail of the directed edge*)
+      (*Update with outgoing*)
+        (*Find the head of the directed edge*)
+          (*Update with incoming*)
+    (** Add nodeFrom nodeTo with weight values on from end  *)
+    let add_weight nodeFrom nodeTo weightValue nodeMap =
+        (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing,
+            label, wgts) = x in 
+            let _  = Weights.add wgts nodeTo weightValue in
+            Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label, wgts)) nodeMap)
+        |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing,
+            tolabel, wgts) = x in
+            Some ((AdjSet.add nodeFrom toIncoming), (toOutgoing), tolabel, wgts))
+    ;;
+
+    (*Find the tail of the directed edge*)
+      (*Update with outgoing*)
+        (*Find the head of the directed edge*)
+          (*Update with incoming*)
+    (** Add nodeFrom nodeTo with weight values on both endss  *)
+    let add_weight2 nodeFrom nodeTo weightValue nodeMap =
+        (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing,
+            (label: elt), wgts) = x in 
+            let _  = Weights.add wgts nodeTo weightValue in
+            Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label, wgts)) nodeMap)
+        |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing,
+            tolabel, wgts) = x in
+            let _  = Weights.add wgts nodeFrom weightValue in
+            Some ((AdjSet.add nodeFrom toIncoming), (toOutgoing), tolabel, wgts))
+    ;;
+
     (*let add_weighted nodeFrom nodeTo weightValue nodeMap = *)
         (*(NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label) = x in *)
             (*Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label)) nodeMap)*)
@@ -237,7 +270,9 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         AdjSet.cardinal @@ neighbours node nodeMap
     ;;
 
-    (** Removes a node from the graph *)
+    (** Removes a node from the graph - weights aren't altered and may still be
+    available from an opposite end of the edge depending oon how the graph is
+    structured *)
     let remove delnode nodeMap =
         let (incoming, outgoing, _label, _) = (NodeMap.find delnode nodeMap) in
         NodeMap.remove delnode (AdjSet.fold (fun nodelabel updatemap ->
