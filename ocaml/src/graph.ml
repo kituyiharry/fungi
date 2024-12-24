@@ -9,7 +9,7 @@
 * TODO: use Weak module instead of label-key duplication                      *
 *                                                                             *
 *******************************************************************************)
-open Myset;;
+open Treeset;;
 
 let (let*) = Option.bind
 

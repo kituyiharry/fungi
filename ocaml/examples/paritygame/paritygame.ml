@@ -10,8 +10,8 @@
    For reference please cite this repository if you are using it for your own
    purposes!
 *)
-open Mygraph;;
-open Myset;;
+open Libparity.Graph ;;
+open Libparity.Treeset;;
 
 let precision         = 1     (* Set to precision of the universe if necessary :-) *)
 let entropy           = ref 0
@@ -113,8 +113,6 @@ module ParityGame = struct
     (** [diffplayer player identity bool] Structural difference i.e Odd != Even or Even != Odd *)
     let diffplayer player_a (Label (Priority (_, player_b), _)) = player_a <> player_b
 
-    let playerof (Label (Priority (_, playeri), _)) = playeri
-
     let priorityof (Label ((p, _))) = p
 
     (** [invertplayer identity identity]
@@ -135,6 +133,10 @@ module ParityGame = struct
         @@ AdjSet.to_seq
         @@ AdjSet.filter (fun y -> AdjSet.mem y attractor) (Graph.outgoingof node game)
     ;;
+
+    (** [playerof identity player]
+    Destructure the player from a label and its unique component *)
+    let playerof (Label ((Priority (_, curplayer), _))) = curplayer
 
     (* Checks whether the a play can be added as a strategy for owner into the
      strategy set *)
@@ -178,10 +180,6 @@ module ParityGame = struct
     let resolve player (stratstate: (node * node) StrSet.set) (seq: play Seq.t) =
         Seq.fold_left (fun acc a -> validstrategy player a acc) stratstate seq
     ;;
-
-    (** [playerof identity player]
-    Destructure the player from a label and its unique component *)
-    let playerof (Label ((Priority (_, curplayer), _))) = curplayer
 
     (** [hassafeoutgoing AdjSet.t PGame.t identity]
     Get the checked node outgoing set
