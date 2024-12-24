@@ -13,15 +13,15 @@
 (package
  (name libparity)
  (version 0.1.0)
- (synopsis "A short description of your library")
- (description "A longer description of your library.
-This can span multiple lines and should give users a good idea of what your library does.")
+ (synopsis "A functional graph library")
+ (description "A graph library based on functional adjacency list with some common graph
+algorithms implemented.")
  
  ; License must match your LICENSE file
  (license MIT)
  
  ; Project maintainer(s)
- (maintainers "Your Name <email@example.com>")
+ (maintainers "Harry K <kituyiharry@github.com>")
  
  ; Source code location (typically GitHub)
  ;(source
@@ -38,9 +38,9 @@ This can span multiple lines and should give users a good idea of what your libr
   
   ; Optional dependencies with versions
   base
-  (ppx_jane :with-test)  ; Only needed for running tests
-  (odoc :with-doc)       ; Only needed for documentation generation
-  (mdx :with-test)       ; Only needed if you use mdx for doc tests
+  ;(ppx_jane :with-test)  ; Only needed for running tests
+  ;(odoc :with-doc)       ; Only needed for documentation generation
+  ;(mdx :with-test)       ; Only needed if you use mdx for doc tests
   
   ; Add any other dependencies your library needs
   )
