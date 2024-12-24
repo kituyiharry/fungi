@@ -3,7 +3,7 @@
 *                       Functions to Solve Parity Games                       *
 *                                                                             *
 *******************************************************************************)
-open Paritygame;
+open Game;;
 
 let empty_strategy = (ParityGame.StrSet.empty, ParityGame.StrSet.empty)
 let empty_region   = (ParityGame.AdjSet.empty, ParityGame.AdjSet.empty)

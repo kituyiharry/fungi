@@ -1,0 +1,16 @@
+(lang dune 3.16)
+
+(name paritygame)
+
+(generate_opam_files false)
+
+(source
+ (github username/reponame))
+
+(authors "Harry K")
+
+(maintainers "Harry K")
+
+(license LICENSE)
+
+(documentation https://url/to/documentation)

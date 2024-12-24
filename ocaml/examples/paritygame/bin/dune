@@ -1,0 +1,6 @@
+(executable
+ (name main)
+ (public_name paritygame)
+ (modules main)
+ (libraries paritygame libparity unix)
+ (modes byte exe))

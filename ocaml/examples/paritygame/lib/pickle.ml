@@ -13,8 +13,7 @@
 *                                                                             *
 *                                                                             *
 *******************************************************************************)
-open Paritygame;;
-
+open Game;;
 
 let edges outgoing = 
     ParityGame.AdjSet.elements outgoing

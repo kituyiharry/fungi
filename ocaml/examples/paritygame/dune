@@ -1,5 +1,0 @@
-(executable
- (name main)
- (public_name paritygame)
- (modules pickle utils solve main paritygame )
- (libraries libparity unix))

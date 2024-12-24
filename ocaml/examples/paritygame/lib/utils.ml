@@ -3,8 +3,9 @@
 *            Utilities and Helpers for some repetitive tasks                  *
 *                                                                             *
 *******************************************************************************)
-module Utils = struct
+open Game;;
 
+module Utils = struct
 
     (**
     Poor mans benchmarking
@@ -46,12 +47,12 @@ module Utils = struct
 
     let randnode max_prio idx =  
         if ((Random.int (idx+1)) mod 2) = 0 then
-            (Paritygame.ParityGame.Even, Random.int max_prio)
+            (ParityGame.Even, Random.int max_prio)
         else
-            (Paritygame.ParityGame.Odd, Random.int max_prio)
+            (ParityGame.Odd, Random.int max_prio)
     ;;
 
-    let add_node g (pl, pr) = Paritygame.ParityGame.add pl pr g
+    let add_node g (pl, pr) = ParityGame.add pl pr g
 
     let rec pick bindings total output count maxno = 
         if total <= 2 then
@@ -67,28 +68,28 @@ module Utils = struct
 
     let makerandomgame num_nodes max_prio maxno = 
         let game =
-            Seq.fold_left (add_node) Paritygame.ParityGame.empty
+            Seq.fold_left (add_node) ParityGame.empty
             @@ Seq.init num_nodes (randnode max_prio) 
         in 
-            let bindings = Paritygame.ParityGame.bindings game in
+            let bindings = ParityGame.bindings game in
             let adj_list_desc =
                 List.map (fun x -> (x, pick bindings num_nodes [] 0 maxno)) bindings
             in
-                Paritygame.ParityGame.Graph.of_list adj_list_desc game
+                ParityGame.Graph.of_list adj_list_desc game
     ;;
 
     (* use seeded random *)
     let smakerandomgame seed num_nodes max_prio maxno =
         let _ = Random.init seed in
         let game =
-            Seq.fold_left (add_node) Paritygame.ParityGame.empty
+            Seq.fold_left (add_node) ParityGame.empty
             @@ Seq.init num_nodes (randnode max_prio) 
         in 
-            let bindings = Paritygame.ParityGame.bindings game in
+            let bindings = ParityGame.bindings game in
             let adj_list_desc =
                 List.map (fun x -> (x, pick bindings num_nodes [] 0 maxno)) bindings
             in
-                Paritygame.ParityGame.Graph.of_list adj_list_desc game
+                ParityGame.Graph.of_list adj_list_desc game
     ;;
 
 end
