@@ -230,7 +230,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
       (*Update with outgoing*)
         (*Find the head of the directed edge*)
           (*Update with incoming*)
-    (** Add nodeFrom nodeTo with weight values on both ends  *)
+    (** Add bidirectional nodeFrom nodeTo with weight values on both ends  *)
     let add_weight2 nodeFrom nodeTo weightValue nodeMap =
         (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in 
             let _  = Weights.add wgts nodeTo weightValue in
@@ -394,7 +394,9 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         ;;
 
         (* creates a Map of ints -> ([], Graph.t) where the int is the link value.
-           it computes its neighbours into the list section of the Map value
+           it computes its neighbours into the list section of the Map value. 
+           This makes more idiomatic to the outer graph structure which is also
+           a map but with different values
         *)
         let subgraphs nodeMap sccs =
             SccTbl.fold (fun {link=lowlink;_} elt acc -> 
@@ -402,7 +404,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 let (_, out, _, _) = edges in
                 let keyseq = SccTbl.to_seq_keys sccs in
                 let sccedg = (AdjSet.fold (fun e ac ->
-                    match (keyseq) |> Seq.find (hasnode e) with
+                    match Seq.find (hasnode e) keyseq with
                     | Some v -> if v.link != lowlink then  v.link :: ac else ac
                     | None   -> ac
                 ) out []) in
@@ -717,6 +719,8 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         Djikstra
         Astar
     *)
+        let djikstra graph = 
+        ;;
     end
 
     (* Ford-Fulkerson (flow) *)
