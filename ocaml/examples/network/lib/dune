@@ -1,0 +1,4 @@
+(library
+ (modules utils)
+ (libraries libparity)
+ (name paritygame))

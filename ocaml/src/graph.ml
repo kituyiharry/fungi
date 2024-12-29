@@ -45,7 +45,7 @@ module type ClusterImpl = sig
     type elt
     type adj
     module NodeMap: Map.S    with type key := elt
-    module AdjSet: TSet      with type t   := elt
+    module AdjSet:  TSet     with type t   := elt
 
     val bronkerbosch:  adj NodeMap.t -> elt AdjSet.set list
     val bronkerbosch2: adj NodeMap.t -> elt AdjSet.set list
@@ -54,6 +54,7 @@ end
 module type PathImpl = sig
     type elt
     type adj
+    type path
     module NodeMap: Map.S    with type key := elt
     module AdjSet:  TSet     with type t   := elt
     module NodeHeap:TreeHeap with type elt := elt
@@ -63,7 +64,7 @@ module type SpanImpl = sig
     type elt
     type adj
     module NodeMap: Map.S    with type key := elt
-    module AdjSet: TSet      with type t   := elt
+    module AdjSet:  TSet     with type t   := elt
 end
 
 module type VertexImpl = sig 
@@ -138,8 +139,11 @@ module type Graph = sig
     val degree:      elt -> adj NodeMap.t -> int
     val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
     val cull:        adj NodeMap.t -> adj NodeMap.t
-    val bfs:         (elt * elt AdjSet.set * 'a -> bool * 'a) -> (elt * elt AdjSet.set * 'a -> 'a) -> adj NodeMap.t -> elt -> 'a -> 'a
-    val dfs:         (elt * elt AdjSet.set * 'a -> bool * 'a) -> (elt * elt AdjSet.set * 'a -> 'a) -> adj NodeMap.t -> elt -> 'a -> 'a
+
+    type 'b srchctx = { elt: elt;  vis: elt AdjSet.set; acc: 'b }
+    val bfs:         ('b srchctx -> bool * 'b) -> ('b srchctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
+    val dfs:         ('b srchctx -> bool * 'b) -> ('b srchctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
+
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose:   adj NodeMap.t -> adj NodeMap.t
 end
@@ -303,6 +307,8 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         ) graph
     ;;
 
+    type 'b srchctx = { elt: elt;  vis: elt AdjSet.set; acc: 'b }
+
     (** breadth first search starting from start node applying f until returns
         true or queue is empty applying f on each node and b on backtrack *)
     let bfs f b game start init =
@@ -314,7 +320,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 (vis, acc)
             else
                 let label = Queue.take nxt in
-                let (stop, acc') = f (label, vis, acc) in
+                let (stop, acc') = f {elt=label; vis=vis; acc=acc} in
                 let (vis', acc'') = if stop then
                     (vis, acc')
                 else
@@ -323,7 +329,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     let _   = AdjSet.iter (fun x -> Queue.add x nxt) (diff) in
                     iter (AdjSet.union diff vis) nxt acc'
                 in
-                (vis', b (label, vis', acc''))
+                (vis', b {elt=label; vis=vis'; acc=(acc'');})
         in let (_, acc) = iter visited que init in acc
     ;;
 
@@ -339,7 +345,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 (vis, acc)
             else
                 let label = Stack.pop nxt in
-                let (stop, acc') = f (label, vis, acc) in
+                let (stop, acc') = f {elt=label; vis=vis; acc=acc;} in
                 let (vis', acc'') = (
                     if stop then
                         (vis, acc')
@@ -350,7 +356,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                         let out = outgoingof label game in
                         let _   = AdjSet.iter (fun x -> Stack.push x nxt) (out) in
                         iter (AdjSet.add label vis) nxt acc'
-                ) in (vis', b (label, vis', acc''))
+                ) in (vis', b {elt=label; vis=vis'; acc=acc''})
         in let (_, acc) = iter visited stck init in acc
     ;;
 
@@ -612,8 +618,8 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     let _ = incr count in
                     (* find all reachable nodes *)
                     let vstd = dfs
-                        (fun (_, _, _) -> (false, AdjSet.empty)) 
-                        (fun (_, v, _) -> v) tgraph sccnode.node (AdjSet.empty)
+                        (fun _ -> (false, AdjSet.empty)) 
+                        (fun {vis;_} -> vis) tgraph sccnode.node (AdjSet.empty)
                     in
                     (* popelements into an scc while they are visited *)
                     popwhile (fun e -> AdjSet.mem e.node vstd) scc (!count)
@@ -713,6 +719,11 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     **************************************************************************)
     module Path = struct 
         module NodeHeap = Make_heap (Unique)
+        type path = (elt * float) list
+
+        (*let depth f start graph = *)
+        (*;;*)
+
     (*
         Floyd warshall
         Bellman ford
@@ -723,7 +734,9 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         (*;;*)
     end
 
-    (* Ford-Fulkerson (flow) *)
+    module Flow = struct 
+        (* Ford-Fulkerson (flow) *)
+    end
 
     (*************************************************************************
     *                           Spanning Trees                               *

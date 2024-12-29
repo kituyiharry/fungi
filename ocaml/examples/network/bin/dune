@@ -1,0 +1,6 @@
+(executable
+ (name main)
+ (public_name network)
+ (modules main)
+ (libraries libparity)
+ (modes byte exe))
