@@ -1,8 +1,3 @@
-signature ORDERED_TYPE = sig
-    type t
-    val compare : t * t -> order
-end
-
 signature MAP = sig
     type key
     type 'a map
@@ -15,7 +10,7 @@ signature MAP = sig
     val toList : 'a map -> (key * 'a) list
 end
 
-functor RedBlackMap(Ord: ORDERED_TYPE) : sig include MAP where type key = Ord.t end = struct
+functor RedBlackMap(Ord: OrderedType) : sig include MAP where type key = Ord.t end = struct
     type key = Ord.t
  
     datatype color = RED | BLACK
@@ -57,7 +52,7 @@ functor RedBlackMap(Ord: ORDERED_TYPE) : sig include MAP where type key = Ord.t 
     fun insert (key, value, tree) =
         case insert'(key, value, tree) of
             NODE(RED, item, left, right) => NODE(BLACK, item, left, right)
-          | tree => tree
+          | itree => itree
 
     (* Lookup a value in the map *)
     fun lookup (key, EMPTY) = NONE
