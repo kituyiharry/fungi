@@ -10,12 +10,11 @@
    For reference please cite this repository if you are using it for your own
    purposes!
 *)
-open Libparity.Graph ;;
+open Libparity.Graph  ;;
 open Libparity.Treeset;;
 
-let precision         = 1     (* Set to precision of the universe if necessary :-) *)
 let entropy           = ref 0
-let strictmonotonic x = let () = x := !x+precision in !x;;
+let strictmonotonic x = let () = incr x in !x;;
 
 module ParityGame = struct
 
@@ -301,4 +300,3 @@ module ParityGame = struct
     ;;
 
 end
-

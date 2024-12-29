@@ -16,7 +16,7 @@ let (~~) = Seq.append
 
 (** [zielonka PGame.t PGame.solution]
     Recursive algorithm which produces winning sets of the game
-    https://en.wikipedia.org/wiki/Parity_game#:~:text=color%20is%20even.-,Recursive%20algorithm%20for%20solving%20parity%20games,-%5Bedit%5D
+    https://en.wikipedia.org/wiki/Parity_game (Recursive algorithm)
 *)
 let rec zielonka = fun game ->
     if ParityGame.Nodes.is_empty game then

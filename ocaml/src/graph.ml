@@ -203,8 +203,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
           (*Update with incoming*)
     *)
     let add_edge nodeFrom nodeTo nodeMap =
-        (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing,
-            label, wgts) = x in 
+        (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in 
             Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label, wgts)) nodeMap)
         |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing,
             tolabel, wgts) = x in
@@ -217,8 +216,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
           (*Update with incoming*)
     (** Add nodeFrom nodeTo with weight values on from end  *)
     let add_weight nodeFrom nodeTo weightValue nodeMap =
-        (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing,
-            label, wgts) = x in 
+        (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in 
             let _  = Weights.add wgts nodeTo weightValue in
             Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label, wgts)) nodeMap)
         |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing,
@@ -309,7 +307,8 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         ) graph
     ;;
 
-    (** breadth first search starting from start node applying f until returns true*)
+    (** breadth first search starting from start node applying f until returns
+        true or queue is empty applying f on each node and b on backtrack *)
     let bfs f b game start init =
         let que     = Queue.create () in
         let _       = Queue.add start que in
@@ -332,7 +331,9 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         in let (_, acc) = iter visited que init in acc
     ;;
 
-    (** depth first search starting from start node applying f until returns true*)
+    (** depth first search starting from start node applying f until returns
+        true applying f until returns
+        true or stack is empty applying f on each node and b on backtrack *)
     let dfs f b game start init =
         let stck    = Stack.create () in
         let _       = Stack.push start stck in
@@ -480,7 +481,8 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             match tarj.stck with
             | sccel :: rest ->
                 let tarj' = {
-                    tarj with stck = rest;
+                    tarj with 
+                    stck = rest;
                     onst = AdjSet.remove (sccel.node) tarj.onst;
                 } in
                     let x = { sccel with link=id } in
@@ -719,8 +721,8 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         Djikstra
         Astar
     *)
-        let djikstra graph = 
-        ;;
+        (*let djikstra _graph = ()*)
+        (*;;*)
     end
 
     (* Ford-Fulkerson (flow) *)
