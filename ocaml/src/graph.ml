@@ -1,15 +1,10 @@
 (******************************************************************************
+*                                                                             *
 *     Simplest Functional Directed Graph Implementation (Adjacency list)      *
-*                                                                             *
-* https://www.lri.fr/~filliatr/ftp/publis/ocamlgraph-tfp-8.pdf                *
-* https://bryangarza.github.io/blog/basic-graph-traversal-in-ocaml            *
-* https://gist.github.com/theawesomestllama/7d1c0961a2c4446ef40b              *
-* https://github.com/backtracking/ocamlgraph                                  *
-*                                                                             *
-* TODO: use Weak module instead of label-key duplication                      *
 *                                                                             *
 *******************************************************************************)
 open Treeset;;
+open Heap;;
 
 let (let*) = Option.bind
 
@@ -61,6 +56,7 @@ module type PathImpl = sig
     type adj
     module NodeMap: Map.S    with type key := elt
     module AdjSet:  TSet     with type t   := elt
+    module NodeHeap:TreeHeap with type elt := elt
 end
 
 module type SpanImpl = sig 
@@ -575,7 +571,8 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         (* Kosaraju visits all nodes until the first nodes with all edges going
            back into the discovered or has none and builds a stack. After that 
            we transpose the graph and pop from the stack, seeing which elements
-           in the stack are still reachable on pop *)
+           in the stack are still reachable on pop 
+           time values are not really as relevant for this algorithm *)
         let kosaraju graph =
             let count  = ref 0 in
             let rec iter node (_, out, _, _) scc =
@@ -620,7 +617,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     in
                     (* popelements into an scc while they are visited *)
                     popwhile (fun e -> AdjSet.mem e.node vstd) scc (!count)
-            in List.fold_left iter2 {fscc with onst = AdjSet.empty} (fscc.stck)
+            in List.fold_left iter2 {fscc with onst = AdjSet.empty} fscc.stck
         ;;
 
     end
@@ -715,6 +712,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     *                             Path Algos                                 *
     **************************************************************************)
     module Path = struct 
+        module NodeHeap = Make_heap (Unique)
     (*
         Floyd warshall
         Bellman ford

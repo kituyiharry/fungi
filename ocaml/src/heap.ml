@@ -1,4 +1,19 @@
-module Make_heap(Cmp : Set.OrderedType) = struct
+module type TreeHeap = sig 
+    type t
+    type elt
+
+    val rank:        t -> int
+    val is_empty:    t -> bool
+    val insert:      t -> elt -> t
+    val peek_top:    t -> elt
+    val extract_top: t -> (elt * t)
+    val of_list:     elt list -> t
+    val to_list:     t -> elt list
+    val size:        t -> int
+    val verify:      t -> bool
+end
+
+module Make_heap(Cmp : Set.OrderedType): TreeHeap with type elt := Cmp.t = struct
 
     type elt = Cmp.t
 
@@ -86,6 +101,7 @@ module Make_heap(Cmp : Set.OrderedType) = struct
                 insert heap x
         in
         build (List.rev sorted)
+    ;;
 
     let to_list t =
         let rec aux acc = function
@@ -95,6 +111,7 @@ module Make_heap(Cmp : Set.OrderedType) = struct
                 aux (min :: acc) rest
         in
         List.rev (aux [] t)
+    ;;
 
     let size t =
         let rec aux = function
@@ -102,8 +119,7 @@ module Make_heap(Cmp : Set.OrderedType) = struct
             | Node {left; right; _} -> 1 + aux left + aux right
         in
         aux t
-
-    let merge = merge
+    ;;
 
     (* Helper to verify heap property - useful for testing *)
     let rec verify = function
@@ -116,4 +132,6 @@ module Make_heap(Cmp : Set.OrderedType) = struct
             in
             check_subtree left && check_subtree right &&
             verify left && verify right
+    ;;
+
 end

@@ -1,0 +1,4 @@
+- https://www.lri.fr/~filliatr/ftp/publis/ocamlgraph-tfp-8.pdf     
+- https://bryangarza.github.io/blog/basic-graph-traversal-in-ocaml 
+- https://gist.github.com/theawesomestllama/7d1c0961a2c4446ef40b   
+- https://github.com/backtracking/ocamlgraph                       
