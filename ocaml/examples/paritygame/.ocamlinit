@@ -234,6 +234,32 @@ let c_adjlist =
 
 let c = ParityGame.Graph.of_list c_adjlist c;;
 
+(* dag *)
+let d = ParityGame.empty;;
+
+let (d_0, d)  = ParityGame.add_node  ParityGame.Odd  0  d;;
+let (d_1, d)  = ParityGame.add_node  ParityGame.Odd  1  d;;
+let (d_2, d)  = ParityGame.add_node  ParityGame.Even 2  d;;
+let (d_3, d)  = ParityGame.add_node  ParityGame.Odd  3  d;;
+let (d_4, d)  = ParityGame.add_node  ParityGame.Even 4  d;;
+let (d_5, d)  = ParityGame.add_node  ParityGame.Odd  5  d;;
+let (d_6, d)  = ParityGame.add_node  ParityGame.Even 6  d;;
+let (d_7, d)  = ParityGame.add_node  ParityGame.Even 7  d;;
+
+let d_adjlist =
+    [
+        (d_0,  [d_6]);
+        (d_1,  [d_6;d_2;d_4]);
+        (d_2,  []);
+        (d_3,  [d_4;d_0]);
+        (d_4,  []);
+        (d_5,  [d_1;]);
+        (d_6,  []);
+        (d_7,  [d_0; d_1]);
+    ]
+
+let d = ParityGame.Graph.of_list d_adjlist d;;
+
 (* Convenience functions for printing in the REPl *)
 (** [asplayerprio ParityGame.t (node * priority)]
 helper to show parity game as a graph without the random generated ids *)

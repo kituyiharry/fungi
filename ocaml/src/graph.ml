@@ -44,6 +44,7 @@ end
 module type ClusterImpl = sig 
     type elt
     type adj
+
     module NodeMap: Map.S    with type key := elt
     module AdjSet:  TSet     with type t   := elt
 
@@ -56,17 +57,20 @@ module type PathImpl = sig
     type adj
     type 'b ctx
     type path := (elt * elt * float) list
+
     module NodeMap: Map.S    with type key := elt
     module AdjSet:  TSet     with type t   := elt
     module NodeHeap:TreeHeap with type elt := elt
 
     val walkdepthuntil:   (path ctx -> bool) -> elt -> adj NodeMap.t -> path
     val walkbreadthuntil: (path ctx -> bool) -> elt -> adj NodeMap.t -> path
+    val djikstra:         elt -> elt -> adj NodeMap.t -> path
 end
 
 module type SpanImpl = sig 
     type elt
     type adj
+
     module NodeMap: Map.S    with type key := elt
     module AdjSet:  TSet     with type t   := elt
 end
@@ -152,6 +156,7 @@ module type Graph = sig
     val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
     val cull:        adj NodeMap.t -> adj NodeMap.t
 
+    val toposort:    ('a * elt AdjSet.set * 'b * 'c) NodeMap.t -> elt list
     val bfs:         ('b srchctx -> bool * 'b) -> ('b srchctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
     val dfs:         ('b srchctx -> bool * 'b) -> ('b srchctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
 
@@ -412,6 +417,22 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         NodeMap.map (fun (inc, out, label, wgts) -> (out, inc, label, wgts)) nodeMap
     ;;
 
+    (** toposort *)
+    let toposort nodeMap =
+        snd @@ NodeMap.fold (fun x _y (v, a) -> 
+            if AdjSet.mem x v then
+                (v, a)
+            else
+                dfs (fun s -> (false, s.acc)) (fun s -> 
+                    if AdjSet.mem s.elt (fst s.acc) then
+                        s.acc
+                    else
+                        let ov, os = s.acc in
+                        (AdjSet.add s.elt ov, s.elt :: os)
+                ) nodeMap x (v, a) 
+        ) nodeMap (AdjSet.empty, [])
+    ;;
+
     (*************************************************************************
     *                    Strongly connected Components                       *
     *                  Every vertex is reachable in a SCC                    *
@@ -526,12 +547,12 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     stck = rest;
                     onst = AdjSet.remove (sccel.node) tarj.onst;
                 } in
-                    let x = { sccel with link=id } in
-                    let _ = SccTbl.add tarj'.sccs x x.node in
-                    if pred sccel then
-                        tarj'
-                    else
-                        popscc pred tarj' id
+                let x = { sccel with link=id } in
+                let _ = SccTbl.add tarj'.sccs x x.node in
+                if pred sccel then
+                    tarj'
+                else
+                    popscc pred tarj' id
             | [] ->
                 tarj
         ;;
@@ -656,7 +677,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                 else
                     let _ = incr count in
                     (* find all reachable nodes *)
-                    let vstd = dfs
+                    let vstd = bfs
                         (fun _ -> (false, AdjSet.empty)) 
                         (fun {vis;_} -> vis) tgraph sccnode.node (AdjSet.empty)
                     in
@@ -785,14 +806,16 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
             )) (fun s -> s.acc) graph start []
         ;;
 
-    (*
+        let djikstra _start _target _graph = 
+            []
+        ;;
+
+        (*
         Floyd warshall
         Bellman ford
         Djikstra
         Astar
     *)
-        (*let djikstra _graph = ()*)
-        (*;;*)
     end
 
     module Flow = struct 
@@ -803,7 +826,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     *                           Spanning Trees                               *
     **************************************************************************)
     module Span = struct
-    (**
+        (**
       kruskal  
     *)
     end
