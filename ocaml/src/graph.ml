@@ -115,6 +115,12 @@ module type Graph = sig
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
 
+    module Span: SpanImpl with
+        type       elt     := elt
+        and type   adj     := adj
+        and module NodeMap := NodeMap
+        and module AdjSet  := AdjSet
+
     module Path: PathImpl with
         type       elt     := elt
         and type   adj     := adj
@@ -122,11 +128,7 @@ module type Graph = sig
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
 
-    module Span: SpanImpl with
-        type       elt     := elt
-        and type   adj     := adj
-        and module NodeMap := NodeMap
-        and module AdjSet  := AdjSet
+    (*TODO: sparse graphs: module Sparse*)
 
     val empty:       adj NodeMap.t
     val equal:       elt -> elt -> bool
