@@ -54,10 +54,14 @@ end
 module type PathImpl = sig
     type elt
     type adj
-    type path
+    type 'b ctx
+    type path := (elt * elt * float) list
     module NodeMap: Map.S    with type key := elt
     module AdjSet:  TSet     with type t   := elt
     module NodeHeap:TreeHeap with type elt := elt
+
+    val walkdepthuntil:   (path ctx -> bool) -> elt -> adj NodeMap.t -> path
+    val walkbreadthuntil: (path ctx -> bool) -> elt -> adj NodeMap.t -> path
 end
 
 module type SpanImpl = sig 
@@ -77,7 +81,7 @@ module type VertexImpl = sig
 
     val empty     : elt -> adj
     val weights   : elt -> adj NodeMap.t -> weights
-    val edge      : elt -> adj NodeMap.t -> float
+    val edge      : elt -> elt -> adj NodeMap.t -> float
 end
 
 module type Graph = sig
@@ -88,6 +92,7 @@ module type Graph = sig
     module AdjSet:  TSet      with type t   := elt
     module Weights: Hashtbl.S with type key := elt
 
+    type 'b srchctx = { prev: elt option; elt: elt;  vis: elt AdjSet.set; acc: 'b }
     type adj := (elt AdjSet.set * elt AdjSet.set * elt * float Weights.t)
 
     module NodeMap: Map.S     with type key := elt
@@ -113,6 +118,7 @@ module type Graph = sig
     module Path: PathImpl with
         type       elt     := elt
         and type   adj     := adj
+        and type   'b ctx  := 'b srchctx
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
 
@@ -127,9 +133,13 @@ module type Graph = sig
     val add:         elt -> adj NodeMap.t -> adj NodeMap.t
     val add_edge:    elt -> elt -> adj NodeMap.t -> adj NodeMap.t
     val add_all:     elt -> elt list -> adj NodeMap.t -> adj NodeMap.t
+    val allweighted: elt -> (elt * float) list -> adj NodeMap.t -> adj NodeMap.t
+    val allweighted2:elt -> (elt * float) list -> adj NodeMap.t -> adj NodeMap.t
     val add_weight:  elt -> elt -> float -> adj NodeMap.t -> adj NodeMap.t
     val add_weight2: elt -> elt -> float -> adj NodeMap.t -> adj NodeMap.t
     val of_list:     (elt * elt list) list -> adj NodeMap.t -> adj NodeMap.t
+    val of_weights:  (elt * (elt * float) list) list -> adj NodeMap.t -> adj NodeMap.t
+    val of_weights2: (elt * (elt * float) list) list -> adj NodeMap.t -> adj NodeMap.t
     val incomingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
     val outgoingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
     val neighbours:  elt -> adj NodeMap.t -> elt AdjSet.set 
@@ -140,7 +150,6 @@ module type Graph = sig
     val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
     val cull:        adj NodeMap.t -> adj NodeMap.t
 
-    type 'b srchctx = { elt: elt;  vis: elt AdjSet.set; acc: 'b }
     val bfs:         ('b srchctx -> bool * 'b) -> ('b srchctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
     val dfs:         ('b srchctx -> bool * 'b) -> ('b srchctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
 
@@ -178,7 +187,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         let compare     = fun (_, _, lnode, _) (_, _, rnode, _) -> Unique.compare lnode rnode
         let empty lbl   = (AdjSet.empty, AdjSet.empty, lbl, Weights.create 1)
         let weights n g = let (_, _, _, w) = NodeMap.find n g in w
-        let edge  lbl g = Weights.find (weights lbl g) lbl
+        let edge  f t g = Weights.find (weights f g) t
     end
 
     (** Adjacency list graph definition **)
@@ -243,12 +252,40 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         | nodeTo :: rest -> add_edge nodeFrom nodeTo (add_all nodeFrom rest nodeMap)
     ;;
 
+    let rec allweighted nodeFrom nodeToList nodeMap = match nodeToList with
+        | [] -> nodeMap
+        | (nodeTo, nodeVal) :: rest -> add_weight nodeFrom nodeTo nodeVal
+            (allweighted nodeFrom rest nodeMap)
+    ;;
+
+    let rec allweighted2 nodeFrom nodeToList nodeMap = match nodeToList with
+        | [] -> nodeMap
+        | (nodeTo, nodeVal) :: rest -> add_weight2 nodeFrom nodeTo nodeVal
+            (allweighted2 nodeFrom rest nodeMap)
+    ;;
+
     (** Creates a graph given a node and outgoing edge, incoming edges will be
        resolved naturally. All nodes should already be available in the map  *)
     let rec of_list adjList nodeMap = match adjList with
         | [] -> nodeMap
         | (nodeFrom, nodeJoinList) :: rest ->
             add_all nodeFrom nodeJoinList (of_list rest nodeMap)
+    ;;
+
+    (** Creates a graph given a node and outgoing edge, incoming edges will be
+       resolved naturally. All nodes should already be available in the map  *)
+    let rec of_weights adjList nodeMap = match adjList with
+        | [] -> nodeMap
+        | (nodeFrom, nodeJoinList) :: rest ->
+            allweighted nodeFrom nodeJoinList (of_weights rest nodeMap)
+    ;;
+
+    (** Creates a graph given a node and outgoing edge, incoming edges will be
+       resolved naturally. All nodes should already be available in the map  *)
+    let rec of_weights2 adjList nodeMap = match adjList with
+        | [] -> nodeMap
+        | (nodeFrom, nodeJoinList) :: rest ->
+            allweighted2 nodeFrom nodeJoinList (of_weights2 rest nodeMap)
     ;;
 
     (** [ incomingof identity (Graph.t) AdjSet.t]
@@ -307,29 +344,29 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         ) graph
     ;;
 
-    type 'b srchctx = { elt: elt;  vis: elt AdjSet.set; acc: 'b }
+    type 'b srchctx = { prev: elt option; elt: elt;  vis: elt AdjSet.set; acc: 'b }
 
     (** breadth first search starting from start node applying f until returns
         true or queue is empty applying f on each node and b on backtrack *)
     let bfs f b game start init =
         let que     = Queue.create () in
-        let _       = Queue.add start que in
+        let _       = Queue.add (None, start) que in
         let visited = AdjSet.empty in
         let rec iter vis nxt acc =
             if Queue.is_empty nxt then
                 (vis, acc)
             else
-                let label = Queue.take nxt in
-                let (stop, acc') = f {elt=label; vis=vis; acc=acc} in
+                let (prev, label) = Queue.take nxt in
+                let (stop, acc') = f {prev=prev;elt=label; vis=vis; acc=acc} in
                 let (vis', acc'') = if stop then
                     (vis, acc')
                 else
                     let out =  outgoingof label game in
                     let diff = AdjSet.diff out vis in
-                    let _   = AdjSet.iter (fun x -> Queue.add x nxt) (diff) in
+                    let _   = AdjSet.iter (fun x -> Queue.add (Some label, x) nxt) (diff) in
                     iter (AdjSet.union diff vis) nxt acc'
                 in
-                (vis', b {elt=label; vis=vis'; acc=(acc'');})
+                (vis', b {prev=prev;elt=label; vis=vis'; acc=(acc'');})
         in let (_, acc) = iter visited que init in acc
     ;;
 
@@ -338,14 +375,14 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         true or stack is empty applying f on each node and b on backtrack *)
     let dfs f b game start init =
         let stck    = Stack.create () in
-        let _       = Stack.push start stck in
+        let _       = Stack.push (None, start) stck in
         let visited = AdjSet.empty in
         let rec iter vis nxt acc =
             if Stack.is_empty stck then
                 (vis, acc)
             else
-                let label = Stack.pop nxt in
-                let (stop, acc') = f {elt=label; vis=vis; acc=acc;} in
+                let (prev, label) = Stack.pop nxt in
+                let (stop, acc') = f {prev=prev;elt=label; vis=vis; acc=acc;} in
                 let (vis', acc'') = (
                     if stop then
                         (vis, acc')
@@ -354,9 +391,9 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                         iter (vis) nxt acc'
                     else
                         let out = outgoingof label game in
-                        let _   = AdjSet.iter (fun x -> Stack.push x nxt) (out) in
+                        let _   = AdjSet.iter (fun x -> Stack.push (Some label, x) nxt) (out) in
                         iter (AdjSet.add label vis) nxt acc'
-                ) in (vis', b {elt=label; vis=vis'; acc=acc''})
+                ) in (vis', b {prev=prev; elt=label; vis=vis'; acc=acc''})
         in let (_, acc) = iter visited stck init in acc
     ;;
 
@@ -719,10 +756,32 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     **************************************************************************)
     module Path = struct 
         module NodeHeap = Make_heap (Unique)
-        type path = (elt * float) list
 
-        (*let depth f start graph = *)
-        (*;;*)
+        (* All pairs depth first walk until (f ctx -> bool) is true or all nodes
+           are exhausted. Requires the node edges to be weighted  Uses simple
+           dfs to append edges and their corresponding weights to a list*)
+        let walkdepthuntil f start graph = 
+            List.rev @@ dfs (fun s -> (
+                match s.prev with
+                | Some prev ->
+                    (f s), ((prev, s.elt, (Vertex.edge prev s.elt graph)) :: s.acc)
+                | None ->
+                    (f s), ((s.elt, s.elt, (0.)) :: s.acc)
+            )) (fun s -> s.acc) graph start []
+        ;;
+
+        (* All pairs breadth first walk until (f ctx -> bool) is true or all nodes
+           are exhausted. Requires the node edges to be weighted. Uses simple
+           bfs to append edges and their corresponding weights to a list *)
+        let walkbreadthuntil f start graph = 
+            List.rev @@ bfs (fun s -> (
+                match s.prev with
+                | Some prev ->
+                    (f s), ((prev, s.elt, (Vertex.edge prev s.elt graph)) :: s.acc)
+                | None -> 
+                    (f s), ((s.elt, s.elt, (0.)) :: s.acc)
+            )) (fun s -> s.acc) graph start []
+        ;;
 
     (*
         Floyd warshall
