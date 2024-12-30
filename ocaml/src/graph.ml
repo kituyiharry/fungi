@@ -132,8 +132,6 @@ module type Graph = sig
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
 
-    (*TODO: sparse graphs: module Sparse*)
-
     val empty:       adj NodeMap.t
     val equal:       elt -> elt -> bool
     val add:         elt -> adj NodeMap.t -> adj NodeMap.t
@@ -148,18 +146,16 @@ module type Graph = sig
     val of_weights2: (elt * (elt * float) list) list -> adj NodeMap.t -> adj NodeMap.t
     val incomingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
     val outgoingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
-    val neighbours:  elt -> adj NodeMap.t -> elt AdjSet.set 
-    val xorneighbors:elt -> adj NodeMap.t -> elt AdjSet.set 
-    val mutuals:     elt -> adj NodeMap.t -> elt AdjSet.set 
-    val xormutuals:  elt -> adj NodeMap.t -> elt AdjSet.set 
+    val neighbours:  elt -> adj NodeMap.t -> elt AdjSet.set
+    val xorneighbors:elt -> adj NodeMap.t -> elt AdjSet.set
+    val mutuals:     elt -> adj NodeMap.t -> elt AdjSet.set
+    val xormutuals:  elt -> adj NodeMap.t -> elt AdjSet.set
     val degree:      elt -> adj NodeMap.t -> int
     val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
     val cull:        adj NodeMap.t -> adj NodeMap.t
-
-    val toposort:    ('a * elt AdjSet.set * 'b * 'c) NodeMap.t -> elt list
+    val toposort:    adj NodeMap.t -> elt list
     val bfs:         ('b srchctx -> bool * 'b) -> ('b srchctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
     val dfs:         ('b srchctx -> bool * 'b) -> ('b srchctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
-
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose:   adj NodeMap.t -> adj NodeMap.t
 end

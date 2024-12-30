@@ -11,6 +11,7 @@ module type TreeHeap = sig
     val to_list:     t -> elt list
     val size:        t -> int
     val verify:      t -> bool
+    val decrease_key:t -> elt -> elt -> t
 end
 
 module Make_heap(Cmp : Set.OrderedType): TreeHeap with type elt := Cmp.t = struct
@@ -132,6 +133,52 @@ module Make_heap(Cmp : Set.OrderedType): TreeHeap with type elt := Cmp.t = struc
             in
             check_subtree left && check_subtree right &&
             verify left && verify right
+    ;;
+
+    (* Path to target element + remaining path to rebuild *)
+    type path = 
+        | Top
+        | Left of Cmp.t * t * path
+        | Right of Cmp.t * t * path
+    ;;
+
+    (* Find element and build path *)
+    let rec find_path target = function
+        | Empty -> None
+        | Node {value; left; right; _} as n ->
+            if Cmp.compare value target = 0 then Some (n, Top)
+            else 
+                match find_path target left with
+                | Some (n, p) -> Some (n, Left (value, right, p))
+                | None -> 
+                    match find_path target right with
+                    | Some (n, p) -> Some (n, Right (value, left, p))
+                    | None -> None
+    ;;
+
+    (* Rebuild heap along path with new value *)
+    let rec rebuild_path new_value = function
+        | Top -> make_node new_value Empty Empty
+        | Left (v, r, p) -> 
+            let subtree = rebuild_path new_value p in
+            if Cmp.compare v new_value <= 0 
+            then make_node v subtree r
+            else make_node new_value subtree r
+        | Right (v, l, p) ->
+            let subtree = rebuild_path new_value p in
+            if Cmp.compare v new_value <= 0
+            then make_node v l subtree
+            else make_node new_value l subtree
+    ;;
+
+    (* Main decrease_key function *)
+    let decrease_key heap target new_value =
+        if Cmp.compare new_value target > 0 then
+            invalid_arg "New value must be smaller than target"
+        else
+            match find_path target heap with
+            | None -> invalid_arg "Target value not found"
+            | Some (_, path) -> rebuild_path new_value path
     ;;
 
 end
