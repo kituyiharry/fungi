@@ -2,4 +2,4 @@
   (name libparity)
   (public_name libparity)
   (modules treeset graph heap)
-  (libraries base))
+  (libraries))

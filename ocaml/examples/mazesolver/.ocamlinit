@@ -1,6 +1,10 @@
 open Libparity;;
 
-module SGraph = Graph.MakeGraph(String);;
+module SGraph = Graph.MakeGraph(struct 
+    type t     = string
+    type edge  = float
+    let compare=  String.compare
+end);;
 
 let s = SGraph.empty;;
 

@@ -2,6 +2,7 @@ module type TreeHeap = sig
     type t
     type elt
 
+    val empty:       t
     val rank:        t -> int
     val is_empty:    t -> bool
     val insert:      t -> elt -> t

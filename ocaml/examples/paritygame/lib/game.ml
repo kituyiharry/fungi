@@ -48,6 +48,7 @@ module ParityGame = struct
 
     module GraphNode = struct
         type t      = node       (* The type to uniquely identify a node *)
+        type edge   = unit
         let compare = cmprands
     end
 

@@ -55,15 +55,16 @@ end
 module type PathImpl = sig
     type elt
     type adj
+    type edge
     type 'b ctx
-    type path := (elt * elt * float) list
+    type path := (elt * elt * edge option) list
 
     module NodeMap: Map.S    with type key := elt
     module AdjSet:  TSet     with type t   := elt
     module NodeHeap:TreeHeap with type elt := elt
 
-    val walkdepthuntil:   (path ctx -> bool) -> elt -> adj NodeMap.t -> path
-    val walkbreadthuntil: (path ctx -> bool) -> elt -> adj NodeMap.t -> path
+    val walkdepthuntil:   adj NodeMap.t -> (path ctx -> bool) -> elt -> path
+    val walkbreadthuntil: adj NodeMap.t -> (path ctx -> bool) -> elt -> path
     val djikstra:         elt -> elt -> adj NodeMap.t -> path
 end
 
@@ -78,6 +79,7 @@ end
 module type VertexImpl = sig 
     type elt
     type adj
+    type edge
     type weights
 
     include Set.OrderedType  with type t   := adj
@@ -85,26 +87,33 @@ module type VertexImpl = sig
 
     val empty     : elt -> adj
     val weights   : elt -> adj NodeMap.t -> weights
-    val edge      : elt -> elt -> adj NodeMap.t -> float
+    val edge      : elt -> elt -> adj NodeMap.t -> edge option
+end
+
+module type GraphElt = sig 
+    type edge
+    include Set.OrderedType
 end
 
 module type Graph = sig
 
     type +'a t
     type elt
+    type edge
 
     module AdjSet:  TSet      with type t   := elt
     module Weights: Hashtbl.S with type key := elt
 
-    type 'b srchctx = { prev: elt option; elt: elt;  vis: elt AdjSet.set; acc: 'b }
-    type adj := (elt AdjSet.set * elt AdjSet.set * elt * float Weights.t)
+    type 'b ctx = { prev: elt option; elt: elt; vis: elt AdjSet.set; acc: 'b }
+    type adj    = (elt AdjSet.set * elt AdjSet.set * elt * edge Weights.t)
 
     module NodeMap: Map.S     with type key := elt
 
     module Vertex: VertexImpl with 
         type       elt     := elt
         and type   adj     := adj
-        and type   weights := float Weights.t
+        and type   weights := edge Weights.t
+        and type   edge    := edge
         and module NodeMap := NodeMap
 
     module Scc: SccImpl with
@@ -128,7 +137,8 @@ module type Graph = sig
     module Path: PathImpl with
         type       elt     := elt
         and type   adj     := adj
-        and type   'b ctx  := 'b srchctx
+        and type   edge    := edge
+        and type   'b ctx  := 'b ctx
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
 
@@ -137,13 +147,13 @@ module type Graph = sig
     val add:         elt -> adj NodeMap.t -> adj NodeMap.t
     val add_edge:    elt -> elt -> adj NodeMap.t -> adj NodeMap.t
     val add_all:     elt -> elt list -> adj NodeMap.t -> adj NodeMap.t
-    val allweighted: elt -> (elt * float) list -> adj NodeMap.t -> adj NodeMap.t
-    val allweighted2:elt -> (elt * float) list -> adj NodeMap.t -> adj NodeMap.t
-    val add_weight:  elt -> elt -> float -> adj NodeMap.t -> adj NodeMap.t
-    val add_weight2: elt -> elt -> float -> adj NodeMap.t -> adj NodeMap.t
+    val allweighted: elt -> (elt * edge) list -> adj NodeMap.t -> adj NodeMap.t
+    val allweighted2:elt -> (elt * edge) list -> adj NodeMap.t -> adj NodeMap.t
+    val add_weight:  elt -> elt -> edge -> adj NodeMap.t -> adj NodeMap.t
+    val add_weight2: elt -> elt -> edge -> adj NodeMap.t -> adj NodeMap.t
     val of_list:     (elt * elt list) list -> adj NodeMap.t -> adj NodeMap.t
-    val of_weights:  (elt * (elt * float) list) list -> adj NodeMap.t -> adj NodeMap.t
-    val of_weights2: (elt * (elt * float) list) list -> adj NodeMap.t -> adj NodeMap.t
+    val of_weights:  (elt * (elt * edge) list) list -> adj NodeMap.t -> adj NodeMap.t
+    val of_weights2: (elt * (elt * edge) list) list -> adj NodeMap.t -> adj NodeMap.t
     val incomingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
     val outgoingof:  elt -> adj NodeMap.t -> (elt AdjSet.set)
     val neighbours:  elt -> adj NodeMap.t -> elt AdjSet.set
@@ -154,15 +164,16 @@ module type Graph = sig
     val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
     val cull:        adj NodeMap.t -> adj NodeMap.t
     val toposort:    adj NodeMap.t -> elt list
-    val bfs:         ('b srchctx -> bool * 'b) -> ('b srchctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
-    val dfs:         ('b srchctx -> bool * 'b) -> ('b srchctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
+    val bfs:         ('b ctx -> bool * 'b) -> ('b ctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
+    val dfs:         ('b ctx -> bool * 'b) -> ('b ctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose:   adj NodeMap.t -> adj NodeMap.t
 end
 
-module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = struct
+module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edge := Unique.edge = struct
 
     type elt = Unique.t
+    type edge= Unique.edge
 
     (** compare 2 nodes in the graph *)
     let equal lnode rnode = (Unique.compare lnode rnode) = 0
@@ -171,15 +182,15 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         the weight, on undirected graphs it may be duplicated on both nodes
         vertex values as a to in one and a from in another *)
     module WeightNode = struct
-        type t      = elt 
-        let equal   = fun (left) (right) -> (equal left right)
-        let hash    = fun x -> (Obj.magic x)
+        type t      = elt
+        let  equal  = (equal)
+        let  hash   = (Obj.magic)
     end
     module Weights = Hashtbl.Make (WeightNode)
 
     (** Module for manipulating the Set structure holding the Adjacency list *)
     module AdjSet  = TreeSet(Unique)
-    type   adj     = (elt AdjSet.set * elt AdjSet.set * elt * float Weights.t)
+    type   adj     = (elt AdjSet.set * elt AdjSet.set * elt * edge Weights.t)
 
     (** Module for manipulating the Map (Node -> (set , set , label)) *)
     module NodeMap = Map.Make(Unique)
@@ -188,9 +199,9 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     module Vertex  = struct 
         type t          = adj
         let compare     = fun (_, _, lnode, _) (_, _, rnode, _) -> Unique.compare lnode rnode
-        let empty lbl   = (AdjSet.empty, AdjSet.empty, lbl, Weights.create 1)
+        let empty   lbl = (AdjSet.empty, AdjSet.empty, lbl, Weights.create 1)
         let weights n g = let (_, _, _, w) = NodeMap.find n g in w
-        let edge  f t g = Weights.find (weights f g) t
+        let edge  f t g = Weights.find_opt (weights f g) t
     end
 
     (** Adjacency list graph definition **)
@@ -305,6 +316,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
     (** both incoming and outgoing edges of a graph - self edges NOT included *)
     let xorneighbors node game = let (inc, out, _, _) = NodeMap.find node game in 
         AdjSet.remove node (AdjSet.union inc out)
+    ;;
 
     (** items in both incoming and outgoing edges of a graph - self edges included *)
     let mutuals node game = let (inc, out, _, _) = NodeMap.find node game in
@@ -347,7 +359,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         ) graph
     ;;
 
-    type 'b srchctx = { prev: elt option; elt: elt;  vis: elt AdjSet.set; acc: 'b }
+    type 'b ctx = { prev: elt option; elt: elt; vis: elt AdjSet.set; acc: 'b }
 
     (** breadth first search starting from start node applying f until returns
         true or queue is empty applying f on each node and b on backtrack *)
@@ -365,7 +377,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     (vis, acc')
                 else
                     let out =  outgoingof label game in
-                    let diff = AdjSet.diff out vis in
+                    let diff= AdjSet.diff out vis in
                     let _   = AdjSet.iter (fun x -> Queue.add (Some label, x) nxt) (diff) in
                     iter (AdjSet.union diff vis) nxt acc'
                 in
@@ -423,8 +435,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
                     if AdjSet.mem s.elt (fst s.acc) then
                         s.acc
                     else
-                        let ov, os = s.acc in
-                        (AdjSet.add s.elt ov, s.elt :: os)
+                        (AdjSet.add s.elt (fst s.acc), s.elt :: (snd s.acc))
                 ) nodeMap x (v, a) 
         ) nodeMap (AdjSet.empty, [])
     ;;
@@ -455,7 +466,7 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         (* creates a Map of ints -> ([], Graph.t) where the int is the link value.
            it computes its neighbours into the list section of the Map value. 
            This makes more idiomatic to the outer graph structure which is also
-           a map but with different values
+           a map albeit with different values
         *)
         let subgraphs nodeMap sccs =
             SccTbl.fold (fun {link=lowlink;_} elt acc -> 
@@ -779,30 +790,31 @@ module MakeGraph(Unique: Set.OrderedType): Graph with type elt := Unique.t = str
         (* All pairs depth first walk until (f ctx -> bool) is true or all nodes
            are exhausted. Requires the node edges to be weighted  Uses simple
            dfs to append edges and their corresponding weights to a list*)
-        let walkdepthuntil f start graph = 
+        let walkdepthuntil graph f start = 
             List.rev @@ dfs (fun s -> (
                 match s.prev with
                 | Some prev ->
                     (f s), ((prev, s.elt, (Vertex.edge prev s.elt graph)) :: s.acc)
                 | None ->
-                    (f s), ((s.elt, s.elt, (0.)) :: s.acc)
+                    (f s), ((s.elt, s.elt, None) :: s.acc)
             )) (fun s -> s.acc) graph start []
         ;;
 
         (* All pairs breadth first walk until (f ctx -> bool) is true or all nodes
            are exhausted. Requires the node edges to be weighted. Uses simple
            bfs to append edges and their corresponding weights to a list *)
-        let walkbreadthuntil f start graph = 
+        let walkbreadthuntil graph f start = 
             List.rev @@ bfs (fun s -> (
                 match s.prev with
                 | Some prev ->
                     (f s), ((prev, s.elt, (Vertex.edge prev s.elt graph)) :: s.acc)
                 | None -> 
-                    (f s), ((s.elt, s.elt, (0.)) :: s.acc)
+                    (f s), ((s.elt, s.elt, None) :: s.acc)
             )) (fun s -> s.acc) graph start []
         ;;
 
         let djikstra _start _target _graph = 
+            (*let queue = NodeHeap.is_empty in*)
             []
         ;;
 
