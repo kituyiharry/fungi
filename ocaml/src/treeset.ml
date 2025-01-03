@@ -15,6 +15,7 @@ module type TSet = sig
     val mem:            t -> t set -> bool
     val cardinal:       t set -> int
     val of_list:        t list -> t set
+    val to_list:        t set  -> t list
     val root:           t set -> t option
     val choose:         t set -> t
     val take_min_opt:   t set -> t option * t set
@@ -160,6 +161,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | [] -> Empty
         | hd :: tail -> add hd (of_list tail)
     ;;
+    let of_list = of_list
 
     (** [set_of_seq 'a Seq] Build a Set from a lazy sequence *)
     let of_seq = Seq.fold_left (fun x a -> add a x) Empty;;
@@ -182,6 +184,10 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | Node (Empty, a, Empty) ->  stack @ [a]
         | Node (x, a, y) -> inorder ((inorder stack x) @ [a]) y
     ;; (* Inorder traversal - Left - Root - Right *)
+
+    (** [to_list 'a list] Build a list from a set *)
+    let to_list = inorder []
+    ;;
 
     let rec iter g = function
         | Empty -> ()

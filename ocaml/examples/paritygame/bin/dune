@@ -2,5 +2,5 @@
  (name main)
  (public_name paritygame)
  (modules main)
- (libraries paritygame libparity unix)
+ (libraries paritygame fungi unix)
  (modes byte exe))

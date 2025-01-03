@@ -10,8 +10,8 @@
    For reference please cite this repository if you are using it for your own
    purposes!
 *)
-open Libparity.Graph  ;;
-open Libparity.Treeset;;
+open Fungi.Graph  ;;
+open Fungi.Treeset;;
 
 let entropy           = ref 0
 let strictmonotonic x = let () = incr x in !x;;

@@ -1,4 +1,4 @@
-open Libparity;;
+open Fungi;;
 
 module SGraph = Graph.MakeGraph(struct 
     type t     = string

@@ -4,7 +4,7 @@
 *                                                                             *
 *******************************************************************************)
 open Treeset;;
-open Heap;;
+(*open Heap;;*)
 
 let (let*) = Option.bind
 
@@ -61,7 +61,7 @@ module type PathImpl = sig
 
     module NodeMap: Map.S    with type key := elt
     module AdjSet:  TSet     with type t   := elt
-    module NodeHeap:TreeHeap with type elt := elt
+    (*module NodeHeap:TreeHeap with type elt := elt*)
 
     val walkdepthuntil:   adj NodeMap.t -> (path ctx -> bool) -> elt -> path
     val walkbreadthuntil: adj NodeMap.t -> (path ctx -> bool) -> elt -> path
@@ -415,9 +415,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (** Get adjacency list of a node *)
     let adj_list_of node nodeMap =
         let (incoming, outgoing, _label, _wgts) = NodeMap.find node nodeMap in
-        AdjSet.fold (
-            fun anode alist -> anode :: alist
-        ) (AdjSet.union incoming outgoing) []
+        AdjSet.to_list (AdjSet.union incoming outgoing)
     ;;
 
     (** swap the incoming and outgoing edge direction *)
@@ -519,7 +517,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let findby pred dset = Option.is_some (SccSet.find_first_opt (pred) dset)
         ;;
 
-        (**  visit function graph  root-node  neighbour-node solution*)
+        (** tarjans visit args: function graph  root-node  neighbour-node solution*)
         let visit apply g root visited tarj =
             if not (findby (hasnode visited) tarj.disc) then
                 (* unvisited edge - recurse and update *)
@@ -676,7 +674,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             let fscc = NodeMap.fold (iter) graph (empty (NodeMap.cardinal graph)) in 
             (* transpose the graph *)
             let tgraph = transpose graph in
-            (* pop elements while a condition is true *)
             let iter2 scc sccnode =
                 (* if onst the we consider it already a part of an scc *)
                 if AdjSet.mem sccnode.node scc.onst then
@@ -785,7 +782,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     *                             Path Algos                                 *
     **************************************************************************)
     module Path = struct 
-        module NodeHeap = Make_heap (Unique)
+        (*module NodeHeap = Make_heap (Unique)*)
 
         (* All pairs depth first walk until (f ctx -> bool) is true or all nodes
            are exhausted. Requires the node edges to be weighted  Uses simple
@@ -814,7 +811,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ;;
 
         let djikstra _start _target _graph = 
-            (*let queue = NodeHeap.is_empty in*)
             []
         ;;
 
@@ -838,5 +834,12 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
       kruskal  
     *)
     end
+
+    (* TODO:
+        Rodl nibble
+        Dot
+        IO
+        Compressed ??
+    *)
 
 end;;

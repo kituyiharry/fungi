@@ -2,5 +2,5 @@
  (name main)
  (public_name mazesolver)
  (modules main)
- (libraries libparity)
+ (libraries fungi)
  (modes byte exe))

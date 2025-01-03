@@ -1,6 +1,6 @@
 (lang dune 3.12)
 
-(name libparity)
+(name fungi)
 
 ; Generate opam file from this dune-project file
 (generate_opam_files true)
@@ -11,7 +11,7 @@
 
 ; Package definition
 (package
- (name libparity)
+ (name fungi)
  (version 0.1.0)
  (synopsis "A functional graph library")
  (description "A graph library based on functional adjacency list with some common graph
