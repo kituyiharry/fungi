@@ -5,6 +5,8 @@
 *       The tree will remain mostly unbalanced!                               *
 *       Target is to add some 'laziness' with some functions                  *
 *                                                                             *
+*       Harry K W                                                             *
+*                                                                             *
 *******************************************************************************)
 
 module type TSet = sig

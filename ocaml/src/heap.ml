@@ -1,15 +1,41 @@
-(**
+(******************************************************************************
+*                                                                             *
+*   Simplest Fibonacci (d-ary)  heap                                          *
+*     - Every node's key is less(default cmp) than or equal to its children   * 
+*       keys as given by the Entry.compare function                           *
+*     - The minimum|maximum element is always in the root list depending      *
+*       on your compare function                                              *
+*     - Unlike binary heaps, there's no enforced structure                    *
+*     - A node can have any number of children                                *
+*     - Children can be added or removed freely                               *
+*     - no redundancy (if 2 nodes are the same their trees are assumed to     *
+*       be the same)                                                          *
+*                                                                             *
+*******************************************************************************)
 
-    Simplest fibonacci heap
-        - Every node's key is less than or equal to its children's keys
-          as given by the Entry.compare function
-        - The minimum element is always in the root list
-        - Unlike binary heaps, there's no enforced structure
-        - A node can have any number of children
-        - Children can be added or removed freely
-    
-*)
-module MakeFibHeap(Entry: Set.OrderedType) = struct
+module type FibHeap = sig
+    type node
+    type elts        = { data: node; succ: elts list }
+    type t           = elts list
+    val empty:       t
+    val minify:      node -> node -> bool
+    val maxify:      node -> node -> bool
+    val degree:      elts -> int
+    val cardinal:    t -> int
+    val collapse:    t -> node list
+    val join:        ?cmp:(node -> node -> bool) -> t -> t
+    val mem:         ?cmp:(node -> node -> bool) -> node -> t -> bool
+    val insert:      ?cmp:(node -> node -> bool) -> node -> t -> t
+    val peek:        ?cmp:(node -> node -> bool) -> t -> elts
+    val peek_opt:    ?cmp:(node -> node -> bool) -> t -> elts option
+    val extract:     ?cmp:(node -> node -> bool) -> t -> (node * t)
+    val extract_opt: ?cmp:(node -> node -> bool) -> t -> (node * t) option
+    val extract_all: ?cmp:(node -> node -> bool) -> t -> node list
+    val increase:    ?cmp:(node -> node -> bool) -> node -> node -> t -> t
+    val decrease:    ?cmp:(node -> node -> bool) -> node -> node -> t -> t
+end
+
+module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = struct
 
     type node = Entry.t
     ;;
@@ -17,13 +43,17 @@ module MakeFibHeap(Entry: Set.OrderedType) = struct
     type elts = { data: node; succ: elts list }
     ;;
 
-    type t = elts list
+    type t    = elts list
     ;;
 
-    let empty: t = []
+    let empty = []
     ;;
 
-    let equal  l r = (Entry.compare l r) = 0
+    (* internal joining tbl which stores int (degree) -> elts *)
+    let tbl = Hashtbl.create 0
+    ;;
+
+    let equal  l r = (Entry.compare l r) =  0
     ;;
 
     (* comparator that determines if the root is the smallest or the largest *)
@@ -36,11 +66,12 @@ module MakeFibHeap(Entry: Set.OrderedType) = struct
     let minify l r = (Entry.compare l r) = -1
     ;;
 
-    let rec mem p = function 
+    let rec mem ?(cmp=minify) p = function 
         | [] -> 
             false
         | hd :: tail ->
-            (equal hd.data p) || (mem p hd.succ) || (mem p tail)
+            (equal hd.data p) || 
+               (if cmp hd.data p then mem ~cmp:cmp p hd.succ else mem ~cmp:cmp p tail)
     ;;
 
     let rec cardinal = function 
@@ -50,7 +81,7 @@ module MakeFibHeap(Entry: Set.OrderedType) = struct
     ;;
 
     let rec insert ?(cmp=minify) p = function
-        | [] as a -> { data=p; succ=[] } :: a
+        | [] -> [ { data=p; succ=[] } ]
         | (hd :: tail) as s ->
             if equal hd.data p then
                 s
@@ -60,34 +91,223 @@ module MakeFibHeap(Entry: Set.OrderedType) = struct
                 hd :: (insert p ~cmp:cmp tail)
     ;;
 
+    (* insert like merge into an existing tree *)
+    let rec merge_node ?(cmp=minify) p = function
+        | [] -> [ p ]
+        | (hd :: tail) as s ->
+            if equal hd.data p.data then
+                s
+            else if cmp hd.data p.data then
+                { data=hd.data; succ=(merge_node p ~cmp:cmp hd.succ) } :: tail
+            else
+                hd :: (merge_node p ~cmp:cmp tail)
+    ;;
+
+    (* merge two tree elements *)
+    let merge ?(cmp=minify) tree trunk = 
+        if equal tree.data trunk.data then
+            tree
+        (* bubbling elements to maintain heap properties  *)
+        else if cmp tree.data trunk.data then
+            (* bubble down the tree *)
+            { data=tree.data;  succ=(merge_node ~cmp:cmp trunk tree.succ) }
+        else
+            (* bubble up the trunk *)
+            { data=trunk.data; succ=(merge_node ~cmp:cmp tree trunk.succ) }
+    ;;
+
     exception Empty
 
-    let rec find ?(cmp=minify) p = function 
-        | [] -> raise Empty
-        | hd :: tail ->
-            if (equal hd.data p) then 
-                hd
-            else if cmp hd.data p then
-                find p hd.succ
-            else
-                find p tail
+    let degree t = List.length t.succ
     ;;
 
-    let rec find_opt ?(cmp=minify) p = function 
+    (** collapse the heap, elements will likely be out of order *)
+    let rec collapse = function 
+        | [] -> [] 
+        | { succ=s; data=p } :: tail ->
+            p :: collapse s @ collapse tail
+    ;;
+
+    let rec peek ?(cmp=minify) = function 
+        | [] -> raise Empty 
+        | hd :: tail ->
+            match tail with 
+            | [] -> hd 
+            | fllw :: rest -> 
+                if cmp hd.data fllw.data then
+                    peek ~cmp:cmp (hd   :: rest)
+                else
+                    peek ~cmp:cmp (fllw :: rest)
+    ;;
+ 
+    let rec peek_opt ?(cmp=minify) = function 
         | [] -> None
         | hd :: tail ->
-            if (equal hd.data p) then 
-                Some hd
-            else if cmp hd.data p then
-                find_opt p hd.succ
-            else
-                find_opt p tail
+            match tail with 
+            | [] -> Some hd 
+            | fllw :: rest -> 
+                if cmp hd.data fllw.data then
+                    peek_opt ~cmp:cmp (hd   :: rest)
+                else
+                    peek_opt ~cmp:cmp (fllw :: rest)
     ;;
 
-    let degree p h =
-        match find_opt p h with
-        | None -> 0
-        | Some v -> List.length v.succ
+    (* joins subtrees of equal degrees 
+       The ntree is added back into the hashtable to be
+       rejoined with the one there if it existed.
+       this creates the binomial tree situation which sees the
+       degree
+    *)
+    let join ?(cmp=minify) trees  =
+        let rec cascade rejoin =  
+            let leftover = List.fold_left (fun acc el ->
+                let degs = degree el in
+                match Hashtbl.find_opt tbl degs with
+                | Some tree ->
+                    (* merge and rejoin *)
+                    let ntree = merge ~cmp:cmp tree el in
+                    let _ = Hashtbl.remove tbl degs in
+                    ntree :: acc
+                | None ->
+                    let _ = Hashtbl.add tbl degs el in
+                    acc
+            ) [] rejoin in if List.is_empty leftover then () else cascade leftover
+        in
+        let _   = cascade trees in
+        let fin = List.of_seq @@ Hashtbl.to_seq_values tbl in
+        let _   = Hashtbl.clear tbl in
+        fin
+    ;;
+
+    let extract ?(cmp=minify) = function 
+        | [] -> raise Empty
+        | hd :: tail -> 
+            (* straddle the root elts for the elt most true for cmp *)
+            let rec split hd tl acc =
+                match tl with 
+                | [] -> (hd, [], acc) 
+                | fllw :: rest -> 
+                    if cmp hd.data fllw.data then
+                        split hd   rest (fllw :: acc)
+                    else
+                        split fllw rest (hd   :: acc)
+            in 
+            (* add all its successors to the root list *)
+            let (it, _, rem) = split hd tail [] in 
+            (it.data, join ~cmp:cmp (rem @ it.succ))
+    ;;
+
+    let extract_opt ?(cmp=minify) = function 
+        | [] -> None
+        | head :: tail -> 
+            (* straddle the root elts for the elt most true for cmp *)
+            let rec split hd tl acc =
+                match tl with 
+                | [] -> (hd, [], acc) 
+                | fllw :: rest -> 
+                    if cmp hd.data fllw.data then
+                        split hd   rest (fllw :: acc)
+                    else
+                        split fllw rest (hd   :: acc)
+            in 
+            (* add all its successors to the root list 
+               try and keep the number of root trees to a minimum 
+               by joining same degreee nodes *)
+            let  (it, _, rem) = split head tail [] in 
+            Some (it.data, join ~cmp:cmp (rem @ it.succ))
+    ;;
+
+    (* extract_all should yield a sorted list *)
+    let rec extract_all ?(cmp=minify) tree = 
+        let c , y =  extract ~cmp:cmp tree in 
+        match y with
+        | []   -> [ c ]
+        | rest ->   c :: extract_all ~cmp:cmp rest
+    ;;
+
+    (* basically search until we find the old-entry and replace with a new one 
+       we have to confirm with the parent whether the main property holds and
+       change otherwise 
+       This operation may end up introducing duplicates from the new entry as a
+       replacement *)
+    let increase ?(cmp=minify) oldent newent tree = 
+        let rec atparent parent tree leftover = match tree with
+        | [] -> raise Empty
+        | (hd :: tl) as s  -> 
+            if (Entry.compare oldent newent) =  1 then
+                failwith "new value must be larger"
+            else if equal oldent newent then
+                (s, leftover)
+            else
+                if (equal hd.data oldent) then 
+                    (* keep if this is true otherwise just leave as is *)
+                    let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
+                    match maxbelopt with
+                    | Some maxbel ->
+                        let par, son = (cmp parent newent), (cmp maxbel.data newent) in
+                        if par && not son then
+                            (* true, false  -> ok *)
+                            ({ hd with data=newent }  :: tl, leftover)
+                        else
+                            (* true, true   -> hill  *)
+                            (tl, { data=newent; succ=[] } :: hd.succ)
+                    | None -> 
+                        let par = (cmp parent newent) in
+                        if par then
+                            (* true, false  -> ok *)
+                            ({ hd with data=newent }  :: tl, leftover)
+                        else
+                            (* true, true   -> hill  *)
+                            (tl, { data=newent; succ=[] } :: hd.succ)
+                else if cmp hd.data oldent then
+                    let nt, lf =  atparent hd.data hd.succ leftover in
+                    ({ hd with succ=nt } :: tl, lf)
+                else
+                    let nt, lf = atparent parent tl leftover in
+                    (hd :: nt, lf)
+        in 
+        let ntree, left = atparent newent tree [] in 
+        ntree @ left
+    ;;
+
+    let decrease ?(cmp=minify) oldent newent tree = 
+        let rec atparent parent tree leftover = match tree with
+            | [] -> raise Empty
+            | (hd :: tl) as s  -> 
+                if (Entry.compare oldent newent) = -1 then
+                    failwith "new value must be smaller"
+                else if equal oldent newent then
+                    (s, leftover)
+                else
+                    (* found the element *)
+                    if (equal hd.data oldent) then 
+                        let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
+                        match maxbelopt with
+                        | Some maxbel -> 
+                            let par, son = (cmp parent newent), (cmp maxbel.data newent) in
+                            if par && not son then
+                                (* true, false  -> ok *)
+                                ({ hd with data=newent } :: tl, leftover)
+                            else
+                                (* false, false -> trough *)
+                                (tl, { data=newent; succ=[] } :: hd.succ)
+                        | None -> 
+                            let par = (cmp parent newent) in
+                            if par then
+                                (* true, false  -> ok *)
+                                ({ hd with data=newent } :: tl, leftover)
+                            else
+                                (* false, false -> trough *)
+                                (tl, { data=newent; succ=[] } :: hd.succ)
+                    else if cmp hd.data oldent then
+                        let nt, lf = (atparent hd.data hd.succ leftover) in
+                        ({ hd with succ=nt } :: tl, lf)
+                    else
+                        let nt, lf = atparent parent tl leftover in
+                        (hd :: nt, lf)
+        in 
+        let ntree, left = atparent newent tree [] in 
+        ntree @ left
     ;;
 
 end
