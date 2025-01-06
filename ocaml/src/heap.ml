@@ -6,6 +6,8 @@
 *     - The minimum|maximum element is always in the root list depending      *
 *       on your compare function                                              *
 *     - Unlike binary heaps, there's no enforced structure                    *
+*     - Duplicates are tolerated as they can be introduced by decrease and    *
+*       increase operations                                                   *
 *     - A node can have any number of children                                *
 *     - Children can be added or removed freely                               *
 *     - no redundancy (if 2 nodes are the same their trees are assumed to     *
@@ -15,7 +17,7 @@
 
 module type FibHeap = sig
     type node
-    type elts        = { data: node; succ: elts list }
+    type elts        = { data: node; mutable churn: int; succ: elts list }
     type t           = elts list
     val empty:       t
     val minify:      node -> node -> bool
@@ -28,6 +30,7 @@ module type FibHeap = sig
     val insert:      ?cmp:(node -> node -> bool) -> node -> t -> t
     val peek:        ?cmp:(node -> node -> bool) -> t -> elts
     val peek_opt:    ?cmp:(node -> node -> bool) -> t -> elts option
+    val merge:       ?cmp:(node -> node -> bool) -> elts -> elts -> elts
     val extract:     ?cmp:(node -> node -> bool) -> t -> (node * t)
     val extract_opt: ?cmp:(node -> node -> bool) -> t -> (node * t) option
     val extract_all: ?cmp:(node -> node -> bool) -> t -> node list
@@ -40,7 +43,8 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
     type node = Entry.t
     ;;
 
-    type elts = { data: node; succ: elts list }
+    (* churn tracks the grandchildren that have been removed *)
+    type elts = { data: node; mutable churn: int; succ: elts list }
     ;;
 
     type t    = elts list
@@ -62,6 +66,10 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
     let maxify l r = (Entry.compare l r) =  1
     ;;
 
+    (* churn thresh *)
+    let churn_threshold = ref 2
+    ;;
+
     (* min-heapify, root elts are the least of their successors *)
     let minify l r = (Entry.compare l r) = -1
     ;;
@@ -81,12 +89,12 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
     ;;
 
     let rec insert ?(cmp=minify) p = function
-        | [] -> [ { data=p; succ=[] } ]
+        | [] -> [ { data=p; churn=0; succ=[] } ]
         | (hd :: tail) as s ->
             if equal hd.data p then
-                s
+                { data=p; churn=0; succ=[] } :: s
             else if cmp hd.data p then
-                { data=hd.data; succ=(insert p ~cmp:cmp hd.succ) } :: tail
+                { hd with succ=(insert p ~cmp:cmp hd.succ) } :: tail
             else
                 hd :: (insert p ~cmp:cmp tail)
     ;;
@@ -96,24 +104,25 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
         | [] -> [ p ]
         | (hd :: tail) as s ->
             if equal hd.data p.data then
-                s
+                p :: s
             else if cmp hd.data p.data then
-                { data=hd.data; succ=(merge_node p ~cmp:cmp hd.succ) } :: tail
+                { hd with succ=(merge_node p ~cmp:cmp hd.succ) } :: tail
             else
                 hd :: (merge_node p ~cmp:cmp tail)
     ;;
 
     (* merge two tree elements *)
     let merge ?(cmp=minify) tree trunk = 
+        (* duplicate allowed to exit in successor *)
         if equal tree.data trunk.data then
-            tree
+            { tree with succ = trunk :: tree.succ }
         (* bubbling elements to maintain heap properties  *)
         else if cmp tree.data trunk.data then
             (* bubble down the tree *)
-            { data=tree.data;  succ=(merge_node ~cmp:cmp trunk tree.succ) }
+            { tree with succ=(merge_node ~cmp:cmp trunk tree.succ) }
         else
             (* bubble up the trunk *)
-            { data=trunk.data; succ=(merge_node ~cmp:cmp tree trunk.succ) }
+            { trunk with succ=(merge_node ~cmp:cmp tree trunk.succ) }
     ;;
 
     exception Empty
@@ -121,11 +130,11 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
     let degree t = List.length t.succ
     ;;
 
-    (** collapse the heap, elements will likely be out of order *)
+    (** inorder traverse the heap, elements will likely be out of order *)
     let rec collapse = function 
         | [] -> [] 
-        | { succ=s; data=p } :: tail ->
-            p :: collapse s @ collapse tail
+        | { succ=s; data=p;_ } :: tail ->
+            collapse s @ [ p ] @ collapse tail
     ;;
 
     let rec peek ?(cmp=minify) = function 
@@ -165,8 +174,8 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
                 match Hashtbl.find_opt tbl degs with
                 | Some tree ->
                     (* merge and rejoin *)
-                    let ntree = merge ~cmp:cmp tree el in
-                    let _ = Hashtbl.remove tbl degs in
+                    let ntree = merge ~cmp:cmp tree el  in
+                    let _     = Hashtbl.remove tbl degs in
                     ntree :: acc
                 | None ->
                     let _ = Hashtbl.add tbl degs el in
@@ -178,6 +187,11 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
         let _   = Hashtbl.clear tbl in
         fin
     ;;
+
+    (*
+    TODO: Because we are traversing the root elements instead of memoizing the
+    min|max, this is actuall o(len(root elts)) and not o1, fix it!
+    *)
 
     let extract ?(cmp=minify) = function 
         | [] -> raise Empty
@@ -192,7 +206,7 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
                     else
                         split fllw rest (hd   :: acc)
             in 
-            (* add all its successors to the root list *)
+            (* consolidate all its successors to the root list *)
             let (it, _, rem) = split hd tail [] in 
             (it.data, join ~cmp:cmp (rem @ it.succ))
     ;;
@@ -212,7 +226,7 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
             in 
             (* add all its successors to the root list 
                try and keep the number of root trees to a minimum 
-               by joining same degreee nodes *)
+               by joining same degreee nodes (consolidate) *)
             let  (it, _, rem) = split head tail [] in 
             Some (it.data, join ~cmp:cmp (rem @ it.succ))
     ;;
@@ -227,9 +241,28 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
 
     (* basically search until we find the old-entry and replace with a new one 
        we have to confirm with the parent whether the main property holds and
-       change otherwise 
+       change otherwise by "cutting it out" to the root
+
+       As this can slow extract by making us end up with trees of large degree
+       but few successors we mark parents to have them also be cut off once a
+       threshold of succesors have been "updated" by decrease or incr to sort-of 
+       balance out the nodes
+
        This operation may end up introducing duplicates from the new entry as a
-       replacement *)
+       replacement - which creates a new challenge 
+
+       In the presence of duplicates, we decrease|increase only the first item to be
+       found (local only approach) if you want to update all, you would need to
+       either call it multiple times until it raises empty, but likely you need
+       to choose a better structure and comparator for your Entry.t to better
+       disambiguatae entries
+
+       decrease-key does NOT trigger consolidation of the root list. 
+       This is actually crucial for maintaining the O(1) amortized time complexity of decrease-key.
+
+    *)
+
+    (* local only increase, duplicates not updated *)
     let increase ?(cmp=minify) oldent newent tree = 
         let rec atparent parent tree leftover = match tree with
         | [] -> raise Empty
@@ -244,32 +277,39 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
                     let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
                     match maxbelopt with
                     | Some maxbel ->
-                        let par, son = (cmp parent newent), (cmp maxbel.data newent) in
+                        let par, son = (cmp parent.data newent), (cmp maxbel.data newent) in
                         if par && not son then
-                            (* true, false  -> ok *)
+                            (* true, false -> ok   *)
                             ({ hd with data=newent }  :: tl, leftover)
                         else
-                            (* true, true   -> hill  *)
-                            (tl, { data=newent; succ=[] } :: hd.succ)
+                            (* true, true  -> hill *)
+                            let _ = (parent.churn <- parent.churn + 1) in
+                            (tl, { data=newent; churn=0; succ=[] } :: hd.succ)
                     | None -> 
-                        let par = (cmp parent newent) in
+                        let par = (cmp parent.data newent) in
                         if par then
                             (* true, false  -> ok *)
                             ({ hd with data=newent }  :: tl, leftover)
                         else
                             (* true, true   -> hill  *)
-                            (tl, { data=newent; succ=[] } :: hd.succ)
+                            (tl, { data=newent; churn=0; succ=[] } :: hd.succ)
                 else if cmp hd.data oldent then
-                    let nt, lf =  atparent hd.data hd.succ leftover in
-                    ({ hd with succ=nt } :: tl, lf)
+                    let nt, lf =  atparent hd hd.succ leftover in
+                    if hd.churn > (!churn_threshold) then
+                        (* many children have died, we die as well :-( *)
+                        let _ = (parent.churn <- parent.churn + 1) in
+                        (tl, { hd with succ=nt } :: lf)
+                    else
+                        ({ hd with succ=nt } :: tl, lf)
                 else
                     let nt, lf = atparent parent tl leftover in
                     (hd :: nt, lf)
         in 
-        let ntree, left = atparent newent tree [] in 
+        let ntree, left = atparent { data=newent; churn=0; succ=[] } tree [] in 
         ntree @ left
     ;;
 
+    (* local only decrease, duplicates not updated *)
     let decrease ?(cmp=minify) oldent newent tree = 
         let rec atparent parent tree leftover = match tree with
             | [] -> raise Empty
@@ -284,29 +324,43 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
                         let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
                         match maxbelopt with
                         | Some maxbel -> 
-                            let par, son = (cmp parent newent), (cmp maxbel.data newent) in
+                            let par, son = (cmp parent.data newent), (cmp maxbel.data newent) in
                             if par && not son then
                                 (* true, false  -> ok *)
                                 ({ hd with data=newent } :: tl, leftover)
                             else
                                 (* false, false -> trough *)
-                                (tl, { data=newent; succ=[] } :: hd.succ)
+                                (* since we are cutting off, we churn the parent *)
+                                let _ = (parent.churn <- parent.churn + 1) in
+                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ)
                         | None -> 
-                            let par = (cmp parent newent) in
+                            let par = (cmp parent.data newent) in
                             if par then
                                 (* true, false  -> ok *)
                                 ({ hd with data=newent } :: tl, leftover)
                             else
                                 (* false, false -> trough *)
-                                (tl, { data=newent; succ=[] } :: hd.succ)
+                                (* since we are cutting off, we churn the parent *)
+                                let _ = (parent.churn <- parent.churn + 1) in
+                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ)
                     else if cmp hd.data oldent then
-                        let nt, lf = (atparent hd.data hd.succ leftover) in
-                        ({ hd with succ=nt } :: tl, lf)
+                        let nt, lf = (atparent hd hd.succ leftover) in
+                        (* backtrack, check if we hit a churn threshold *)
+                        if hd.churn > (!churn_threshold) then
+                            (* many children have died, we die as well :-( *)
+                            let _ = (parent.churn <- parent.churn + 1) in
+                            (tl, { hd with succ=nt } :: lf)
+                        else
+                            ({ hd with succ=nt } :: tl, lf)
                     else
+                        (* straddle *)
                         let nt, lf = atparent parent tl leftover in
                         (hd :: nt, lf)
         in 
-        let ntree, left = atparent newent tree [] in 
+        (* start with self as its own parent *)
+        let ntree, left = atparent { data=newent; churn=0; succ=[] } tree [] in 
+        (* reset churn values *)
+        let _ = (List.iter (fun n -> n.churn <- 0) left) in
         ntree @ left
     ;;
 
