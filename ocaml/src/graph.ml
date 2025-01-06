@@ -840,6 +840,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         Dot
         IO
         Compressed ??
+        DeBruijn
     *)
 
 end;;

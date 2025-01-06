@@ -74,18 +74,21 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
     let minify l r = (Entry.compare l r) = -1
     ;;
 
-    let rec mem ?(cmp=minify) p = function 
-        | [] -> 
-            false
+    let mem ?(cmp=minify) pleaf ptree = 
+        let rec fmem tree rem = match tree with
+        | [] -> (match rem with
+                | [] -> false
+                | v  -> fmem v [])
         | hd :: tail ->
-            (equal hd.data p) || 
-               (if cmp hd.data p then mem ~cmp:cmp p hd.succ else mem ~cmp:cmp p tail)
+            (equal hd.data pleaf) || 
+               (if cmp hd.data pleaf then fmem hd.succ (tail @ rem) else fmem tail rem)
+        in fmem ptree []
     ;;
 
     let rec cardinal = function 
         | [] -> 0
         | hd :: tail ->
-            1 + (cardinal hd.succ) + (cardinal tail)
+            (cardinal hd.succ) + 1 + (cardinal tail)
     ;;
 
     let rec insert ?(cmp=minify) p = function
@@ -137,6 +140,7 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
             collapse s @ [ p ] @ collapse tail
     ;;
 
+    (* straddles the root elts for the min *)
     let rec peek ?(cmp=minify) = function 
         | [] -> raise Empty 
         | hd :: tail ->
@@ -264,61 +268,77 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
 
     (* local only increase, duplicates not updated *)
     let increase ?(cmp=minify) oldent newent tree = 
-        let rec atparent parent tree leftover = match tree with
-        | [] -> raise Empty
-        | (hd :: tl) as s  -> 
-            if (Entry.compare oldent newent) =  1 then
-                failwith "new value must be larger"
-            else if equal oldent newent then
-                (s, leftover)
-            else
-                if (equal hd.data oldent) then 
-                    (* keep if this is true otherwise just leave as is *)
-                    let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
-                    match maxbelopt with
-                    | Some maxbel ->
-                        let par, son = (cmp parent.data newent), (cmp maxbel.data newent) in
-                        if par && not son then
-                            (* true, false -> ok   *)
-                            ({ hd with data=newent }  :: tl, leftover)
+        if (Entry.compare oldent newent) =  1 then
+            failwith "new value must be larger"
+        else if equal oldent newent then
+            tree
+        else if List.is_empty tree then
+            raise Empty
+        else
+            let rec atparent parent tree leftover found = match tree with
+                | [] ->
+                    tree, leftover, found
+                | (hd :: tl) -> 
+                    if (equal hd.data oldent) then 
+                        let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
+                        match maxbelopt with
+                        | Some maxbel ->
+                            let par, son = (cmp parent.data newent), (cmp maxbel.data newent) in
+                            if par && not son then
+                                (* true, false -> ok and consistent *)
+                                ({ hd with data=newent }  :: tl, leftover, true)
+                            else
+                                (* true, true  -> hill inconsistency *)
+                                let _ = (parent.churn <- parent.churn + 1) in
+                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
+                        | None -> 
+                            let par = (cmp parent.data newent) in
+                            if par then
+                                (* true, false  -> ok *)
+                                ({ hd with data=newent } :: tl, leftover, true)
+                            else
+                                (* true, true   -> hill  *)
+                                let _ = (parent.churn <- parent.churn + 1) in
+                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
+                    else if cmp hd.data oldent then
+                        let nt, lf, wasfound = atparent hd hd.succ leftover found in
+                        if wasfound then
+                            if hd.churn > (!churn_threshold) then
+                                (* many children have died, we die as well :-( *)
+                                let _ = (parent.churn <- parent.churn + 1) in
+                                (tl, { hd with succ=nt } :: lf, wasfound)
+                            else
+                                ({ hd with succ=nt } :: tl, lf, wasfound)
                         else
-                            (* true, true  -> hill *)
-                            let _ = (parent.churn <- parent.churn + 1) in
-                            (tl, { data=newent; churn=0; succ=[] } :: hd.succ)
-                    | None -> 
-                        let par = (cmp parent.data newent) in
-                        if par then
-                            (* true, false  -> ok *)
-                            ({ hd with data=newent }  :: tl, leftover)
-                        else
-                            (* true, true   -> hill  *)
-                            (tl, { data=newent; churn=0; succ=[] } :: hd.succ)
-                else if cmp hd.data oldent then
-                    let nt, lf =  atparent hd hd.succ leftover in
-                    if hd.churn > (!churn_threshold) then
-                        (* many children have died, we die as well :-( *)
-                        let _ = (parent.churn <- parent.churn + 1) in
-                        (tl, { hd with succ=nt } :: lf)
+                            (* the node may have moved to the root, straddle
+                               the tail *)
+                            let nt, lf, rem = atparent parent tl leftover wasfound in
+                            (hd :: nt, lf, rem)
                     else
-                        ({ hd with succ=nt } :: tl, lf)
-                else
-                    let nt, lf = atparent parent tl leftover in
-                    (hd :: nt, lf)
-        in 
-        let ntree, left = atparent { data=newent; churn=0; succ=[] } tree [] in 
-        ntree @ left
+                        let nt, lf, rem = atparent parent tl leftover found in
+                        (hd :: nt, lf, rem)
+            in let ntree, left, found = atparent { data=newent; churn=0; succ=[] } tree [] false in 
+            if found then
+                (* reset root churn values *)
+                let _ = (List.iter (fun n -> n.churn <- 0) left) in
+                ntree @ left
+            else
+                failwith "value not in heap"
     ;;
 
     (* local only decrease, duplicates not updated *)
     let decrease ?(cmp=minify) oldent newent tree = 
-        let rec atparent parent tree leftover = match tree with
-            | [] -> raise Empty
-            | (hd :: tl) as s  -> 
-                if (Entry.compare oldent newent) = -1 then
-                    failwith "new value must be smaller"
-                else if equal oldent newent then
-                    (s, leftover)
-                else
+        if (Entry.compare oldent newent) = -1 then
+            failwith "new value must be smaller"
+        else if equal oldent newent then
+            tree
+        else if List.is_empty tree then
+            raise Empty
+        else
+            let rec atparent parent tree leftover found = match tree with
+                | [] ->
+                    (tree, leftover, found)
+                | (hd :: tl) -> 
                     (* found the element *)
                     if (equal hd.data oldent) then 
                         let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
@@ -327,41 +347,50 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
                             let par, son = (cmp parent.data newent), (cmp maxbel.data newent) in
                             if par && not son then
                                 (* true, false  -> ok *)
-                                ({ hd with data=newent } :: tl, leftover)
+                                ({ hd with data=newent } :: tl, leftover, true)
                             else
-                                (* false, false -> trough *)
+                                (* false, false -> trough inconsistency *)
                                 (* since we are cutting off, we churn the parent *)
                                 let _ = (parent.churn <- parent.churn + 1) in
-                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ)
+                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
                         | None -> 
                             let par = (cmp parent.data newent) in
                             if par then
                                 (* true, false  -> ok *)
-                                ({ hd with data=newent } :: tl, leftover)
+                                ({ hd with data=newent } :: tl, leftover, true)
                             else
                                 (* false, false -> trough *)
                                 (* since we are cutting off, we churn the parent *)
                                 let _ = (parent.churn <- parent.churn + 1) in
-                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ)
+                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
                     else if cmp hd.data oldent then
-                        let nt, lf = (atparent hd hd.succ leftover) in
+                        let nt, lf, wasfound = (atparent hd hd.succ leftover found) in
                         (* backtrack, check if we hit a churn threshold *)
-                        if hd.churn > (!churn_threshold) then
-                            (* many children have died, we die as well :-( *)
-                            let _ = (parent.churn <- parent.churn + 1) in
-                            (tl, { hd with succ=nt } :: lf)
-                        else
-                            ({ hd with succ=nt } :: tl, lf)
+                        if wasfound then
+                            if hd.churn > (!churn_threshold) then
+                                (* many children have died, we die as well :-( *)
+                                let _ = (parent.churn <- parent.churn + 1) in
+                                (tl, { hd with succ=nt } :: lf, wasfound)
+                            else
+                                ({ hd with succ=nt } :: tl, lf, wasfound)
+                        else 
+                            (* the node may have moved to the root, straddle
+                               the tail *)
+                            let nt, lf, rem = atparent parent tl leftover wasfound in
+                            (hd :: nt, lf, rem)
                     else
-                        (* straddle *)
-                        let nt, lf = atparent parent tl leftover in
-                        (hd :: nt, lf)
-        in 
-        (* start with self as its own parent *)
-        let ntree, left = atparent { data=newent; churn=0; succ=[] } tree [] in 
-        (* reset churn values *)
-        let _ = (List.iter (fun n -> n.churn <- 0) left) in
-        ntree @ left
+                        (* straddle as the former doesn't need checking *)
+                        let nt, lf, rem = atparent parent tl leftover found in
+                        (hd :: nt, lf, rem)
+            in 
+            (* start with self as its own parent *)
+            let ntree, left, wasfound = atparent { data=newent; churn=0; succ=[] } tree [] false in 
+            if wasfound then
+                (* reset churn values *)
+                let _ = (List.iter (fun n -> n.churn <- 0) left) in
+                ntree @ left
+            else
+                failwith "value not in heap"
     ;;
 
 end
