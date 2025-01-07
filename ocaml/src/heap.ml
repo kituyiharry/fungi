@@ -266,6 +266,29 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
 
     *)
 
+    let update ?(cmp=minify) hd tl newent parent leftover = 
+        let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
+        match maxbelopt with
+        | Some maxbel ->
+            let par, son = (cmp parent.data newent), (cmp maxbel.data newent) in
+            if par && not son then
+                (* true, false -> ok and consistent *)
+                ({ hd with data=newent }  :: tl, leftover, true)
+            else
+                (* true, true  -> hill inconsistency *)
+                let _ = (parent.churn <- parent.churn + 1) in
+                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
+        | None -> 
+            let par = (cmp parent.data newent) in
+            if par then
+                (* true, false  -> ok *)
+                ({ hd with data=newent } :: tl, leftover, true)
+            else
+                (* true, true   -> hill  *)
+                let _ = (parent.churn <- parent.churn + 1) in
+                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
+    ;;
+
     (* local only increase, duplicates not updated *)
     let increase ?(cmp=minify) oldent newent tree = 
         if (Entry.compare oldent newent) =  1 then
@@ -280,26 +303,7 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
                     tree, leftover, found
                 | (hd :: tl) -> 
                     if (equal hd.data oldent) then 
-                        let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
-                        match maxbelopt with
-                        | Some maxbel ->
-                            let par, son = (cmp parent.data newent), (cmp maxbel.data newent) in
-                            if par && not son then
-                                (* true, false -> ok and consistent *)
-                                ({ hd with data=newent }  :: tl, leftover, true)
-                            else
-                                (* true, true  -> hill inconsistency *)
-                                let _ = (parent.churn <- parent.churn + 1) in
-                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
-                        | None -> 
-                            let par = (cmp parent.data newent) in
-                            if par then
-                                (* true, false  -> ok *)
-                                ({ hd with data=newent } :: tl, leftover, true)
-                            else
-                                (* true, true   -> hill  *)
-                                let _ = (parent.churn <- parent.churn + 1) in
-                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
+                        update hd tl newent parent leftover
                     else if cmp hd.data oldent then
                         let nt, lf, wasfound = atparent hd hd.succ leftover found in
                         if wasfound then
@@ -341,28 +345,7 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
                 | (hd :: tl) -> 
                     (* found the element *)
                     if (equal hd.data oldent) then 
-                        let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
-                        match maxbelopt with
-                        | Some maxbel -> 
-                            let par, son = (cmp parent.data newent), (cmp maxbel.data newent) in
-                            if par && not son then
-                                (* true, false  -> ok *)
-                                ({ hd with data=newent } :: tl, leftover, true)
-                            else
-                                (* false, false -> trough inconsistency *)
-                                (* since we are cutting off, we churn the parent *)
-                                let _ = (parent.churn <- parent.churn + 1) in
-                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
-                        | None -> 
-                            let par = (cmp parent.data newent) in
-                            if par then
-                                (* true, false  -> ok *)
-                                ({ hd with data=newent } :: tl, leftover, true)
-                            else
-                                (* false, false -> trough *)
-                                (* since we are cutting off, we churn the parent *)
-                                let _ = (parent.churn <- parent.churn + 1) in
-                                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
+                        update hd tl newent parent leftover
                     else if cmp hd.data oldent then
                         let nt, lf, wasfound = (atparent hd hd.succ leftover found) in
                         (* backtrack, check if we hit a churn threshold *)
