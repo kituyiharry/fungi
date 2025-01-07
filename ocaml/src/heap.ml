@@ -12,6 +12,8 @@
 *     - Children can be added or removed freely                               *
 *     - no redundancy (if 2 nodes are the same their trees are assumed to     *
 *       be the same)                                                          *
+*     - For simplicity we don't have a min pointer at the root list but it may*
+*       be added in the future                                                *
 *                                                                             *
 *******************************************************************************)
 
