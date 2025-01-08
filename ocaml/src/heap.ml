@@ -111,7 +111,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
         let rec fmem tree rem = match tree with
         | [] -> (match rem with
                 | [] -> false
-                | v  -> fmem v [])
+                | subtree  -> fmem subtree [])
         | hd :: tail ->
             (equal hd.data pleaf) || 
                (if cmp hd.data pleaf then fmem hd.succ (tail @ rem) else fmem tail rem)
@@ -124,31 +124,31 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
             (cardinal hd.succ) + 1 + (cardinal tail)
     ;;
 
-    let rec insert ?(cmp=minify) p = function
-        | [] -> [ { data=p; churn=0; succ=[] } ]
+    let rec insert ?(cmp=minify) pleaf = function
+        | [] -> [ { data=pleaf; churn=0; succ=[] } ]
         | (hd :: tail) as s ->
-            if equal hd.data p then
-                { data=p; churn=0; succ=[] } :: s
-            else if cmp hd.data p then
-                { hd with succ=(insert p ~cmp:cmp hd.succ) } :: tail
+            if equal hd.data pleaf then
+                { data=pleaf; churn=0; succ=[] } :: s
+            else if cmp hd.data pleaf then
+                { hd with succ=(insert pleaf ~cmp:cmp hd.succ) } :: tail
             else
-                hd :: (insert p ~cmp:cmp tail)
+                hd :: (insert pleaf ~cmp:cmp tail)
     ;;
 
-    let singleton p = 
-        [ { data=p; churn=0; succ=[] } ]
+    let singleton pleaf = 
+        [ { data=pleaf; churn=0; succ=[] } ]
     ;;
 
     (* insert like merge into an existing tree *)
-    let rec merge_node ?(cmp=minify) p = function
-        | [] -> [ p ]
+    let rec merge_node ?(cmp=minify) pleaf = function
+        | [] -> [ pleaf ]
         | (hd :: tail) as s ->
-            if equal hd.data p.data then
-                p :: s
-            else if cmp hd.data p.data then
-                { hd with succ=(merge_node p ~cmp:cmp hd.succ) } :: tail
+            if equal hd.data pleaf.data then
+                pleaf :: s
+            else if cmp hd.data pleaf.data then
+                { hd with succ=(merge_node pleaf ~cmp:cmp hd.succ) } :: tail
             else
-                hd :: (merge_node p ~cmp:cmp tail)
+                hd :: (merge_node pleaf ~cmp:cmp tail)
     ;;
 
     (* merge two tree elements *)
@@ -159,7 +159,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
         (* bubbling elements to maintain heap properties  *)
         else if cmp tree.data trunk.data then
             (* bubble down the tree *)
-            { tree with succ=(merge_node ~cmp:cmp trunk tree.succ) }
+            { tree  with succ=(merge_node ~cmp:cmp trunk tree.succ) }
         else
             (* bubble up the trunk *)
             { trunk with succ=(merge_node ~cmp:cmp tree trunk.succ) }
@@ -167,14 +167,14 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
 
     exception Empty
 
-    let degree t = List.length t.succ
+    let degree tree = List.length tree.succ
     ;;
 
     (** inorder traverse the heap, elements will likely be out of order *)
     let rec collapse = function 
         | [] -> [] 
-        | { succ=s; data=p;_ } :: tail ->
-            collapse s @ [ p ] @ collapse tail
+        | { succ=child; data=pleaf;_ } :: tail ->
+            collapse child @ [ pleaf ] @ collapse tail
     ;;
 
     (* straddles the root elts for the min *)
@@ -210,16 +210,16 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     *)
     let join ?(cmp=minify) trees  =
         let rec cascade rejoin =  
-            let leftover = List.fold_left (fun acc el ->
-                let degs = degree el in
-                match Hashtbl.find_opt tbl degs with
+            let leftover = List.fold_left (fun acc eltree ->
+                let deg = degree eltree in
+                match Hashtbl.find_opt tbl deg with
                 | Some tree ->
                     (* merge and rejoin *)
-                    let ntree = merge ~cmp:cmp tree el  in
-                    let _     = Hashtbl.remove tbl degs in
+                    let ntree = merge ~cmp:cmp tree eltree  in
+                    let _     = Hashtbl.remove tbl deg in
                     ntree :: acc
                 | None ->
-                    let _ = Hashtbl.add tbl degs el in
+                    let _ = Hashtbl.add tbl deg eltree in
                     acc
             ) [] rejoin in if List.is_empty leftover then () else cascade leftover
         in
@@ -274,10 +274,10 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
 
     (* extract_all should yield a sorted list *)
     let rec extract_all ?(cmp=minify) tree = 
-        let c , y =  extract ~cmp:cmp tree in 
-        match y with
-        | []   -> [ c ]
-        | rest ->   c :: extract_all ~cmp:cmp rest
+        let sml, rem =  extract ~cmp:cmp tree in 
+        match rem with
+        | []   -> [ sml ]
+        | rest ->   sml :: extract_all ~cmp:cmp rest
     ;;
 
     let of_list ?(cmp=minify) els = 
@@ -294,13 +294,13 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
 
     (* extract until a condition is true should yield a sorted list *)
     let extract_til ?(cmp=minify) f tree = 
-        let c , y =  extract ~cmp:cmp tree in 
-        if f c then 
-            [ c ]
+        let sml , rem =  extract ~cmp:cmp tree in 
+        if f sml then 
+            [ sml ]
         else
-            match y with
-            | []   -> [ c ]
-            | rest ->   c :: extract_all ~cmp:cmp rest
+            match rem with
+            | []   -> [ sml ]
+            | rest ->   sml :: extract_all ~cmp:cmp rest
     ;;
 
     (* basically search until we find the old-entry and replace with a new one 
