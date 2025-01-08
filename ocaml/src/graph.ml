@@ -4,7 +4,7 @@
 *                                                                             *
 *******************************************************************************)
 open Treeset;;
-(*open Heap;;*)
+open Heap;;
 
 let (let*) = Option.bind
 
@@ -52,20 +52,40 @@ module type ClusterImpl = sig
     val bronkerbosch2: adj NodeMap.t -> elt AdjSet.set list
 end
 
+module type Measurable = sig 
+    type edge
+    include Set.OrderedType
+    val measure: edge -> t
+end
+
+(* simple adapter for some types to save some boilerplate in some cases *)
+module Direct(T: Set.OrderedType): Measurable with type t = T.t and type edge = T.t = struct 
+        type t         = T.t
+        type edge      = T.t
+        let  compare   = T.compare
+        let  measure e = e
+end
+
 module type PathImpl = sig
     type elt
     type adj
     type edge
     type 'b ctx
-    type path := (elt * elt * edge option) list
+    type 'c pathelt = { from: elt; next: elt; value: 'c; }
 
-    module NodeMap: Map.S    with type key := elt
-    module AdjSet:  TSet     with type t   := elt
-    (*module NodeHeap:TreeHeap with type elt := elt*)
+    module NodeMap:  Map.S with type key  := elt
+    module AdjSet:   TSet  with type t    := elt
 
-    val walkdepthuntil:   adj NodeMap.t -> (path ctx -> bool) -> elt -> path
-    val walkbreadthuntil: adj NodeMap.t -> (path ctx -> bool) -> elt -> path
-    val djikstra:         elt -> elt -> adj NodeMap.t -> path
+    module Compute(Measure: Measurable with type edge := edge): sig
+        module PathType: Ordinal with type order = Measure.t         and type t     = Measure.t pathelt
+        module NodeHeap: FibHeap with type node  = Measure.t pathelt and type order = Measure.t
+
+        val djikstra: elt -> elt -> adj NodeMap.t -> NodeHeap.t
+    end
+
+    type path      := (edge pathelt) list
+    val naivedfs: adj NodeMap.t -> (path ctx -> bool) -> elt -> path
+    val naivebfs: adj NodeMap.t -> (path ctx -> bool) -> elt -> path
 end
 
 module type SpanImpl = sig 
@@ -87,7 +107,7 @@ module type VertexImpl = sig
 
     val empty     : elt -> adj
     val weights   : elt -> adj NodeMap.t -> weights
-    val edge      : elt -> elt -> adj NodeMap.t -> edge option
+    val edge      : elt -> elt -> adj NodeMap.t -> edge
 end
 
 module type GraphElt = sig 
@@ -170,6 +190,13 @@ module type Graph = sig
     val transpose:   adj NodeMap.t -> adj NodeMap.t
 end
 
+(* simple adapter for some types to save some boilerplate in some cases *)
+module Plain(T: Set.OrderedType): GraphElt with type t = T.t = struct 
+    type t      = T.t
+    let compare = T.compare
+    type edge   = unit
+end
+
 module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edge := Unique.edge = struct
 
     type elt = Unique.t
@@ -201,7 +228,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let compare     = fun (_, _, lnode, _) (_, _, rnode, _) -> Unique.compare lnode rnode
         let empty   lbl = (AdjSet.empty, AdjSet.empty, lbl, Weights.create 1)
         let weights n g = let (_, _, _, w) = NodeMap.find n g in w
-        let edge  f t g = Weights.find_opt (weights f g) t
+        let edge  f t g = Weights.find (weights f g) t
     end
 
     (** Adjacency list graph definition **)
@@ -362,7 +389,11 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     type 'b ctx = { prev: elt option; elt: elt; vis: elt AdjSet.set; acc: 'b }
 
     (** breadth first search starting from start node applying f until returns
-        true or queue is empty applying f on each node and b on backtrack *)
+        true or queue is empty applying f on each node and b on backtrack 
+
+        filters already visited nodes, in bidirectional cases,
+        backedges will not be visited twice 
+    *)
     let bfs f b game start init =
         let que     = Queue.create () in
         let _       = Queue.add (None, start) que in
@@ -779,60 +810,87 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     end
 
     (*************************************************************************
+    *                           Spanning Trees                               *
+    **************************************************************************)
+    module Span = struct
+        (**
+            kruskal and prim
+        *)
+    end
+
+    (*************************************************************************
     *                             Path Algos                                 *
     **************************************************************************)
     module Path = struct 
-        (*module NodeHeap = Make_heap (Unique)*)
+
+        type 'c pathelt = { from: elt; next: elt; value: 'c; }
+
+        module Compute(Measure: Measurable with type edge := edge) = struct 
+
+            module PathType = struct 
+                type t          = Measure.t pathelt
+                type order      = Measure.t
+                let  bind t     = t.value 
+                let  compare l r = (Unique.compare l.from r.from) lor (Unique.compare l.next r.next)
+                let  ocompare    = Measure.compare
+            end
+
+            module NodeHeap = MakeFibHeap (PathType)
+
+            let djikstra start target graph = 
+                bfs 
+                    (fun ctx -> 
+                        let c' = (match ctx.prev with
+                        | Some p ->
+                            let e = Measure.measure (Vertex.edge p ctx.elt graph) in 
+                            let npath = { from=p; next=ctx.elt; value=e  } in
+                            (NodeHeap.insert npath ctx.acc) 
+                        | None ->  
+                                ctx.acc
+                        ) in
+                        (equal ctx.elt target, c')) 
+                    (fun ctx -> (ctx.acc)) 
+                    graph start (NodeHeap.empty)
+            ;;
+
+        end
 
         (* All pairs depth first walk until (f ctx -> bool) is true or all nodes
            are exhausted. Requires the node edges to be weighted  Uses simple
            dfs to append edges and their corresponding weights to a list*)
-        let walkdepthuntil graph f start = 
+        let naivedfs graph f start = 
             List.rev @@ dfs (fun s -> (
                 match s.prev with
                 | Some prev ->
-                    (f s), ((prev, s.elt, (Vertex.edge prev s.elt graph)) :: s.acc)
+                    (f s), ({from=prev; next=s.elt; value=(Vertex.edge prev s.elt graph)} :: s.acc)
                 | None ->
-                    (f s), ((s.elt, s.elt, None) :: s.acc)
+                    (f s), (s.acc)
             )) (fun s -> s.acc) graph start []
         ;;
 
         (* All pairs breadth first walk until (f ctx -> bool) is true or all nodes
            are exhausted. Requires the node edges to be weighted. Uses simple
            bfs to append edges and their corresponding weights to a list *)
-        let walkbreadthuntil graph f start = 
+        let naivebfs graph f start = 
             List.rev @@ bfs (fun s -> (
                 match s.prev with
                 | Some prev ->
-                    (f s), ((prev, s.elt, (Vertex.edge prev s.elt graph)) :: s.acc)
+                    (f s), ({from=prev; next=s.elt; value=(Vertex.edge prev s.elt graph)} :: s.acc)
                 | None -> 
-                    (f s), ((s.elt, s.elt, None) :: s.acc)
+                    (f s), (s.acc)
             )) (fun s -> s.acc) graph start []
         ;;
 
-        let djikstra _start _target _graph = 
-            []
-        ;;
-
         (*
-        Floyd warshall
-        Bellman ford
-        Djikstra
-        Astar
-    *)
+            Floyd warshall
+            Bellman ford
+            Djikstra
+            Astar
+        *)
     end
 
     module Flow = struct 
         (* Ford-Fulkerson (flow) *)
-    end
-
-    (*************************************************************************
-    *                           Spanning Trees                               *
-    **************************************************************************)
-    module Span = struct
-        (**
-      kruskal  
-    *)
     end
 
     (* TODO:

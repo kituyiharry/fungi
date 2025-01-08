@@ -1,3 +1,6 @@
+#load "../../_build/default/examples/mazesolver/lib/mazesolver.cma";;
+#load "../../_build/default/src/fungi.cma";;
+
 open Fungi;;
 
 module SGraph = Graph.MakeGraph(struct 
@@ -41,3 +44,5 @@ let s_adjlist = [
 ];;
 
 let s = SGraph.of_weights2 s_adjlist s;;
+
+module SPath = SGraph.Path.Compute(Graph.Direct(Float));;

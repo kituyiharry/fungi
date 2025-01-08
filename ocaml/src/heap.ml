@@ -17,8 +17,32 @@
 *                                                                             *
 *******************************************************************************)
 
+module type Ordinal = sig 
+    (* The full type *)
+    type t
+    (* How we order in the heap *)
+    type order
+    (* How we get the order from a node *)
+    val  bind:     t  -> order
+    (* How we compare different elements *)
+    (* total order *)
+    val  compare:  t     -> t ->     int
+    (* How we compare different orders *)
+    val  ocompare: order -> order -> int
+end
+
+(* immediately binds a value as its own order *)
+module Immediate(Inner: Set.OrderedType): Ordinal with type t = Inner.t and type order = Inner.t = struct 
+    type t         = Inner.t
+    type order     = Inner.t
+    let  bind    e = e
+    let  ocompare  = Inner.compare
+    let  compare   = Inner.compare
+end
+
 module type FibHeap = sig
     type node
+    type order
     type elts        = { data: node; mutable churn: int; succ: elts list }
     type t           = elts list
     val empty:       t
@@ -27,6 +51,10 @@ module type FibHeap = sig
     val degree:      elts -> int
     val cardinal:    t -> int
     val collapse:    t -> node list
+    val singleton:   node -> t
+    val extract_til: ?cmp:(node -> node -> bool) -> (node -> bool) -> t -> node list
+    val to_seq:      ?cmp:(node -> node -> bool) -> t -> node Seq.t
+    val of_list:     ?cmp:(node -> node -> bool) -> node list -> t
     val join:        ?cmp:(node -> node -> bool) -> t -> t
     val mem:         ?cmp:(node -> node -> bool) -> node -> t -> bool
     val insert:      ?cmp:(node -> node -> bool) -> node -> t -> t
@@ -40,12 +68,15 @@ module type FibHeap = sig
     val decrease:    ?cmp:(node -> node -> bool) -> node -> node -> t -> t
 end
 
-module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = struct
+module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type order = Entry.order = struct
 
-    type node = Entry.t
+    type node  = Entry.t
     ;;
 
-    (* churn tracks the grandchildren that have been removed *)
+    type order = Entry.order 
+    ;;
+
+    (* churn tracks the grand-children that have been removed *)
     type elts = { data: node; mutable churn: int; succ: elts list }
     ;;
 
@@ -65,15 +96,15 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
     (* comparator that determines if the root is the smallest or the largest *)
 
     (* max-heapify, root elts are the most of their successors *)
-    let maxify l r = (Entry.compare l r) =  1
+    let maxify l r = (Entry.ocompare (Entry.bind l) (Entry.bind r)) =  1
     ;;
 
-    (* churn thresh *)
+    (* churn threshold *)
     let churn_threshold = ref 2
     ;;
 
     (* min-heapify, root elts are the least of their successors *)
-    let minify l r = (Entry.compare l r) = -1
+    let minify l r = (Entry.ocompare (Entry.bind l) (Entry.bind r)) = -1
     ;;
 
     let mem ?(cmp=minify) pleaf ptree = 
@@ -102,6 +133,10 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
                 { hd with succ=(insert p ~cmp:cmp hd.succ) } :: tail
             else
                 hd :: (insert p ~cmp:cmp tail)
+    ;;
+
+    let singleton p = 
+        [ { data=p; churn=0; succ=[] } ]
     ;;
 
     (* insert like merge into an existing tree *)
@@ -245,6 +280,29 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
         | rest ->   c :: extract_all ~cmp:cmp rest
     ;;
 
+    let of_list ?(cmp=minify) els = 
+        List.fold_right (insert ~cmp:cmp) els empty
+    ;;
+
+    let to_seq ?(cmp=minify) tree = 
+            let rec aux l () = match extract_opt ~cmp:cmp l with
+                | None -> Seq.Nil
+                | Some (hd, tail) -> Seq.Cons (hd, (aux tail))
+            in
+                (aux tree)
+    ;;
+
+    (* extract until a condition is true should yield a sorted list *)
+    let extract_til ?(cmp=minify) f tree = 
+        let c , y =  extract ~cmp:cmp tree in 
+        if f c then 
+            [ c ]
+        else
+            match y with
+            | []   -> [ c ]
+            | rest ->   c :: extract_all ~cmp:cmp rest
+    ;;
+
     (* basically search until we find the old-entry and replace with a new one 
        we have to confirm with the parent whether the main property holds and
        change otherwise by "cutting it out" to the root
@@ -293,10 +351,8 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
 
     (* local only increase, duplicates not updated *)
     let increase ?(cmp=minify) oldent newent tree = 
-        if (Entry.compare oldent newent) =  1 then
+        if (Entry.ocompare (Entry.bind oldent) (Entry.bind newent)) =  1 then
             failwith "new value must be larger"
-        else if equal oldent newent then
-            tree
         else if List.is_empty tree then
             raise Empty
         else
@@ -334,10 +390,8 @@ module MakeFibHeap(Entry: Set.OrderedType): FibHeap with type node = Entry.t = s
 
     (* local only decrease, duplicates not updated *)
     let decrease ?(cmp=minify) oldent newent tree = 
-        if (Entry.compare oldent newent) = -1 then
+        if (Entry.ocompare (Entry.bind oldent) (Entry.bind newent)) = -1 then
             failwith "new value must be smaller"
-        else if equal oldent newent then
-            tree
         else if List.is_empty tree then
             raise Empty
         else
