@@ -76,6 +76,8 @@ module type PathImpl = sig
     module NodeMap:  Map.S with type key  := elt
     module AdjSet:   TSet  with type t    := elt
 
+    val mkpath: elt -> elt -> 'a -> 'a pathelt
+
     module Compute(Measure: Measurable with type edge := edge): sig
         module PathType: Ordinal with type order = Measure.t         and type t     = Measure.t pathelt
         module NodeHeap: FibHeap with type node  = Measure.t pathelt and type order = Measure.t
@@ -825,14 +827,23 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
         type 'c pathelt = { from: elt; next: elt; value: 'c; }
 
+        let mkpath f t cost = 
+            { from=f; next=t; value=cost }
+        ;;
+
         module Compute(Measure: Measurable with type edge := edge) = struct 
 
             module PathType = struct 
-                type t          = Measure.t pathelt
-                type order      = Measure.t
-                let  bind t     = t.value 
-                let  compare l r = (Unique.compare l.from r.from) lor (Unique.compare l.next r.next)
+                type t           = Measure.t pathelt
+                type order       = Measure.t
+                let  bind t      = t.value 
+                let  compare l r =
+                    match (Unique.compare l.next r.next) with
+                        | 0 -> (Unique.compare l.from r.from)
+                        | x -> x
+                    ;;
                 let  ocompare    = Measure.compare
+                let  replace v t = { v with value=t }
             end
 
             module NodeHeap = MakeFibHeap (PathType)
@@ -840,12 +851,12 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             let djikstra start target graph = 
                 bfs 
                     (fun ctx -> 
-                        let c' = (match ctx.prev with
-                        | Some p ->
-                            let e = Measure.measure (Vertex.edge p ctx.elt graph) in 
-                            let npath = { from=p; next=ctx.elt; value=e  } in
-                            (NodeHeap.insert npath ctx.acc) 
-                        | None ->  
+                        let c' = 
+                        (match ctx.prev with
+                            | Some p ->
+                                let e = Measure.measure (Vertex.edge p ctx.elt graph) in 
+                                (NodeHeap.insert { from=p; next=ctx.elt; value=e } ctx.acc) 
+                            | None -> 
                                 ctx.acc
                         ) in
                         (equal ctx.elt target, c')) 
