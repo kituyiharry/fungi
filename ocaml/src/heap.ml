@@ -13,7 +13,8 @@
 *     - no redundancy (if 2 nodes are the same their trees are assumed to     *
 *       be the same)                                                          *
 *     - For simplicity we don't have a min pointer at the root list but it may*
-*       be added in the future                                                *
+*       be added in the future, we so have to walk the root list to get the   *
+*       min                                                                   *
 *                                                                             *
 *******************************************************************************)
 
@@ -26,11 +27,11 @@ module type Ordinal = sig
     val  bind:     t  -> order
     (* How we compare different elements *)
     (* total order *)
-    val  compare:  t     -> t ->     int
+    val  compare:  t  -> t -> int
     (* How we compare different orders *)
     val  ocompare: order -> order -> int
     (* replace new values of the order - think of it in the context of an
-       increase decrease *)
+       increase decrease with a functional update *)
     val  replace:   t -> order -> t
 end
 

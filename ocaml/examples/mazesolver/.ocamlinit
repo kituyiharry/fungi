@@ -6,8 +6,15 @@ open Fungi;;
 module SGraph = Graph.MakeGraph(struct 
     type t     = string
     type edge  = float
-    let compare=  String.compare
+    let compare= String.compare
 end);;
+
+module SGraph2 = Graph.MakeGraph(struct 
+    type t     = string
+    type edge  = unit
+    let compare= String.compare
+end);;
+module SGraph4 = Graph.MakeGraph(Graph.Plain(String));;
 
 let s = SGraph.empty;;
 
@@ -46,3 +53,10 @@ let s_adjlist = [
 let s = SGraph.of_weights2 s_adjlist s;;
 
 module SPath = SGraph.Path.Compute(Graph.Direct(Float));;
+module SPath2 = SGraph2.Path.Compute(struct 
+        type t         = unit
+        type edge      = unit
+        let  compare   = Unit.compare
+        let  measure (e: edge) = `Value e
+end);;
+module SPath3 = SGraph2.Path.Compute(Graph.Direct(Unit));;

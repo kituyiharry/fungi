@@ -52,18 +52,22 @@ module type ClusterImpl = sig
     val bronkerbosch2: adj NodeMap.t -> elt AdjSet.set list
 end
 
+(* we have to use a wrap type to denote extremes, ideally this is just a float
+   but the challenge is we don't know they final type ahead of time so we
+   prefigure it as we need it for some algorithms e.g djikstra *)
 module type Measurable = sig 
-    type edge
     include Set.OrderedType
-    val measure: edge -> t
+    type edge
+    type +'a wrap := [`Inf | `NegInf | `Value of 'a]
+    val measure: edge -> t wrap
 end
 
 (* simple adapter for some types to save some boilerplate in some cases *)
-module Direct(T: Set.OrderedType): Measurable with type t = T.t and type edge = T.t = struct 
+module Direct(T: Set.OrderedType): Measurable with type edge = T.t = struct 
         type t         = T.t
         type edge      = T.t
         let  compare   = T.compare
-        let  measure e = e
+        let  measure e = `Value e
 end
 
 module type PathImpl = sig
@@ -79,13 +83,16 @@ module type PathImpl = sig
     val mkpath: elt -> elt -> 'a -> 'a pathelt
 
     module Compute(Measure: Measurable with type edge := edge): sig
-        module PathType: Ordinal with type order = Measure.t         and type t     = Measure.t pathelt
-        module NodeHeap: FibHeap with type node  = Measure.t pathelt and type order = Measure.t
+        type +'a wrap := [`Inf | `NegInf | `Value of 'a]
+        type measure = Measure.t wrap
 
-        val djikstra: elt -> elt -> adj NodeMap.t -> NodeHeap.t
+        module PathList: Ordinal with type order = measure and type t = measure pathelt
+        module PathHeap: FibHeap with type node  = measure pathelt and type order = measure
+
+        val djikstra: elt -> elt -> adj NodeMap.t -> PathHeap.t
     end
 
-    type path      := (edge pathelt) list
+    type path     := (edge pathelt) list
     val naivedfs: adj NodeMap.t -> (path ctx -> bool) -> elt -> path
     val naivebfs: adj NodeMap.t -> (path ctx -> bool) -> elt -> path
 end
@@ -190,13 +197,16 @@ module type Graph = sig
     val dfs:         ('b ctx -> bool * 'b) -> ('b ctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose:   adj NodeMap.t -> adj NodeMap.t
+    val outlist:     adj NodeMap.t -> (elt * elt AdjSet.set) list
+    val to_matrix:   adj NodeMap.t -> int array array * (int * elt) list 
+    val of_matrix:   int array array -> (int * elt) list -> adj NodeMap.t
 end
 
 (* simple adapter for some types to save some boilerplate in some cases *)
-module Plain(T: Set.OrderedType): GraphElt with type t = T.t = struct 
-    type t      = T.t
-    let compare = T.compare
-    type edge   = unit
+module Plain(T: Set.OrderedType): GraphElt with type edge = unit = struct 
+    type t       = T.t
+    let  compare = T.compare
+    type edge    = unit
 end
 
 module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edge := Unique.edge = struct
@@ -449,6 +459,48 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     let adj_list_of node nodeMap =
         let (incoming, outgoing, _label, _wgts) = NodeMap.find node nodeMap in
         AdjSet.to_list (AdjSet.union incoming outgoing)
+    ;;
+
+    let outlist nodeMap = 
+        NodeMap.fold (fun elt (_, out, _, _) acc ->  
+            (elt, out) :: acc
+        ) nodeMap []
+    ;;
+
+    (* graph to 2d array and a key list defining the elt for each array index *)
+    let to_matrix nodeMap = 
+        let sz   = NodeMap.cardinal nodeMap in
+        let keys = NodeMap.to_list  nodeMap in
+        (* map outgoing edges to indices, return each ed *)
+        let adjs = List.mapi (fun i (k, (_, o, _, _)) -> 
+            ((i, k), AdjSet.fold (fun elt acc -> 
+                Option.get (
+                    List.find_index (fun (b, _) -> equal b elt) keys
+                ) :: acc
+            ) o [])
+        ) keys in
+        let b = Array.init_matrix sz sz (fun i j -> 
+            Bool.to_int @@ List.mem j (snd @@ List.nth adjs i)
+        ) in
+        (* return matrix and keys showing which elt is which index *)
+        (b, List.map (fst) adjs)
+    ;;
+
+    (* graph from 2d matrix with keys defining which elt maps to what index *)
+    let of_matrix (nodeMatrix: int array array) (keys: (int * elt) list): adj NodeMap.t = 
+        let g = List.fold_right (fun (_, e) a  -> add e a) keys empty  in
+        let index = 0 in
+        let adj_list = snd @@ Array.fold_left (fun (idx, acc) iarr -> 
+            let k = (snd (List.find (fun  (id, _el) -> id = idx) keys )) in
+            let index' = 0 in
+            (idx+1, (k, snd @@ (Array.fold_left (fun (idx', acc') v -> 
+                if v = 1 then
+                    (idx'+1, (snd (List.find (fun  (id, _el) -> id = idx') keys )) :: acc')
+                else
+                    (idx'+1, acc')
+            ) (index', []) iarr)) :: acc)
+        ) (index, []) nodeMatrix in 
+        of_list adj_list g
     ;;
 
     (** swap the incoming and outgoing edge direction *)
@@ -833,35 +885,67 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
         module Compute(Measure: Measurable with type edge := edge) = struct 
 
-            module PathType = struct 
-                type t           = Measure.t pathelt
-                type order       = Measure.t
+            type +'a wrap = [`Inf | `NegInf | `Value of 'a]
+            type measure = Measure.t wrap
+
+            (* implement an ordinal interface with the measure compare for the
+               heap order *)
+            module PathList = struct 
+                type t           = measure pathelt
+                type order       = measure
                 let  bind t      = t.value 
-                let  compare l r =
+                let compare l r =
                     match (Unique.compare l.next r.next) with
                         | 0 -> (Unique.compare l.from r.from)
                         | x -> x
                     ;;
-                let  ocompare    = Measure.compare
+                let  ocompare l r  = 
+                    match (l, r) with
+                        | (`Value a,`Value b) ->  Measure.compare a b
+                        | (`Inf,    `Inf)     ->  0
+                        | (`NegInf, `NegInf)  ->  0
+                        | (`Inf,    `NegInf)  ->  1
+                        | (`NegInf, `Inf)     -> -1
+                        | (`NegInf, `Value _) -> -1
+                        | (`Value _,`NegInf)  ->  1
+                        | (`Inf,    `Value _) ->  1
+                        | (`Value _,`Inf)     -> -1
+                    ;;
                 let  replace v t = { v with value=t }
             end
 
-            module NodeHeap = MakeFibHeap (PathType)
+            module PathHeap = MakeFibHeap (PathList)
+            module PathSet  = TreeSet (PathList)
 
-            let djikstra start target graph = 
-                bfs 
-                    (fun ctx -> 
-                        let c' = 
-                        (match ctx.prev with
-                            | Some p ->
-                                let e = Measure.measure (Vertex.edge p ctx.elt graph) in 
-                                (NodeHeap.insert { from=p; next=ctx.elt; value=e } ctx.acc) 
-                            | None -> 
-                                ctx.acc
-                        ) in
-                        (equal ctx.elt target, c')) 
-                    (fun ctx -> (ctx.acc)) 
-                    graph start (NodeHeap.empty)
+            (* Single source shortest path *)
+            let djikstra start _target graph = 
+                let init     = 
+                    (* Set all out edges to infinity except the pseudo edge to
+                       self to denote the start point *)
+                    outlist graph 
+                    |>  List.fold_left (fun acc (k, v) -> 
+                            AdjSet.fold (fun x a -> 
+                                PathHeap.insert (mkpath k x `Inf) a
+                            ) v acc
+                        ) (PathHeap.singleton (mkpath start start `NegInf))
+                in
+                let _iter vis heap = 
+                    match PathHeap.extract_opt heap with 
+                        | Some (minpath, _rest) ->
+                            let out   = outgoingof minpath.next graph in 
+                            let heap' = AdjSet.fold (fun x acc -> 
+                                let d = (Measure.measure (Vertex.edge minpath.next x graph)) in
+                                let p = mkpath minpath.next x d in
+                                if PathSet.mem p vis then
+                                    acc
+                                else
+                                    PathHeap.insert p acc
+                            ) out heap 
+                            in heap'
+                        | None -> 
+                            failwith "now what??"
+                in
+                    init
             ;;
 
         end
