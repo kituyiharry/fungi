@@ -398,7 +398,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                             failwith "new value must be larger"
                         else
                             update ~cmp:cmp hd tl newent parent leftover
-                    else if Entry.ocompare (Entry.bind hd.data) newent <= 0 then
+                    else
                         let nt, lf, wasfound = atparent hd hd.succ leftover found in
                         if wasfound then
                             if hd.churn > (!churn_threshold) then
@@ -408,13 +408,10 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                             else
                                 ({ hd with succ=nt } :: tl, lf, wasfound)
                         else
-                            let nt, lf, rem = atparent parent tl leftover wasfound in
-                            (hd :: nt, lf, rem)
-                    else
-                        (* the node may have moved to the root, straddle
+                            (* the node may have moved to the root, straddle
                                the tail *)
-                        let nt, lf, rem = atparent parent tl leftover found in
-                        (hd :: nt, lf, rem)
+                            let nt, lf, rem = atparent parent tl leftover found in
+                            (hd :: nt, lf, rem)
             in let ntree, left, found = atparent { data=node; churn=0; succ=[]; index=0 } tree [] false in 
             if found then
                 (* reset root churn values *)
@@ -430,7 +427,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     hints: we expect the value to be at most newent
     *)
     let decrease ?(cmp=minify) node newent tree = 
-    (*let decrease node newent tree = *)
+        (*let decrease node newent tree = *)
         if List.is_empty tree then
             raise Empty
         else
@@ -444,10 +441,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                             failwith "new value must be smaller"
                         else
                             update ~cmp:cmp hd tl newent parent leftover
-                    (* if this stops being true then we prune that part as there
-                       will only be values smaller than newent which violates
-                       the heap property *)
-                    else if Entry.ocompare (Entry.bind hd.data) newent >= 0 then
+                    else
                         let nt, lf, wasfound = (atparent hd hd.succ leftover found) in
                         (* backtrack, check if we hit a churn threshold *)
                         if wasfound then
@@ -458,13 +452,10 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                             else
                                 ({ hd with succ=nt } :: tl, lf, wasfound)
                         else
+                            (* the node may have moved to the root, straddle
+                               the tail *)
                             let nt, lf, rem = atparent parent tl leftover found in
                             (hd :: nt, lf, rem)
-                    else 
-                        (* the node may have moved to the root, straddle
-                               the tail *)
-                        let nt, lf, rem = atparent parent tl leftover found in
-                        (hd :: nt, lf, rem)
             in 
             (* start with self as its own parent *)
             let ntree, left, wasfound = atparent { data=node; churn=0; succ=[]; index=0; } tree [] false in 
