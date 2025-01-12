@@ -36,6 +36,8 @@ let nodes = [ s_a; s_b; s_c; s_d; s_e; s_f; s_g; s_h; s_i; s_j; s_k; s_l; s_s ];
 
 let s = List.fold_right (SGraph.add) nodes s;;
 
+let _ = Printexc.record_backtrace true;;
+
 let s_adjlist = [
     (s_a, [(s_s, 7.); (s_b, 3.); (s_d, 4.)]);
     (s_s, [(s_c, 3.)]);
@@ -52,11 +54,31 @@ let s_adjlist = [
 
 let s = SGraph.of_weights2 s_adjlist s;;
 
-module SPath = SGraph.Path.Compute(Graph.Direct(Float));;
-module SPath2 = SGraph2.Path.Compute(struct 
-        type t         = unit
-        type edge      = unit
-        let  compare   = Unit.compare
-        let  measure (e: edge) = `Value e
+module SPath  = SGraph.Path.Compute(Graph.Biject(Float));;
+module SPath2 = SGraph.Path.Compute(struct 
+        include Float
+        type t         = float
+        type edge      = float
+        let  compare   = Float.compare
+        let  measure e = `Value e
 end);;
-module SPath3 = SGraph2.Path.Compute(Graph.Direct(Unit));;
+
+let a_s = SGraph.Path.mkpath s_a s_s `Inf ;;
+
+let small l r = SGraph.Path.mkpath l r `Inf;;
+
+let (uvis, init) = 
+    (SGraph.outlist s)
+    |>  List.fold_left (fun (kset, acc) (k, v) -> 
+        (SGraph.AdjSet.add k kset, SGraph.AdjSet.fold (fun x a -> 
+            SPath.PathHeap.insert (SGraph.Path.mkpath k x `Inf) a
+        ) v acc)
+    ) (SGraph.AdjSet.empty, SPath.PathHeap.empty) 
+;;
+
+let _ , init3 = SPath.PathHeap.extract init;;
+let t = (SGraph.Path.mkpath s_d s_b `Inf);;
+
+module F  = Heap.MakeFibHeap (Heap.Surject(Int));;
+let    f  = F.of_list [1;1;1;1;1;1;1;1;1;1;1;1;22;3;2];;
+let d, f' = F.extract f;;

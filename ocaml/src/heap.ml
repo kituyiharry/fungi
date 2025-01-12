@@ -36,7 +36,7 @@ module type Ordinal = sig
 end
 
 (* immediately binds a value as its own order *)
-module Immediate(Inner: Set.OrderedType): Ordinal with type t = Inner.t and type order = Inner.t = struct 
+module Surject(Inner: Set.OrderedType): Ordinal with type t = Inner.t and type order = Inner.t = struct 
     type t          = Inner.t
     type order      = Inner.t
     let  bind    e  = e
@@ -48,16 +48,18 @@ end
 module type FibHeap = sig
     type node
     type order
-    type elts        = { data: node; mutable churn: int; succ: elts list }
+    type elts        = { data: node; mutable churn: int; index: int; succ: elts list }
     type t           = elts list
     val empty:       t
     val equal:       node -> node -> bool
     val minify:      node -> node -> bool
     val maxify:      node -> node -> bool
+    val equify:      node -> node -> bool
     val degree:      elts -> int
     val cardinal:    t -> int
     val collapse:    t -> node list
     val singleton:   node -> t
+    val dedup:       node -> elts list -> (elts list * node list)
     val extract_til: ?cmp:(node -> node -> bool) -> (node -> bool) -> t -> node list
     val to_seq:      ?cmp:(node -> node -> bool) -> t -> node Seq.t
     val of_list:     ?cmp:(node -> node -> bool) -> node list -> t
@@ -70,6 +72,7 @@ module type FibHeap = sig
     val extract:     ?cmp:(node -> node -> bool) -> t -> (node * t)
     val extract_opt: ?cmp:(node -> node -> bool) -> t -> (node * t) option
     val extract_all: ?cmp:(node -> node -> bool) -> t -> node list
+    val update:      ?cmp:(node -> node -> bool) -> elts -> elts list -> order -> elts -> elts list -> elts list * elts list * bool
     val increase:    ?cmp:(node -> node -> bool) -> node -> order -> t -> t
     val decrease:    ?cmp:(node -> node -> bool) -> node -> order -> t -> t
 end
@@ -83,7 +86,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     ;;
 
     (* churn tracks the grand-children that have been removed *)
-    type elts = { data: node; mutable churn: int; succ: elts list }
+    type elts = { data: node; mutable churn: int; index: int; succ: elts list }
     ;;
 
     type t    = elts list
@@ -113,14 +116,17 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     let minify l r = (Entry.ocompare (Entry.bind l) (Entry.bind r)) = -1
     ;;
 
+    let equify l r = (Entry.ocompare (Entry.bind l) (Entry.bind r)) =  0
+    ;;
+
     let mem ?(cmp=minify) pleaf ptree = 
         let rec fmem tree rem = match tree with
         | [] -> (match rem with
                 | [] -> false
-                | subtree  -> fmem subtree [])
+                | subtree  ->  fmem subtree [])
         | hd :: tail ->
             (equal hd.data pleaf) || 
-               (if cmp hd.data pleaf then fmem hd.succ (tail @ rem) else fmem tail rem)
+               (if cmp hd.data pleaf then fmem hd.succ (tail @ rem) else fmem (tail @ hd.succ) rem)
         in fmem ptree []
     ;;
 
@@ -131,10 +137,10 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     ;;
 
     let rec insert ?(cmp=minify) pleaf = function
-        | [] -> [ { data=pleaf; churn=0; succ=[] } ]
+        | [] -> [ { data=pleaf; churn=0; index=0; succ=[] } ]
         | (hd :: tail) as s ->
             if equal hd.data pleaf then
-                { data=pleaf; churn=0; succ=[] } :: s
+                { data=pleaf; churn=0; succ=[]; index=(hd.index+1) } :: s
             else if cmp hd.data pleaf then
                 { hd with succ=(insert pleaf ~cmp:cmp hd.succ) } :: tail
             else
@@ -142,7 +148,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     ;;
 
     let singleton pleaf = 
-        [ { data=pleaf; churn=0; succ=[] } ]
+        [ { data=pleaf; churn=0; index=0; succ=[] } ]
     ;;
 
     (* insert like merge into an existing tree *)
@@ -157,11 +163,28 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                 hd :: (merge_node pleaf ~cmp:cmp tail)
     ;;
 
+    (* remove all occurences of pleaf *)
+    let dedup pleaf tree = 
+        let rec fdup stree ntree acc = match stree with 
+            | [] -> (ntree, acc) 
+            | hd :: tl ->
+            if equal hd.data pleaf then 
+                let (ntree', acc') = fdup hd.succ ntree (hd.data :: acc) in 
+                fdup tl ntree' acc'
+            else
+                fdup tl (hd :: ntree) acc
+        in fdup tree [] []
+    ;;
+
     (* merge two tree elements *)
     let merge ?(cmp=minify) tree trunk = 
         (* duplicate allowed to exit in successor *)
         if equal tree.data trunk.data then
-            { tree with succ = trunk :: tree.succ }
+            (* try and preserve the insertion order *)
+            if tree.index > trunk.index then
+                { trunk with succ = tree  :: trunk.succ }
+            else
+                { tree with succ  = trunk :: tree.succ }
         (* bubbling elements to maintain heap properties  *)
         else if cmp tree.data trunk.data then
             (* bubble down the tree *)
@@ -180,7 +203,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     let rec collapse = function 
         | [] -> [] 
         | { succ=child; data=pleaf;_ } :: tail ->
-            collapse child @ [ pleaf ] @ collapse tail
+            pleaf :: collapse child @ collapse tail
     ;;
 
     (* straddles the root elts for the min *)
@@ -215,6 +238,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
        degree
     *)
     let join ?(cmp=minify) trees  =
+        (* push all nodes by degree *)
         let rec cascade rejoin =  
             let leftover = List.fold_left (fun acc eltree ->
                 let deg = degree eltree in
@@ -344,7 +368,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
             else
                 (* true, true  -> hill inconsistency *)
                 let _ = (parent.churn <- parent.churn + 1) in
-                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
+                (tl, { data=newent; churn=0; succ=[]; index=hd.index; } :: hd.succ, true)
         | None -> 
             let par = (cmp parent.data newent) in
             if par then
@@ -353,11 +377,15 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
             else
                 (* true, true   -> hill  *)
                 let _ = (parent.churn <- parent.churn + 1) in
-                (tl, { data=newent; churn=0; succ=[] } :: hd.succ, true)
+                (tl, { data=newent; churn=0; succ=[]; index=hd.index } :: hd.succ, true)
     ;;
 
-    (* local only increase, duplicates not updated *)
+    (* local only increase, duplicates not updated 
+
+    hints: we expect the value to be at least newent
+       *)
     let increase ?(cmp=minify) node newent tree = 
+    (*let increase node newent tree = *)
         if List.is_empty tree then
             raise Empty
         else
@@ -369,8 +397,8 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                         if (Entry.ocompare (Entry.bind hd.data) newent) =  1 then
                             failwith "new value must be larger"
                         else
-                            update hd tl newent parent leftover
-                    else if cmp hd.data node then
+                            update ~cmp:cmp hd tl newent parent leftover
+                    else if Entry.ocompare (Entry.bind hd.data) newent <= 0 then
                         let nt, lf, wasfound = atparent hd hd.succ leftover found in
                         if wasfound then
                             if hd.churn > (!churn_threshold) then
@@ -380,14 +408,14 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                             else
                                 ({ hd with succ=nt } :: tl, lf, wasfound)
                         else
-                            (* the node may have moved to the root, straddle
-                               the tail *)
                             let nt, lf, rem = atparent parent tl leftover wasfound in
                             (hd :: nt, lf, rem)
                     else
+                        (* the node may have moved to the root, straddle
+                               the tail *)
                         let nt, lf, rem = atparent parent tl leftover found in
                         (hd :: nt, lf, rem)
-            in let ntree, left, found = atparent { data=node; churn=0; succ=[] } tree [] false in 
+            in let ntree, left, found = atparent { data=node; churn=0; succ=[]; index=0 } tree [] false in 
             if found then
                 (* reset root churn values *)
                 let _ = (List.iter (fun n -> n.churn <- 0) left) in
@@ -396,8 +424,13 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                 failwith "value not in heap"
     ;;
 
-    (* local only decrease, duplicates not updated *)
+    (* local only decrease, duplicates not updated 
+    this operation is uninformed of the former nodes priority and thus searches
+    the whole list 
+    hints: we expect the value to be at most newent
+    *)
     let decrease ?(cmp=minify) node newent tree = 
+    (*let decrease node newent tree = *)
         if List.is_empty tree then
             raise Empty
         else
@@ -410,8 +443,11 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                         if (Entry.ocompare (Entry.bind hd.data) (newent)) = -1 then
                             failwith "new value must be smaller"
                         else
-                            update hd tl newent parent leftover
-                    else if cmp hd.data node then
+                            update ~cmp:cmp hd tl newent parent leftover
+                    (* if this stops being true then we prune that part as there
+                       will only be values smaller than newent which violates
+                       the heap property *)
+                    else if Entry.ocompare (Entry.bind hd.data) newent >= 0 then
                         let nt, lf, wasfound = (atparent hd hd.succ leftover found) in
                         (* backtrack, check if we hit a churn threshold *)
                         if wasfound then
@@ -421,18 +457,17 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                                 (tl, { hd with succ=nt } :: lf, wasfound)
                             else
                                 ({ hd with succ=nt } :: tl, lf, wasfound)
-                        else 
-                            (* the node may have moved to the root, straddle
-                               the tail *)
-                            let nt, lf, rem = atparent parent tl leftover wasfound in
+                        else
+                            let nt, lf, rem = atparent parent tl leftover found in
                             (hd :: nt, lf, rem)
-                    else
-                        (* straddle as the former doesn't need checking *)
+                    else 
+                        (* the node may have moved to the root, straddle
+                               the tail *)
                         let nt, lf, rem = atparent parent tl leftover found in
                         (hd :: nt, lf, rem)
             in 
             (* start with self as its own parent *)
-            let ntree, left, wasfound = atparent { data=node; churn=0; succ=[] } tree [] false in 
+            let ntree, left, wasfound = atparent { data=node; churn=0; succ=[]; index=0; } tree [] false in 
             if wasfound then
                 (* reset churn values *)
                 let _ = (List.iter (fun n -> n.churn <- 0) left) in
