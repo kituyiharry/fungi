@@ -6,7 +6,6 @@
 open Treeset;;
 open Heap;;
 
-let (let*) = Option.bind
 
 module type SccImpl = sig 
 
@@ -274,6 +273,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
     type elt = Unique.t
     type edge= Unique.edge
+
+    let (let*) = Option.bind
 
     (** compare 2 nodes in the graph *)
     let equal lnode rnode = (Unique.compare lnode rnode) = 0
