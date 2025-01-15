@@ -1,6 +1,6 @@
 (******************************************************************************
 *                                                                             *
-*   Simplest Fibonacci (d-ary)  heap                                          *
+*   Simplest Indexed Fibonacci (d-ary)  heap                                  *
 *     - Every node's key is less(default cmp) than or equal to its children   * 
 *       keys as given by the Entry.compare function                           *
 *     - The minimum|maximum element is always in the root list depending      *
@@ -51,21 +51,25 @@ module type FibHeap = sig
     type elts        = { data: node; mutable churn: int; index: int; succ: elts list }
     type t           = elts list
     val empty:       t
+    val is_empty:    t -> bool
     val equal:       node -> node -> bool
     val minify:      node -> node -> bool
     val maxify:      node -> node -> bool
-    val equify:      node -> node -> bool
+    val oequal:      node -> node -> int
     val degree:      elts -> int
     val cardinal:    t -> int
     val collapse:    t -> node list
     val singleton:   node -> t
     val dedup:       node -> elts list -> (elts list * node list)
+    val dedup_idx:   node -> elts list -> elts list * (node * int) list
+    val dupcount:    node -> t -> int
     val extract_til: ?cmp:(node -> node -> bool) -> (node -> bool) -> t -> node list
     val to_seq:      ?cmp:(node -> node -> bool) -> t -> node Seq.t
     val of_list:     ?cmp:(node -> node -> bool) -> node list -> t
-    val join:        ?cmp:(node -> node -> bool) -> t -> t
+    val consolidate: ?cmp:(node -> node -> bool) -> t -> t
     val mem:         ?cmp:(node -> node -> bool) -> node -> t -> bool
     val insert:      ?cmp:(node -> node -> bool) -> node -> t -> t
+    val dupinsert:   ?cmp:(node -> node -> bool) -> node -> t -> t
     val peek:        ?cmp:(node -> node -> bool) -> t -> elts
     val peek_opt:    ?cmp:(node -> node -> bool) -> t -> elts option
     val merge:       ?cmp:(node -> node -> bool) -> elts -> elts -> elts
@@ -75,6 +79,7 @@ module type FibHeap = sig
     val update:      ?cmp:(node -> node -> bool) -> elts -> elts list -> order -> elts -> elts list -> elts list * elts list * bool
     val increase:    ?cmp:(node -> node -> bool) -> node -> order -> t -> t
     val decrease:    ?cmp:(node -> node -> bool) -> node -> order -> t -> t
+    val find:        (node -> bool) -> elts list -> node
 end
 
 module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type order = Entry.order = struct
@@ -95,6 +100,9 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     let empty = []
     ;;
 
+    let is_empty = List.is_empty
+    ;;
+
     (* internal joining tbl which stores int (degree) -> elts *)
     let tbl = Hashtbl.create 0
     ;;
@@ -103,20 +111,19 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     ;;
 
     (* comparator that determines if the root is the smallest or the largest *)
+    let oequal l r = (Entry.ocompare (Entry.bind l) (Entry.bind r))
+    ;;
 
     (* max-heapify, root elts are the most of their successors *)
-    let maxify l r = (Entry.ocompare (Entry.bind l) (Entry.bind r)) =  1
+    let maxify l r = oequal l r =  1
+    ;;
+
+    (* min-heapify, root elts are the least of their successors *)
+    let minify l r = oequal l r = -1
     ;;
 
     (* churn threshold *)
     let churn_threshold = ref 2
-    ;;
-
-    (* min-heapify, root elts are the least of their successors *)
-    let minify l r = (Entry.ocompare (Entry.bind l) (Entry.bind r)) = -1
-    ;;
-
-    let equify l r = (Entry.ocompare (Entry.bind l) (Entry.bind r)) =  0
     ;;
 
     let mem ?(cmp=minify) pleaf ptree = 
@@ -136,15 +143,67 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
             (cardinal hd.succ) + 1 + (cardinal tail)
     ;;
 
-    let rec insert ?(cmp=minify) pleaf = function
-        | [] -> [ { data=pleaf; churn=0; index=0; succ=[] } ]
-        | (hd :: tail) as s ->
-            if equal hd.data pleaf then
-                { data=pleaf; churn=0; succ=[]; index=(hd.index+1) } :: s
-            else if cmp hd.data pleaf then
-                { hd with succ=(insert pleaf ~cmp:cmp hd.succ) } :: tail
-            else
-                hd :: (insert pleaf ~cmp:cmp tail)
+    (* linear time find *)
+    let rec find f = function 
+        | [] -> raise Not_found
+        | hd :: tail ->
+            if f hd.data then hd.data else
+               (find f (List.merge (fun x y -> Entry.compare x.data y.data) tail hd.succ))
+    ;;
+
+    (* count all duplicate occurences of pleaf *)
+    let dupcount pleaf tree = 
+        let rec fdup stree acc = match stree with 
+            | [] -> acc 
+            | hd :: tl ->
+                if equal hd.data pleaf then 
+                    fdup tl @@ fdup hd.succ (acc + 1)
+                else
+                    (fdup[@tailcall]) tl acc
+        in fdup tree 0
+    ;;
+
+    (* insert with partial tolerance for duplicates, insertion order may not hold
+       when extracting. Especially if you insert AFTER an extract_min operation
+       however it should be fine if inserts happen at once before extracts 
+       or in the case that updates are consistent with older inserted heap
+       entries and not creating Heap violations e.g. hill | basin inconsistency *)
+    let insert ?(cmp=minify) pleaf tree = 
+        let rec pinsert pleaf dupc = function
+            | [] -> [ { data=pleaf; churn=0; index=dupc; succ=[] } ]
+            | (hd :: tail) ->
+                if equal hd.data pleaf then
+                   let dupc' = dupc + 1 in  
+                   { hd with succ= (pinsert pleaf (dupc') hd.succ) } :: tail
+                else if cmp hd.data pleaf then
+                    { hd with succ=(pinsert pleaf dupc hd.succ) } :: tail
+                else
+                    hd :: (pinsert pleaf dupc tail)
+        in pinsert pleaf 0 tree
+    ;;
+
+    (* insert with high tolerance for duplicates and try to preserve the insertion order
+       as much as possible - requires counting all duplicates ahead *)
+    let dupinsert ?(cmp=minify) pleaf tree = 
+        let dc = (dupcount pleaf tree) + 1 in
+        let rec dupinsert pleaf dupc = function
+            | [] -> [ { data=pleaf; churn=0; index=dupc; succ=[] } ]
+            | (hd :: tail) ->
+                if equal hd.data pleaf then
+                    (* we could have duplicates with different priorities!
+                       so watch out for hill or basin inconsistency *)
+                    if cmp hd.data pleaf then
+                        { hd with succ=(dupinsert pleaf (dupc) hd.succ) } :: tail
+                    else
+                        (* pleaf is fresh so we bubble down hd.data with its index *)
+                        {   data=pleaf; churn=0; index=dupc; 
+                            succ=(dupinsert hd.data (hd.index)  hd.succ)
+                        } :: (tail)
+                else if cmp hd.data pleaf then
+                    { hd with succ=(dupinsert pleaf dupc hd.succ) } :: tail
+                else
+                    hd :: (dupinsert pleaf dupc tail)
+        in dupinsert pleaf dc tree
     ;;
 
     let singleton pleaf = 
@@ -156,23 +215,39 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
         | [] -> [ pleaf ]
         | (hd :: tail) as s ->
             if equal hd.data pleaf.data then
-                pleaf :: s
+                if hd.index < pleaf.index then
+                    { hd with succ=pleaf :: (hd.succ @ pleaf.succ) } :: s
+                else
+                    { pleaf with succ=hd :: (hd.succ @ pleaf.succ) } :: s
             else if cmp hd.data pleaf.data then
                 { hd with succ=(merge_node pleaf ~cmp:cmp hd.succ) } :: tail
             else
                 hd :: (merge_node pleaf ~cmp:cmp tail)
     ;;
 
-    (* remove all occurences of pleaf *)
+    (* remove all duplicate occurences of pleaf *)
     let dedup pleaf tree = 
         let rec fdup stree ntree acc = match stree with 
             | [] -> (ntree, acc) 
             | hd :: tl ->
-            if equal hd.data pleaf then 
-                let (ntree', acc') = fdup hd.succ ntree (hd.data :: acc) in 
-                fdup tl ntree' acc'
-            else
-                fdup tl (hd :: ntree) acc
+                if equal hd.data pleaf then 
+                    let (ntree', acc') = fdup hd.succ ntree (hd.data :: acc) in 
+                    fdup tl ntree' acc'
+                else
+                    fdup tl (hd :: ntree) acc
+        in fdup tree [] []
+    ;;
+
+    (* remove all duplicate occurences of pleaf in reverse insertion order *)
+    let dedup_idx pleaf tree = 
+        let rec fdup stree ntree acc = match stree with 
+            | [] -> (ntree, acc) 
+            | hd :: tl ->
+                if equal hd.data pleaf then 
+                    let (ntree', acc') = fdup hd.succ ntree ((hd.data, hd.index) :: acc) in 
+                    fdup tl ntree' acc'
+                else
+                    fdup tl (hd :: ntree) acc
         in fdup tree [] []
     ;;
 
@@ -218,7 +293,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                 else
                     peek ~cmp:cmp (fllw :: rest)
     ;;
- 
+
     let rec peek_opt ?(cmp=minify) = function 
         | [] -> None
         | hd :: tail ->
@@ -237,7 +312,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
        this creates the binomial tree situation which sees the
        degree
     *)
-    let join ?(cmp=minify) trees  =
+    let consolidate ?(cmp=minify) trees  =
         (* push all nodes by degree *)
         let rec cascade rejoin =  
             let leftover = List.fold_left (fun acc eltree ->
@@ -279,7 +354,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
             in 
             (* consolidate all its successors to the root list *)
             let (it, _, rem) = split hd tail [] in 
-            (it.data, join ~cmp:cmp (rem @ it.succ))
+            (it.data, consolidate ~cmp:cmp (rem @ it.succ))
     ;;
 
     let extract_opt ?(cmp=minify) = function 
@@ -299,7 +374,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                try and keep the number of root trees to a minimum 
                by joining same degreee nodes (consolidate) *)
             let  (it, _, rem) = split head tail [] in 
-            Some (it.data, join ~cmp:cmp (rem @ it.succ))
+            Some (it.data, consolidate ~cmp:cmp (rem @ it.succ))
     ;;
 
     (* extract_all should yield a sorted list *)
@@ -315,11 +390,11 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     ;;
 
     let to_seq ?(cmp=minify) tree = 
-            let rec aux l () = match extract_opt ~cmp:cmp l with
-                | None -> Seq.Nil
-                | Some (hd, tail) -> Seq.Cons (hd, (aux tail))
-            in
-                (aux tree)
+        let rec aux l () = match extract_opt ~cmp:cmp l with
+            | None -> Seq.Nil
+            | Some (hd, tail) -> Seq.Cons (hd, (aux tail))
+        in
+        (aux tree)
     ;;
 
     (* extract until a condition is true should yield a sorted list *)
@@ -381,11 +456,8 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     ;;
 
     (* local only increase, duplicates not updated 
-
-    hints: we expect the value to be at least newent
-       *)
+    *)
     let increase ?(cmp=minify) node newent tree = 
-    (*let increase node newent tree = *)
         if List.is_empty tree then
             raise Empty
         else
@@ -412,7 +484,9 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                                the tail *)
                             let nt, lf, rem = atparent parent tl leftover found in
                             (hd :: nt, lf, rem)
-            in let ntree, left, found = atparent { data=node; churn=0; succ=[]; index=0 } tree [] false in 
+            in 
+            let self = { data=node; churn=0; succ=[]; index=0; } in
+            let ntree, left, found = atparent self tree [] false in 
             if found then
                 (* reset root churn values *)
                 let _ = (List.iter (fun n -> n.churn <- 0) left) in
@@ -421,13 +495,11 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                 failwith "value not in heap"
     ;;
 
-    (* local only decrease, duplicates not updated 
-    this operation is uninformed of the former nodes priority and thus searches
-    the whole list 
-    hints: we expect the value to be at most newent
+    (* local only priority decrease, duplicates not updated 
+        this operation is uninformed of the former nodes priority and thus searches
+        the whole list 
     *)
     let decrease ?(cmp=minify) node newent tree = 
-        (*let decrease node newent tree = *)
         if List.is_empty tree then
             raise Empty
         else
@@ -458,7 +530,8 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                             (hd :: nt, lf, rem)
             in 
             (* start with self as its own parent *)
-            let ntree, left, wasfound = atparent { data=node; churn=0; succ=[]; index=0; } tree [] false in 
+            let self = { data=node; churn=0; succ=[]; index=0; } in
+            let ntree, left, wasfound = atparent self tree [] false in 
             if wasfound then
                 (* reset churn values *)
                 let _ = (List.iter (fun n -> n.churn <- 0) left) in

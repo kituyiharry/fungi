@@ -52,10 +52,38 @@ module type ClusterImpl = sig
     val bronkerbosch2: adj NodeMap.t -> elt AdjSet.set list
 end
 
+(* Axioms *)
 (* we have to use a wrap type to denote extremes, ideally this is just a float
    but the challenge is we don't know they final type ahead of time so we
    prefigure it as we need it for some algorithms e.g djikstra *)
 type +!'a wrap = [`Inf | `NegInf | `Nan | `Value of 'a]
+
+let wcompare f l r = match (l, r) with
+    | (`Value l',`Value r' ) ->  f l' r'
+    | (`Inf,    `Inf)     ->  0
+    | (`NegInf, `NegInf)  ->  0
+    | (`Nan,    `Nan)     ->  0
+    | (`NegInf, `Inf)     -> -1
+    | (`NegInf, `Value _) -> -1
+    | (`Value _,`Inf)     -> -1
+    | (`Nan,    `Inf)     -> -1
+    | (`Nan,    `NegInf)  -> -1
+    | (`Nan,    `Value _) -> -1
+    | (`Inf,    `NegInf)  ->  1
+    | (`Value _,`NegInf)  ->  1
+    | (`Inf,    `Value _) ->  1
+    | (`Inf,    `Nan)     ->  1
+    | (`NegInf, `Nan)     ->  1
+    | (`Value _,`Nan)     ->  1
+;;
+
+(* fallback to polymorphic compare and takes least if not directly comparable *)
+let wbind f l r = match (l, r) with 
+    | (`Value l', `Value r') -> (`Value (f l' r'))
+    | (x, `Value _) -> x 
+    | (`Value _, y) -> y
+    | (x',      y') -> if wcompare (Stdlib.compare) x' y' = -1 then x' else y'
+;;
 
 module type Space = sig
 
@@ -121,7 +149,7 @@ module type PathImpl = sig
         module PathHeap: FibHeap with type node  = measure pathelt and type order = measure
         module PathSet : TSet    with type t    := measure pathelt
 
-        val dijkstra: elt -> elt -> adj NodeMap.t -> PathHeap.t
+        val dijkstra:  elt -> elt -> adj NodeMap.t -> ((elt * elt * measure) list * PathHeap.t)
     end
 
     type path     := (edge pathelt) list
@@ -149,6 +177,7 @@ module type VertexImpl = sig
     val empty     : elt -> adj
     val weights   : elt -> adj NodeMap.t -> weights
     val edge      : elt -> elt -> adj NodeMap.t -> edge
+    val edge2     : elt -> weights -> edge
 end
 
 module type GraphElt = sig 
@@ -255,6 +284,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     module WeightNode = struct
         type t      = elt
         let  equal  = (equal)
+        (* TODO: reconsider this! *)
         let  hash   = (Obj.magic)
     end
     module Weights = Hashtbl.Make (WeightNode)
@@ -273,6 +303,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let empty   lbl = (AdjSet.empty, AdjSet.empty, lbl, Weights.create 1)
         let weights n g = let (_, _, _, w) = NodeMap.find n g in w
         let edge  f t g = Weights.find (weights f g) t
+        let edge2   t o = Weights.find o t
     end
 
     (** Adjacency list graph definition **)
@@ -326,10 +357,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     let add_weight2 nodeFrom nodeTo weightValue nodeMap =
         (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in 
             let _  = Weights.add wgts nodeTo weightValue in
-            Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label, wgts)) nodeMap)
+            Some (AdjSet.add nodeTo fromIncoming, (AdjSet.add nodeTo fromOutgoing), label, wgts)) nodeMap)
         |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing, tolabel, wgts) = x in
             let _  = Weights.add wgts nodeFrom weightValue in
-            Some ((AdjSet.add nodeFrom toIncoming), (toOutgoing), tolabel, wgts))
+            Some ((AdjSet.add nodeFrom toIncoming), (AdjSet.add nodeFrom toOutgoing), tolabel, wgts))
     ;;
 
     let rec add_all nodeFrom nodeToList nodeMap = match nodeToList with
@@ -380,6 +411,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (** [ incomingof identity (Graph.t) AdjSet.t]
     Outgoing set of nodes *)
     let outgoingof node game = let (_, out, _, _) = NodeMap.find node game in out
+    let outweights node game = let (_, out, _, w) = NodeMap.find node game in (out, w)
 
     (** both incoming and outgoing edges of a graph - self edges included *)
     let neighbours node game = let (inc, out, _, _) = NodeMap.find node game in (AdjSet.union inc out)
@@ -493,6 +525,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         AdjSet.to_list (AdjSet.union incoming outgoing)
     ;;
 
+    (* collect graph into a simple [(key,  adj list), ...] *)
     let outlist nodeMap = 
         NodeMap.fold (fun elt (_, out, _, _) acc ->  
             (elt, out) :: acc
@@ -920,79 +953,113 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             type measure = Measure.t wrap
 
             (* implement an ordinal interface with the measure compare for the
-               heap order *)
-            module PathList = struct 
-                type t           = measure pathelt
-                type order       = measure
-                let  bind t      = t.value 
-                let compare l r =
+               heap order of paths (edges in the graph) *)
+            module PathList: Ordinal with type t = measure pathelt and type order = measure = struct 
+                type t          = measure pathelt
+                type order      = measure
+
+                let  bind t     = t.value
+                let  compare l r=
                     match (Unique.compare l.next r.next) with
                         | 0 -> (Unique.compare l.from r.from)
                         | x -> x
                     ;;
-                let  ocompare l r  = 
-                    match (l, r) with
-                        | (`Value a,`Value b) ->  Measure.compare a b
-                        | (`Inf,    `Inf)     ->  0
-                        | (`NegInf, `NegInf)  ->  0
-                        | (`Nan,    `Nan)     ->  0
-                        | (`NegInf, `Inf)     -> -1
-                        | (`NegInf, `Value _) -> -1
-                        | (`Value _,`Inf)     -> -1
-                        | (`Nan,    `Inf)     -> -1
-                        | (`Nan,    `NegInf)  -> -1
-                        | (`Nan,    `Value _) -> -1
-                        | (`Inf,    `NegInf)  ->  1
-                        | (`Value _,`NegInf)  ->  1
-                        | (`Inf,    `Value _) ->  1
-                        | (`Inf,    `Nan)     ->  1
-                        | (`NegInf, `Nan)     ->  1
-                        | (`Value _,`Nan)     ->  1
-                    ;;
+                let  ocompare l r  = wcompare (Measure.compare) l r
+                (* how to replace a value v with a new order t once we update it *)
                 let  replace v t = { v with value=t }
             end
 
             module PathHeap = MakeFibHeap (PathList)
             module PathSet  = TreeSet (PathList)
 
-            (* Single source shortest path *)
-            let dijkstra start target graph = 
-                let (unvis, init)    = 
-                    (* Set all out edges to infinity except the pseudo edge to
-                       self to denote the start point *)
-                    outlist graph 
-                    |>  List.fold_left (fun (kset, acc) (k, v) -> 
-                            (AdjSet.add k kset, AdjSet.fold (fun x a -> 
-                                PathHeap.insert (mkpath k x `Inf) a
-                            ) v acc)
-                        ) 
-                        (AdjSet.empty, 
-                            PathHeap.singleton 
-                                (mkpath start start (`Value Measure.zero))
-                        )
-                in
-                let iter uvis heap = 
-                    if AdjSet.is_empty uvis then
-                        (uvis, heap)
+            let shorterpathto e p =  PathSet.find_first_opt (fun e' -> equal e'.next e) p
+
+            (* 
+               resolve djikstra path by skipping over non-interlinked nodes
+               e.g. for a sample output path
+
+               [("G", "E", `Value 7.); ("S", "A", `Value 7.); ("B", "D", `Value 6.);
+                ("H", "F", `Value 6.); ("B", "A", `Value 5.); ("H", "G", `Value 5.);
+                ("C", "L", `Value 5.); ("S", "C", `Value 3.); ("B", "H", `Value 3.);
+                ("S", "B", `Value 2.); ("S", "S", `Value 0.)]
+  
+                we interlink on edges and reverse the path
+
+               [("S", "S", `Value 0.); ("S", "B", `Value 2.); ("B", "H", `Value 3.);
+                ("H", "G", `Value 5.); ("G", "E", `Value 7.)]
+
+                due to commonality of the from origin
+            *)
+            let rec resolve target acc = function 
+                | [] -> acc
+                | (from, next, value) :: rest -> 
+                    if equal target next then
+                        resolve from ((from, next, value) :: acc) rest
                     else
-                        let (mp, rest) = PathHeap.extract heap in
-                        let   u   = mp.from in
-                        let  og   = outgoingof u graph in
-                        let out   = AdjSet.inter uvis og in 
-                        let (heap') = AdjSet.fold (fun v h' -> 
-                            let r = Vertex.edge u v graph in
-                            let d'= `Value r in
-                            let p = mkpath u v d' in
-                            PathHeap.join (PathHeap.decrease p d' h')
-                        ) out rest
-                        in
-                        if equal mp.next target then
-                            (uvis, heap')
+                        resolve target acc rest
+            ;;
+
+            (* Single source shortest path  
+                
+                we choose between a log n insert or
+                linear decrease like below 
+                Since we can tolerate duplicates we
+                use a log-n insert as it gives us the
+                option of structurally adding new
+                info that doesn't necessarily
+                violate the `compare` result and also saves a bit on time 
+            *)
+            let dijkstra start target graph = 
+                (* we take the path to ourselves as 0 *)
+                let startp = (mkpath start start (`Value Measure.zero)) in
+                (* 
+                Set all start to out edges to infinity except the pseudo edge to
+                self to denote the start point of dijkstra 
+
+                omitted as can be implied when we use insert instead of decrease operation
+
+                init |> NodeMap.fold (fun k _v acc -> 
+                    (PathHeap.insert (mkpath start k `Inf) acc)
+                ) graph 
+
+                caveat: this may not be space efficient as the heap can
+                accumulate duplicates
+                *)
+                let init =  (PathHeap.singleton startp) in
+                let rec iter ps heap elp = 
+                    if PathHeap.is_empty heap then
+                        (elp, heap)
+                    else
+                        let (u, rest) = PathHeap.extract heap in
+                        if equal u.next target  then
+                            ((u.from, u.next, u.value) :: elp, heap)
                         else
-                            (uvis, heap')
-                            (*iter (AdjSet.remove u uvis) heap'*)
+                            let (out,   w) = outweights u.next graph in
+                            let (ps'', h') = AdjSet.fold (fun e (p, a) -> 
+                                (* get distance from u to e *)
+                                let d   = Measure.measure (Vertex.edge2 e w) in 
+                                (* add to distance from start to u *)
+                                let alt = wbind (Measure.add) u.value d in 
+                                (* demarkate edge with distance from start *)
+                                let pe  = mkpath u.next e alt in
+                                match shorterpathto e ps with
+                                | Some v ->
+                                    (* If alternative path is shorter than
+                                       previous we 'override it' *)
+                                    if wcompare (Measure.compare) alt v.value = -1 then
+                                        (PathSet.add pe p, PathHeap.insert pe a)
+                                    else
+                                        (p, a)
+                                | None   ->
+                                    (* First sighting *)
+                                    (PathSet.add pe p, PathHeap.insert pe a)
+                            ) out (ps, rest)
+                            in
+                                iter ps'' h' ((u.from, u.next, u.value) :: elp)
                 in
-                snd @@ iter unvis init
+                    let p, h = iter (PathSet.singleton startp) init []
+                    in (resolve target [] p, h)
+                    (*in (p, h)*)
             ;;
 
         end

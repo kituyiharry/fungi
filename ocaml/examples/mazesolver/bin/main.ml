@@ -41,7 +41,7 @@ let s_adjlist = [
 ];;
 
 
-module SPath = SGraph.Path.Compute(Graph.Direct(Float));;
+module SPath = SGraph.Path.Compute(Graph.Biject(Float));;
 
 let () = 
     let _ = SGraph.of_weights2 s_adjlist s in

@@ -40,7 +40,7 @@ let _ = Printexc.record_backtrace true;;
 
 let s_adjlist = [
     (s_a, [(s_s, 7.); (s_b, 3.); (s_d, 4.)]);
-    (s_s, [(s_c, 3.)]);
+    (s_s, [(s_b, 2.); (s_c, 3.)]);
     (s_c, [(s_l, 2.)]);
     (s_l, [(s_i, 4.); (s_j, 4.)]);
     (s_i, [(s_j, 6.); (s_k, 4.)]);
@@ -48,9 +48,23 @@ let s_adjlist = [
     (s_k, [(s_e, 5.)]);
     (s_d, [(s_b, 4.); (s_f, 5.)]);
     (s_f, [(s_h, 3.)]);
-    (s_h, [(s_g, 2.)]);
+    (s_h, [(s_b, 1.); (s_g, 2.)]);
     (s_g, [(s_e, 2.)]);
 ];;
+
+let pp_sgraph (g: SGraph.adj SGraph.NodeMap.t) = 
+    Format.printf "G: {\n"; 
+    List.iter (fun (k, (_, v, _, _)) ->
+        let _ = Format.printf "\t%s ->\t" k in 
+        let _ = SGraph.AdjSet.iter (fun y ->
+            Format.printf " %s " y
+        ) v in 
+        Format.print_newline ()
+    ) (SGraph.NodeMap.bindings g);
+  Format.printf "} "
+;;
+
+#install_printer pp_sgraph;;
 
 let s = SGraph.of_weights2 s_adjlist s;;
 
