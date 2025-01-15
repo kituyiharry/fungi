@@ -137,7 +137,7 @@ module type PathImpl = sig
     module NodeMap:  Map.S with type key  := elt
     module AdjSet:   TSet  with type t    := elt
 
-    type 'c pathelt = { from: elt; next: elt; value: 'c; }
+    type 'c pathelt = { from: elt; next: elt; via: elt; value: 'c; }
 
     val mkpath: elt -> elt -> 'a -> 'a pathelt
 
@@ -149,6 +149,7 @@ module type PathImpl = sig
         module PathSet : TSet    with type t    := measure pathelt
 
         val dijkstra:  elt -> elt -> adj NodeMap.t -> ((elt * elt * measure) list)
+        val dijkstra2: elt -> elt -> adj NodeMap.t -> ((elt * elt * measure) list)
     end
 
     type path     := (edge pathelt) list
@@ -943,10 +944,14 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     **************************************************************************)
     module Path = struct 
 
-        type 'c pathelt = { from: elt; next: elt; value: 'c; }
+        type 'c pathelt = { from: elt; next: elt; via: elt; value: 'c; }
 
         let mkpath f t cost = 
-            { from=f; next=t; value=cost; }
+            { from=f; next=t; via=f; value=cost; }
+        ;;
+
+        let viapath f v t cost = 
+            { from=f; next=t; via=v; value=cost; }
         ;;
 
         module Compute(Measure: Measurable with type t = edge and type edge = edge) = struct 
@@ -959,15 +964,16 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 type t          = measure pathelt
                 type order      = measure
 
-                let  bind t     = t.value
-                let  compare l r=
-                    match (Unique.compare l.next r.next) with
-                        | 0 -> (Unique.compare l.from r.from)
-                        | x -> x
-                    ;;
-                let  ocompare l r  = wcompare (Measure.compare) l r
+                let  bind t       = t.value
+                (* next node is enough to differentiate between 2 nodes *)
+                let  compare l r  = 
+                    match (Unique.compare l.next r.next) with 
+                    | 0 -> Unique.compare l.from r.from
+                    | x ->  x
+                ;;
+                let  ocompare l r = wcompare (Measure.compare) l r
                 (* how to replace a value v with a new order t once we update it *)
-                let  replace v t = { v with value=t }
+                let  replace v t  = { v with value=t }
             end
 
             module PathHeap = MakeFibHeap (PathList)
@@ -991,13 +997,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
                 due to commonality of the from origin
             *)
-            let rec resolve target acc = function 
+            let rec pathresolve target acc = function 
                 | [] -> acc
                 | (from, next, value) :: rest -> 
                     if equal target next then
-                        (resolve[@tailcall]) from ((from, next, value) :: acc) rest
+                        (pathresolve[@tailcall]) from ((from, next, value) :: acc) rest
                     else
-                        (resolve[@tailcall]) target acc rest
+                        (pathresolve[@tailcall]) target acc rest
             ;;
 
             (* Single source shortest path  
@@ -1024,7 +1030,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 ) graph 
 
                 caveat: this may not be space efficient as the heap can
-                accumulate duplicates
+                accumulate duplicates. Tradeoff for sparse graphs
                 *)
                 let init =  (PathHeap.singleton startp) in
                 let rec iter ps heap elp = 
@@ -1058,8 +1064,58 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             in
                                 iter ps'' h' ((u.from, u.next, u.value) :: elp)
                 in
-                    resolve target [] @@ iter (PathSet.singleton startp) init []
+                    pathresolve target [] @@ iter (PathSet.singleton startp) init []
             ;;
+            
+            let dijkstra2 start target graph = 
+                (* we take the path to ourselves as 0 *)
+                let startp = (viapath start start start (`Value Measure.zero)) in
+                (* 
+                Set all start to out edges to infinity except the pseudo edge to
+                self to denote the start point of dijkstra 
+
+                caveat: this may take longer but does not duplicate nodes hence
+                save some memory. Tradeoff for dense graphs
+                *)
+                let init =  
+                    NodeMap.fold (fun k _ acc -> 
+                        (PathHeap.insert (viapath start start k `Inf) acc)
+                    ) graph (PathHeap.singleton startp) 
+                in
+                let rec iter ps heap elp = 
+                    if PathHeap.is_empty heap then
+                        elp
+                    else
+                        let (u, rest) = PathHeap.extract heap in
+                        if equal u.next target  then
+                            ((u.via, u.next, u.value) :: elp)
+                        else
+                            let (out,   w) = outweights u.next graph in
+                            let (ps'', h') = AdjSet.fold (fun e (p, a) -> 
+                                (* get distance from u to e *)
+                                let d   = Measure.measure (Vertex.edge2 e w) in 
+                                (* add to distance from start to u *)
+                                let alt = wbind (Measure.add) u.value d in 
+                                (* demarkate edge with distance from start *)
+                                let pe  = viapath start u.next e alt in
+                                match shorterpathto e ps with
+                                | Some v ->
+                                    (* If alternative path is shorter than
+                                       previous we 'override it' *)
+                                    if wcompare (Measure.compare) alt v.value = -1 then
+                                        (PathSet.add pe p, PathHeap.decrease pe pe a)
+                                    else
+                                        (p, a)
+                                | None   ->
+                                    (* First sighting *)
+                                    (PathSet.add pe p, PathHeap.decrease pe pe a)
+                            ) out (ps, rest)
+                            in
+                                iter ps'' h' (((u.via), u.next, u.value) :: elp)
+                in
+                    pathresolve target [] @@ iter (PathSet.singleton startp) init []
+            ;;
+
 
         end
 
@@ -1070,7 +1126,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             List.rev @@ dfs (fun s -> (
                 match s.prev with
                 | Some prev ->
-                    (f s), ({from=prev; next=s.elt; value=(Vertex.edge prev s.elt graph);} :: s.acc)
+                    (f s), ({from=prev; next=s.elt; via=prev; value=(Vertex.edge prev s.elt graph);} :: s.acc)
                 | None ->
                     (f s), (s.acc)
             )) (fun s -> s.acc) graph start []
@@ -1083,7 +1139,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             List.rev @@ bfs (fun s -> (
                 match s.prev with
                 | Some prev ->
-                    (f s), ({from=prev; next=s.elt; value=(Vertex.edge prev s.elt graph);} :: s.acc)
+                    (f s), ({from=prev; next=s.elt; via=prev; value=(Vertex.edge prev s.elt graph);} :: s.acc)
                 | None -> 
                     (f s), (s.acc)
             )) (fun s -> s.acc) graph start []

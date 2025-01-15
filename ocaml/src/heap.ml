@@ -76,9 +76,9 @@ module type FibHeap = sig
     val extract:     ?cmp:(node -> node -> bool) -> t -> (node * t)
     val extract_opt: ?cmp:(node -> node -> bool) -> t -> (node * t) option
     val extract_all: ?cmp:(node -> node -> bool) -> t -> node list
-    val update:      ?cmp:(node -> node -> bool) -> elts -> elts list -> order -> elts -> elts list -> elts list * elts list * bool
-    val increase:    ?cmp:(node -> node -> bool) -> node -> order -> t -> t
-    val decrease:    ?cmp:(node -> node -> bool) -> node -> order -> t -> t
+    val update:      ?cmp:(node -> node -> bool) -> node -> elts -> elts list -> elts -> elts list -> elts list * elts list * bool
+    val increase:    ?cmp:(node -> node -> bool) -> node -> node -> t -> t
+    val decrease:    ?cmp:(node -> node -> bool) -> node -> node -> t -> t
     val find:        (node -> bool) -> elts list -> node
 end
 
@@ -431,9 +431,8 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
 
     *)
 
-    let update ?(cmp=minify) hd tl nent parent leftover = 
+    let update ?(cmp=minify) newent hd tl parent leftover = 
         let maxbelopt = (peek_opt ~cmp:cmp hd.succ) in
-        let newent = Entry.replace hd.data nent in
         match maxbelopt with
         | Some maxbel ->
             let par, son = (cmp parent.data newent), (cmp maxbel.data newent) in
@@ -457,7 +456,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
 
     (* local only increase, duplicates not updated 
     *)
-    let increase ?(cmp=minify) node newent tree = 
+    let increase ?(cmp=minify) old node tree = 
         if List.is_empty tree then
             raise Empty
         else
@@ -465,11 +464,11 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                 | [] ->
                     tree, leftover, found
                 | (hd :: tl) -> 
-                    if (equal hd.data node) then 
-                        if (Entry.ocompare (Entry.bind hd.data) newent) =  1 then
+                    if (equal hd.data old) then 
+                        if (oequal hd.data node) =  1 then
                             failwith "new value must be larger"
                         else
-                            update ~cmp:cmp hd tl newent parent leftover
+                            update ~cmp:cmp node hd tl parent leftover
                     else
                         let nt, lf, wasfound = atparent hd hd.succ leftover found in
                         if wasfound then
@@ -499,7 +498,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
         this operation is uninformed of the former nodes priority and thus searches
         the whole list 
     *)
-    let decrease ?(cmp=minify) node newent tree = 
+    let decrease ?(cmp=minify) old node tree = 
         if List.is_empty tree then
             raise Empty
         else
@@ -508,11 +507,12 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                     (tree, leftover, found)
                 | (hd :: tl) -> 
                     (* found the element *)
-                    if (equal hd.data node) then 
-                        if (Entry.ocompare (Entry.bind hd.data) (newent)) = -1 then
+                    if (equal hd.data old) then 
+                        (*if (Entry.ocompare (Entry.bind hd.data) (newent)) = -1 then*)
+                        if (oequal hd.data node) = -1 then
                             failwith "new value must be smaller"
                         else
-                            update ~cmp:cmp hd tl newent parent leftover
+                            update ~cmp:cmp node hd tl parent leftover
                     else
                         let nt, lf, wasfound = (atparent hd hd.succ leftover found) in
                         (* backtrack, check if we hit a churn threshold *)
