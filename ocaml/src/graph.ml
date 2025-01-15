@@ -149,7 +149,7 @@ module type PathImpl = sig
         module PathHeap: FibHeap with type node  = measure pathelt and type order = measure
         module PathSet : TSet    with type t    := measure pathelt
 
-        val dijkstra:  elt -> elt -> adj NodeMap.t -> ((elt * elt * measure) list * PathHeap.t)
+        val dijkstra:  elt -> elt -> adj NodeMap.t -> ((elt * elt * measure) list)
     end
 
     type path     := (edge pathelt) list
@@ -982,7 +982,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 ("H", "F", `Value 6.); ("B", "A", `Value 5.); ("H", "G", `Value 5.);
                 ("C", "L", `Value 5.); ("S", "C", `Value 3.); ("B", "H", `Value 3.);
                 ("S", "B", `Value 2.); ("S", "S", `Value 0.)]
-  
+
                 we interlink on edges and reverse the path
 
                [("S", "S", `Value 0.); ("S", "B", `Value 2.); ("B", "H", `Value 3.);
@@ -994,9 +994,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 | [] -> acc
                 | (from, next, value) :: rest -> 
                     if equal target next then
-                        resolve from ((from, next, value) :: acc) rest
+                        (resolve[@tailcall]) from ((from, next, value) :: acc) rest
                     else
-                        resolve target acc rest
+                        (resolve[@tailcall]) target acc rest
             ;;
 
             (* Single source shortest path  
@@ -1028,11 +1028,11 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 let init =  (PathHeap.singleton startp) in
                 let rec iter ps heap elp = 
                     if PathHeap.is_empty heap then
-                        (elp, heap)
+                        elp
                     else
                         let (u, rest) = PathHeap.extract heap in
                         if equal u.next target  then
-                            ((u.from, u.next, u.value) :: elp, heap)
+                            ((u.from, u.next, u.value) :: elp)
                         else
                             let (out,   w) = outweights u.next graph in
                             let (ps'', h') = AdjSet.fold (fun e (p, a) -> 
@@ -1057,9 +1057,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             in
                                 iter ps'' h' ((u.from, u.next, u.value) :: elp)
                 in
-                    let p, h = iter (PathSet.singleton startp) init []
-                    in (resolve target [] p, h)
-                    (*in (p, h)*)
+                    resolve target [] @@ iter (PathSet.singleton startp) init []
             ;;
 
         end
