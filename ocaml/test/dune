@@ -1,0 +1,4 @@
+(test
+ (name treeprops)
+ (libraries fungi alcotest qcheck-core qcheck-alcotest)
+ (modules treeprops))

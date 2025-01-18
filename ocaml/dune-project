@@ -15,7 +15,7 @@
  (version 0.1.0)
  (synopsis "A functional graph library")
  (description "A graph library based on functional adjacency list with some common graph
-algorithms implemented.")
+algorithms implemented and a fibonacci heap.")
  
  ; License must match your LICENSE file
  (license MIT)
@@ -25,19 +25,22 @@ algorithms implemented.")
  
  ; Source code location (typically GitHub)
  ;(source
-  ;(github username/my_library))
+ ;(github username/my_library))
  
  ; Documentation location (if you have one)
- (documentation "https://url/to/documentation")
+ ;(documentation "https://url/to/documentation")
  
  ; Dependencies
  (depends
   ; Required dependencies
   (ocaml (>= 4.14.0))
-  (dune (>= 3.12))
+  (dune  (>= 3.12))
   
   ; Optional dependencies with versions
-  base
+  ;base
+  (alcotest        :with-test)
+  (qcheck-core     :with-test)
+  (qcheck-alcotest :with-test)
   ;(ppx_jane :with-test)  ; Only needed for running tests
   ;(odoc :with-doc)       ; Only needed for documentation generation
   ;(mdx :with-test)       ; Only needed if you use mdx for doc tests

@@ -29,10 +29,7 @@ module type Ordinal = sig
     (* total order *)
     val  compare:  t  -> t -> int
     (* How we compare different orders *)
-    val  ocompare: order -> order -> int
-    (* replace new values of the order - think of it in the context of an
-       increase decrease with a functional update *)
-    val  replace:   t -> order -> t
+    val  order: order -> order -> int
 end
 
 (* immediately binds a value as its own order *)
@@ -40,9 +37,8 @@ module Surject(Inner: Set.OrderedType): Ordinal with type t = Inner.t and type o
     type t          = Inner.t
     type order      = Inner.t
     let  bind    e  = e
-    let  ocompare   = Inner.compare
+    let  order      = Inner.compare
     let  compare    = Inner.compare
-    let  replace _ o = o
 end
 
 module type FibHeap = sig
@@ -59,12 +55,14 @@ module type FibHeap = sig
     val degree:      elts -> int
     val cardinal:    t -> int
     val collapse:    t -> node list
+    val instance:    node -> int -> elts
     val singleton:   node -> t
     val dedup:       node -> elts list -> (elts list * node list)
     val dedup_idx:   node -> elts list -> elts list * (node * int) list
     val dupcount:    node -> t -> int
     val extract_til: ?cmp:(node -> node -> bool) -> (node -> bool) -> t -> node list
     val to_seq:      ?cmp:(node -> node -> bool) -> t -> node Seq.t
+    val of_seq:      ?cmp:(node -> node -> bool) -> node Seq.t -> elts list
     val of_list:     ?cmp:(node -> node -> bool) -> node list -> t
     val consolidate: ?cmp:(node -> node -> bool) -> t -> t
     val mem:         ?cmp:(node -> node -> bool) -> node -> t -> bool
@@ -111,7 +109,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     ;;
 
     (* comparator that determines if the root is the smallest or the largest *)
-    let oequal l r = (Entry.ocompare (Entry.bind l) (Entry.bind r))
+    let oequal l r = (Entry.order (Entry.bind l) (Entry.bind r))
     ;;
 
     (* max-heapify, root elts are the most of their successors *)
@@ -124,6 +122,9 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
 
     (* churn threshold *)
     let churn_threshold = ref 2
+    ;;
+
+    let instance pleaf idx = { data=pleaf; churn=0; index=idx; succ=[] }
     ;;
 
     let mem ?(cmp=minify) pleaf ptree = 
@@ -167,10 +168,13 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
        when extracting. Especially if you insert AFTER an extract_min operation
        however it should be fine if inserts happen at once before extracts 
        or in the case that updates are consistent with older inserted heap
-       entries and not creating Heap violations e.g. hill | basin inconsistency *)
+       entries and not creating Heap violations e.g. hill | basin inconsistency 
+
+       TODO: Make list head the min pointer (along with consolidate) ??
+    *)
     let insert ?(cmp=minify) pleaf tree = 
         let rec pinsert pleaf dupc = function
-            | [] -> [ { data=pleaf; churn=0; index=dupc; succ=[] } ]
+            | [] -> [ (instance pleaf dupc) ]
             | (hd :: tail) ->
                 if equal hd.data pleaf then
                    let dupc' = dupc + 1 in  
@@ -187,7 +191,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     let dupinsert ?(cmp=minify) pleaf tree = 
         let dc = (dupcount pleaf tree) + 1 in
         let rec dupinsert pleaf dupc = function
-            | [] -> [ { data=pleaf; churn=0; index=dupc; succ=[] } ]
+            | [] -> [ (instance pleaf dupc) ]
             | (hd :: tail) ->
                 if equal hd.data pleaf then
                     (* we could have duplicates with different priorities!
@@ -274,11 +278,33 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     let degree tree = List.length tree.succ
     ;;
 
-    (** inorder traverse the heap, elements will likely be out of order *)
-    let rec collapse = function 
+    (** inorder traverse the heap, elements will likely be out of order 
+        NB: In the rem, we use list of list rather than flat plain list
+    *)
+    let collapse = function 
         | [] -> [] 
         | { succ=child; data=pleaf;_ } :: tail ->
-            pleaf :: collapse child @ collapse tail
+            let rec fcollapse tree rem acc = 
+                match tree with
+                | [] -> 
+                    (* reduce the number of `List.concat` operations by
+                       'batching' lists - this works really good for dense heaps
+                    *)
+                    (match rem with 
+                        | [] -> acc
+                        | branch :: left -> 
+                            (match branch with
+                                | [] -> 
+                                    (match left with 
+                                        | [] -> acc
+                                        | l :: r ->  fcollapse l r acc)
+                                | { succ=child''; data=pleaf'';_ } :: tl'' -> 
+                                    fcollapse child'' ([  tl'' ] @ left) (pleaf'' :: acc)
+                            )
+                    )
+                | { succ=child'; data=pleaf';_ } :: tl' ->
+                    fcollapse child' (tl' :: rem) (pleaf' :: acc)
+            in fcollapse child ([ tail ]) ([ pleaf ])
     ;;
 
     (* straddles the root elts for the min *)
@@ -395,6 +421,17 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
             | Some (hd, tail) -> Seq.Cons (hd, (aux tail))
         in
         (aux tree)
+    ;;
+
+    let rec of_seq ?(cmp=minify) tseq = 
+        match tseq () with
+        | Seq.Nil -> []
+        | Seq.Cons (x1, seq) ->
+            begin match seq () with
+                | Seq.Nil -> [(instance x1 0)]
+                | Seq.Cons (x2, seq) -> 
+                    insert ~cmp:cmp (x1) @@ insert ~cmp:cmp (x2) @@ of_seq ~cmp:cmp seq
+                end
     ;;
 
     (* extract until a condition is true should yield a sorted list *)

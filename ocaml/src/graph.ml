@@ -971,9 +971,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     | 0 -> Unique.compare l.from r.from
                     | x ->  x
                 ;;
-                let  ocompare l r = wcompare (Measure.compare) l r
-                (* how to replace a value v with a new order t once we update it *)
-                let  replace v t  = { v with value=t }
+                let  order l r = wcompare (Measure.compare) l r
             end
 
             module PathHeap = MakeFibHeap (PathList)
