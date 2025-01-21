@@ -1052,7 +1052,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                     (* If alternative path is shorter than
                                        previous we 'override it' *)
                                     if wcompare (Measure.compare) alt v.value = -1 then
-                                        (PathSet.add pe p, PathHeap.insert pe a)
+                                        (PathSet.add pe p, PathHeap.decrease pe pe a)
                                     else
                                         (p, a)
                                 | None   ->
@@ -1109,7 +1109,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                     (PathSet.add pe p, PathHeap.decrease pe pe a)
                             ) out (ps, rest)
                             in
-                                iter ps'' h' (((u.via), u.next, u.value) :: elp)
+                                iter ps'' h' ((u.via, u.next, u.value) :: elp)
                 in
                     pathresolve target [] @@ iter (PathSet.singleton startp) init []
             ;;

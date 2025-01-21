@@ -37,10 +37,11 @@ algorithms implemented and a fibonacci heap.")
   (dune  (>= 3.12))
   
   ; Optional dependencies with versions
-  ;base
+  ; base
   (alcotest        :with-test)
   (qcheck-core     :with-test)
   (qcheck-alcotest :with-test)
+  (core_bench      :with-test)
   ;(ppx_jane :with-test)  ; Only needed for running tests
   ;(odoc :with-doc)       ; Only needed for documentation generation
   ;(mdx :with-test)       ; Only needed if you use mdx for doc tests

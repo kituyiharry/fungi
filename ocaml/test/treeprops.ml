@@ -65,15 +65,32 @@ let set_difference _cx =
 ;;
 
 
-let passing =
-  QCheck.Test.make ~count:1000
-    ~name:"list_rev_is_involutive"
+let preservation =
+  QCheck.Test.make ~count:1000 ~name:"unique_element_membership"
     QCheck.(list small_nat)
-    (fun l -> List.rev (List.rev l) = l);;
+    (fun l -> 
+        let intset = IntTree.of_list l in
+        List.for_all (fun x -> IntTree.mem x intset) l )
+;;
+
+let rec ascending = function
+  | x::y::l -> x <= y && ascending (y::l)
+  | _ -> true
+;;
+
+let sorted =
+  QCheck.Test.make ~count:1000 ~name:"inorder_traversal_sorted"
+    QCheck.(list small_nat)
+    (fun l -> 
+        (* Preconditions edge
+        QCheck.assume (l <> []);*)
+        let intset = IntTree.to_list @@ IntTree.of_list l in
+        ascending intset)
+;;
 
 let suite =
     List.map QCheck_alcotest.to_alcotest
-      [ passing;]
+      [ preservation; sorted ]
 ;;
 
 let () =

@@ -78,6 +78,7 @@ module type FibHeap = sig
     val increase:    ?cmp:(node -> node -> bool) -> node -> node -> t -> t
     val decrease:    ?cmp:(node -> node -> bool) -> node -> node -> t -> t
     val find:        (node -> bool) -> elts list -> node
+    val find_opt:    (node -> bool) -> elts list -> node option
 end
 
 module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type order = Entry.order = struct
@@ -131,10 +132,31 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
         let rec fmem tree rem = match tree with
         | [] -> (match rem with
                 | [] -> false
-                | subtree  ->  fmem subtree [])
+                | branch :: left  ->  
+                    (match branch with
+                        | [] ->
+                            (match left with 
+                                | [] -> false
+                                | l :: r ->  fmem l r)
+                        | hd :: rest ->
+                            (* reduce the number of `List.concat` operations by
+                               'batching' lists - this works really good for dense heaps
+                            *)
+                            (equal hd.data pleaf) 
+                                || 
+                            (if cmp hd.data pleaf then 
+                                fmem hd.succ (rest :: left) 
+                            else 
+                                fmem rest (hd.succ :: left))
+                    )
+                )
         | hd :: tail ->
-            (equal hd.data pleaf) || 
-               (if cmp hd.data pleaf then fmem hd.succ (tail @ rem) else fmem (tail @ hd.succ) rem)
+            (equal hd.data pleaf) 
+                ||
+            (if cmp hd.data pleaf then 
+                fmem hd.succ (tail :: rem) 
+            else 
+                fmem tail (hd.succ :: rem))
         in fmem ptree []
     ;;
 
@@ -145,11 +167,53 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     ;;
 
     (* linear time find *)
-    let rec find f = function 
+    let find f = function 
         | [] -> raise Not_found
         | hd :: tail ->
-            if f hd.data then hd.data else
-               (find f (List.merge (fun x y -> Entry.compare x.data y.data) tail hd.succ))
+            if f hd.data then 
+                hd.data 
+            else
+                let rec mergefind tree rem = match tree with 
+                    | [] -> 
+                        (match rem with
+                            | [] -> raise Not_found
+                            | hd :: rest -> 
+                                if f hd.data then 
+                                    hd.data
+                                else
+                                    (mergefind rest hd.succ)
+                        )
+                    | hd :: tail ->
+                        if f hd.data then 
+                            hd.data 
+                        else
+                            (mergefind tail (hd.succ @ rem))
+                in mergefind hd.succ tail
+    ;;
+
+    (* linear time find *)
+    let find_opt f = function 
+        | [] -> None
+        | hd :: tail ->
+            if f hd.data then 
+                Some hd.data 
+            else
+                let rec mergefind tree rem = match tree with 
+                    | [] -> 
+                        (match rem with
+                            | [] -> None
+                            | hd :: rest -> 
+                                if f hd.data then 
+                                    Some hd.data
+                                else
+                                    (mergefind rest hd.succ)
+                        )
+                    | hd :: tail ->
+                        if f hd.data then 
+                            Some hd.data 
+                        else
+                            (mergefind tail (hd.succ @ rem))
+                in mergefind hd.succ tail
     ;;
 
     (* count all duplicate occurences of pleaf *)
@@ -189,6 +253,8 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     (* insert with high tolerance for duplicates and try to preserve the insertion order
        as much as possible - requires counting all duplicates ahead *)
     let dupinsert ?(cmp=minify) pleaf tree = 
+        (* TODO: By using a mutable ref, we can perhaps reference the duplicate
+           value and emplace it in new duplicate instances *)
         let dc = (dupcount pleaf tree) + 1 in
         let rec dupinsert pleaf dupc = function
             | [] -> [ (instance pleaf dupc) ]
@@ -279,7 +345,8 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     ;;
 
     (** inorder traverse the heap, elements will likely be out of order 
-        NB: In the rem, we use list of list rather than flat plain list
+        NB: In the rem, we use list of list rather than flat plain list to
+        speed up the process
     *)
     let collapse = function 
         | [] -> [] 
@@ -371,7 +438,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
             (* straddle the root elts for the elt most true for cmp *)
             let rec split hd tl acc =
                 match tl with 
-                | [] -> (hd, [], acc) 
+                | [] -> (hd, acc) 
                 | fllw :: rest -> 
                     if cmp hd.data fllw.data then
                         split hd   rest (fllw :: acc)
@@ -379,7 +446,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                         split fllw rest (hd   :: acc)
             in 
             (* consolidate all its successors to the root list *)
-            let (it, _, rem) = split hd tail [] in 
+            let (it, rem) = split hd tail [] in 
             (it.data, consolidate ~cmp:cmp (rem @ it.succ))
     ;;
 
@@ -389,7 +456,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
             (* straddle the root elts for the elt most true for cmp *)
             let rec split hd tl acc =
                 match tl with 
-                | [] -> (hd, [], acc) 
+                | [] -> (hd, acc) 
                 | fllw :: rest -> 
                     if cmp hd.data fllw.data then
                         split hd   rest (fllw :: acc)
@@ -399,7 +466,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
             (* add all its successors to the root list 
                try and keep the number of root trees to a minimum 
                by joining same degreee nodes (consolidate) *)
-            let  (it, _, rem) = split head tail [] in 
+            let  (it, rem) = split head tail [] in 
             Some (it.data, consolidate ~cmp:cmp (rem @ it.succ))
     ;;
 
@@ -493,7 +560,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
 
     (* local only increase, duplicates not updated 
     *)
-    let increase ?(cmp=minify) old node tree = 
+    let increase ?(cmp=minify) old bgger tree = 
         if List.is_empty tree then
             raise Empty
         else
@@ -502,10 +569,10 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                     tree, leftover, found
                 | (hd :: tl) -> 
                     if (equal hd.data old) then 
-                        if (oequal hd.data node) =  1 then
+                        if (oequal hd.data bgger) =  1 then
                             failwith "new value must be larger"
                         else
-                            update ~cmp:cmp node hd tl parent leftover
+                            update ~cmp:cmp bgger hd tl parent leftover
                     else
                         let nt, lf, wasfound = atparent hd hd.succ leftover found in
                         if wasfound then
@@ -521,7 +588,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                             let nt, lf, rem = atparent parent tl leftover found in
                             (hd :: nt, lf, rem)
             in 
-            let self = { data=node; churn=0; succ=[]; index=0; } in
+            let self = { data=bgger; churn=0; succ=[]; index=0; } in
             let ntree, left, found = atparent self tree [] false in 
             if found then
                 (* reset root churn values *)
@@ -535,7 +602,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
         this operation is uninformed of the former nodes priority and thus searches
         the whole list 
     *)
-    let decrease ?(cmp=minify) old node tree = 
+    let decrease ?(cmp=minify) old smller tree = 
         if List.is_empty tree then
             raise Empty
         else
@@ -546,10 +613,10 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                     (* found the element *)
                     if (equal hd.data old) then 
                         (*if (Entry.ocompare (Entry.bind hd.data) (newent)) = -1 then*)
-                        if (oequal hd.data node) = -1 then
+                        if (oequal hd.data smller) = -1 then
                             failwith "new value must be smaller"
                         else
-                            update ~cmp:cmp node hd tl parent leftover
+                            update ~cmp:cmp smller hd tl parent leftover
                     else
                         let nt, lf, wasfound = (atparent hd hd.succ leftover found) in
                         (* backtrack, check if we hit a churn threshold *)
@@ -567,7 +634,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                             (hd :: nt, lf, rem)
             in 
             (* start with self as its own parent *)
-            let self = { data=node; churn=0; succ=[]; index=0; } in
+            let self = { data=smller; churn=0; succ=[]; index=0; } in
             let ntree, left, wasfound = atparent self tree [] false in 
             if wasfound then
                 (* reset churn values *)
