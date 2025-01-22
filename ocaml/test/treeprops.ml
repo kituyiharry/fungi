@@ -4,8 +4,8 @@ open Alcotest;;
 module IntTree = Treeset.TreeSet(Int);;
 
 let simple_tree_add _cx =
-    Alcotest.(check bool) "must account for all inserted elements" 
-        true ((IntTree.cardinal (IntTree.singleton 0)) = 1)
+    Alcotest.(check int) "must account for all inserted elements" 
+        1 ((IntTree.cardinal (IntTree.singleton 0)))
 ;;
 
 let simple_tree_remove _cx = 
