@@ -15,8 +15,6 @@
 *       - It follows the principle of parametric modules in ML, where you     *
 *       instantiate different set implementations for different types         *
 *                                                                             *
-*       Here we don't fix the order relation because we need a map function
-*                                                                             *
 *******************************************************************************)
 
 signature OrderedType = sig 
