@@ -149,7 +149,7 @@ module type PathImpl = sig
         module PathSet : TSet    with type t    := measure pathelt
 
         val dijkstra:  elt -> elt -> adj NodeMap.t -> ((elt * elt * measure) list)
-        val dijkstra2: elt -> elt -> adj NodeMap.t -> ((elt * elt * measure) list)
+        val astar:     (elt -> measure) -> elt -> elt -> adj NodeMap.t -> (elt * elt * measure) list
     end
 
     type path     := (edge pathelt) list
@@ -244,6 +244,7 @@ module type Graph = sig
     val of_list:     (elt * elt list) list -> adj NodeMap.t -> adj NodeMap.t
     val of_weights:  (elt * (elt * edge) list) list -> adj NodeMap.t -> adj NodeMap.t
     val of_weights2: (elt * (elt * edge) list) list -> adj NodeMap.t -> adj NodeMap.t
+    val cardinal:    adj NodeMap.t -> int
     val incomingof:  elt -> adj NodeMap.t -> elt AdjSet.set
     val outgoingof:  elt -> adj NodeMap.t -> elt AdjSet.set
     val neighbours:  elt -> adj NodeMap.t -> elt AdjSet.set
@@ -381,6 +382,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         | (nodeTo, nodeVal) :: rest -> add_weight2 nodeFrom nodeTo nodeVal
             (allweighted2 nodeFrom rest nodeMap)
     ;;
+
+    let cardinal = NodeMap.cardinal;;
 
     (** Creates a graph given a node and outgoing edge, incoming edges will be
        resolved naturally. All nodes should already be available in the map  *)
@@ -1016,57 +1019,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             *)
             let dijkstra start target graph = 
                 (* we take the path to ourselves as 0 *)
-                let startp = (mkpath start start (`Value Measure.zero)) in
-                (* 
-                Set all start to out edges to infinity except the pseudo edge to
-                self to denote the start point of dijkstra 
-
-                omitted as can be implied when we use insert instead of decrease operation
-
-                init |> NodeMap.fold (fun k _v acc -> 
-                    (PathHeap.insert (mkpath start k `Inf) acc)
-                ) graph 
-
-                caveat: this may not be space efficient as the heap can
-                accumulate duplicates. Tradeoff for sparse graphs
-                *)
-                let init =  (PathHeap.singleton startp) in
-                let rec iter ps heap elp = 
-                    if PathHeap.is_empty heap then
-                        elp
-                    else
-                        let (u, rest) = PathHeap.extract heap in
-                        if equal u.next target  then
-                            ((u.from, u.next, u.value) :: elp)
-                        else
-                            let (out,   w) = outweights u.next graph in
-                            let (ps'', h') = AdjSet.fold (fun e (p, a) -> 
-                                (* get distance from u to e *)
-                                let d   = Measure.measure (Vertex.edge2 e w) in 
-                                (* add to distance from start to u *)
-                                let alt = wbind (Measure.add) u.value d in 
-                                (* demarkate edge with distance from start *)
-                                let pe  = mkpath u.next e alt in
-                                match shorterpathto e ps with
-                                | Some v ->
-                                    (* If alternative path is shorter than
-                                       previous we 'override it' *)
-                                    if wcompare (Measure.compare) alt v.value = -1 then
-                                        (PathSet.add pe p, PathHeap.decrease pe pe a)
-                                    else
-                                        (p, a)
-                                | None   ->
-                                    (* First sighting *)
-                                    (PathSet.add pe p, PathHeap.insert pe a)
-                            ) out (ps, rest)
-                            in
-                                iter ps'' h' ((u.from, u.next, u.value) :: elp)
-                in
-                    pathresolve target [] @@ iter (PathSet.singleton startp) init []
-            ;;
-            
-            let dijkstra2 start target graph = 
-                (* we take the path to ourselves as 0 *)
                 let startp = (viapath start start start (`Value Measure.zero)) in
                 (* 
                 Set all start to out edges to infinity except the pseudo edge to
@@ -1114,6 +1066,58 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     pathresolve target [] @@ iter (PathSet.singleton startp) init []
             ;;
 
+            let astar heuristic start target graph = 
+                (* we take the path to ourselves as 0 *)
+                let startp = (mkpath start start (`Value Measure.zero)) in
+                (* 
+                Set all start to out edges to infinity except the pseudo edge to
+                self to denote the start point of dijkstra 
+
+                omitted as can be implied when we use insert instead of decrease operation
+
+                init |> NodeMap.fold (fun k _v acc -> 
+                    (PathHeap.insert (mkpath start k `Inf) acc)
+                ) graph 
+
+                ideally the heuristic reduces the number of duplicates so we can
+                use a second (log n) insert
+                *)
+                let init =  (PathHeap.singleton startp) in
+                let rec iter ps heap elp = 
+                    if PathHeap.is_empty heap then
+                        elp
+                    else
+                        let (u, rest) = PathHeap.extract heap in
+                        if equal u.next target  then
+                            ((u.from, u.next, u.value) :: elp)
+                        else
+                            let (out,   w) = outweights u.next graph in
+                            let (ps'', h') = AdjSet.fold (fun e (p, a) -> 
+                                (* get distance from u to e *)
+                                let d   = Measure.measure (Vertex.edge2 e w) in 
+                                (* add to distance from start to u *)
+                                let alt  = wbind (Measure.add) u.value d in 
+                                let alt' = wbind (Measure.add) alt (heuristic e) in
+                                (* demarkate edge with distance from start
+                                   accounting for the heuristic cost *)
+                                let pe  = mkpath u.next e alt' in
+                                match shorterpathto e ps with
+                                | Some v ->
+                                    (* If alternative path is shorter than
+                                       previous we 'override it' *)
+                                    if wcompare (Measure.compare) alt' v.value = -1 then
+                                        (PathSet.add pe p, PathHeap.decrease pe pe a)
+                                    else
+                                        (p, a)
+                                | None   ->
+                                    (* First sighting *)
+                                    (PathSet.add pe p, PathHeap.insert pe a)
+                            ) out (ps, rest)
+                            in
+                                iter ps'' h' ((u.from, u.next, u.value) :: elp)
+                in
+                    pathresolve target [] @@ iter (PathSet.singleton startp) init []
+            ;;
 
         end
 

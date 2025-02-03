@@ -52,6 +52,24 @@ let s_adjlist = [
     (s_g, [(s_e, 2.)]);
 ];;
 
+let heuristics = Hashtbl.create (SGraph.cardinal s);;
+(* This heuristic table only works if the target is s_e!! *)
+Hashtbl.add heuristics s_s 10.;;
+Hashtbl.add heuristics s_a 9.;;
+Hashtbl.add heuristics s_b 7.;;
+Hashtbl.add heuristics s_c 8.;;
+Hashtbl.add heuristics s_d 4.;;
+Hashtbl.add heuristics s_e 0.;;
+Hashtbl.add heuristics s_f 6.;;
+Hashtbl.add heuristics s_g 3.;;
+Hashtbl.add heuristics s_h 6.;;
+Hashtbl.add heuristics s_i 4.;;
+Hashtbl.add heuristics s_j 4.;;
+Hashtbl.add heuristics s_k 3.;;
+Hashtbl.add heuristics s_l 6.;;
+
+let e_heuristic elt = `Value (Hashtbl.find heuristics elt);; 
+
 let pp_sgraph (g: SGraph.adj SGraph.NodeMap.t) = 
     Format.printf "G: {\n"; 
     List.iter (fun (k, (_, v, _, _)) ->
