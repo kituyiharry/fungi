@@ -1048,6 +1048,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                 let alt = wbind (Measure.add) u.value d in 
                                 (* demarkate edge with distance from start *)
                                 let pe  = viapath start u.next e alt in
+                                (* Relaxation *)
                                 match shorterpathto e ps with
                                 | Some v ->
                                     (* If alternative path is shorter than
