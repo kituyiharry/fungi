@@ -6,7 +6,6 @@
 open Treeset;;
 open Heap;;
 
-
 module type SccImpl = sig 
 
     type elt
@@ -35,9 +34,9 @@ module type SccImpl = sig
 
     type sccedge = (int list * adj NodeMap.t)
 
-    val subgraphs: adj NodeMap.t -> elt SccTbl.t -> sccedge SccMap.t
-    val tarjan:    adj NodeMap.t -> solution
-    val kosaraju:  adj NodeMap.t -> solution
+    val induced:  adj NodeMap.t -> elt SccTbl.t -> sccedge SccMap.t
+    val tarjan:   adj NodeMap.t -> solution
+    val kosaraju: adj NodeMap.t -> solution
 end
 
 module type ClusterImpl = sig 
@@ -82,6 +81,19 @@ let wbind f l r = match (l, r) with
     | (x, `Value _) -> x 
     | (`Value _, y) -> y
     | (x',      y') -> if wcompare (Stdlib.compare) x' y' = -1 then x' else y'
+;;
+
+let wprint f v = match v with
+    | `Inf ->     "`Inf"
+    | `NegInf ->  "`NegInf"
+    | `Nan ->     "`Nan"
+    | `Value x -> Printf.sprintf (format_of_string "`Value %s") (f x)
+;;
+
+let wmin f l r = if (wcompare f l r) = -1 then l else r
+;;
+
+let wmax f l r = if (wcompare f l r) =  1 then l else r
 ;;
 
 module type Space = sig
@@ -132,6 +144,7 @@ module type PathImpl = sig
     type elt
     type adj
     type edge
+    type weights
     type 'b ctx
 
     module NodeMap:  Map.S with type key  := elt
@@ -148,8 +161,9 @@ module type PathImpl = sig
         module PathHeap: FibHeap with type node  = measure pathelt and type order = measure
         module PathSet : TSet    with type t    := measure pathelt
 
-        val dijkstra:  elt -> elt -> adj NodeMap.t -> ((elt * elt * measure) list)
-        val astar:     (elt -> measure) -> elt -> elt -> adj NodeMap.t -> (elt * elt * measure) list
+        val dijkstra:    elt -> elt -> adj NodeMap.t -> ((elt * measure) list)
+        val astar:       (elt -> measure) -> elt -> elt -> adj NodeMap.t -> (elt * measure) list
+        val bellmanford: elt -> elt -> adj NodeMap.t -> (elt * measure) list
     end
 
     type path     := (edge pathelt) list
@@ -228,6 +242,7 @@ module type Graph = sig
         type       elt     := elt
         and type   adj     := adj
         and type   edge    := edge
+        and type   weights := edge Weights.t
         and type   'b ctx  := 'b ctx
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
@@ -246,12 +261,23 @@ module type Graph = sig
     val of_weights2: (elt * (elt * edge) list) list -> adj NodeMap.t -> adj NodeMap.t
     val cardinal:    adj NodeMap.t -> int
     val incomingof:  elt -> adj NodeMap.t -> elt AdjSet.set
+    val incweights:  elt -> adj NodeMap.t -> elt AdjSet.set * edge Weights.t
     val outgoingof:  elt -> adj NodeMap.t -> elt AdjSet.set
+    val outweights:  elt -> adj NodeMap.t -> elt AdjSet.set * edge Weights.t
     val neighbours:  elt -> adj NodeMap.t -> elt AdjSet.set
     val xorneighbors:elt -> adj NodeMap.t -> elt AdjSet.set
     val mutuals:     elt -> adj NodeMap.t -> elt AdjSet.set
     val xormutuals:  elt -> adj NodeMap.t -> elt AdjSet.set
     val degree:      elt -> adj NodeMap.t -> int
+    val iodeg:       elt -> adj NodeMap.t -> (int * int)
+    val undcircuit:   adj NodeMap.t -> bool
+    val dircircuit:   adj NodeMap.t -> bool
+    val undeulpath: adj NodeMap.t -> bool
+    val direulpath: adj NodeMap.t -> bool
+    val incdeg:      elt -> adj NodeMap.t -> int
+    val outdeg:      elt -> adj NodeMap.t -> int
+    val allpairs:    adj NodeMap.t -> (elt * elt) list
+    val allweights:  adj NodeMap.t -> (elt * elt * edge) list
     val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
     val cull:        adj NodeMap.t -> adj NodeMap.t
     val toposort:    adj NodeMap.t -> elt list
@@ -262,6 +288,7 @@ module type Graph = sig
     val outlist:     adj NodeMap.t -> (elt * elt AdjSet.set) list
     val to_matrix:   adj NodeMap.t -> int array array * (int * elt) list 
     val of_matrix:   int array array -> (int * elt) list -> adj NodeMap.t
+    val degmatrix:   adj NodeMap.t -> int array array * (int * elt) list
 end
 
 (* simple adapter for some types to save some boilerplate in some cases *)
@@ -286,9 +313,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         vertex values as a to in one and a from in another *)
     module WeightNode = struct
         type t      = elt
-        let  equal  = (equal)
-        (* TODO: reconsider this! *)
-        let  hash   = (Obj.magic)
+        let  equal  = equal
+        let  hash   = Hashtbl.hash
     end
     module Weights = Hashtbl.Make (WeightNode)
 
@@ -333,8 +359,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     let add_edge nodeFrom nodeTo nodeMap =
         (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in 
             Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label, wgts)) nodeMap)
-        |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing,
-            tolabel, wgts) = x in
+        |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing, tolabel, wgts) = x in
             Some ((AdjSet.add nodeFrom toIncoming), (toOutgoing), tolabel, wgts))
     ;;
 
@@ -347,8 +372,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in 
             let _  = Weights.add wgts nodeTo weightValue in
             Some (fromIncoming, (AdjSet.add nodeTo fromOutgoing), label, wgts)) nodeMap)
-        |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing,
-            tolabel, wgts) = x in
+        |>  NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing, tolabel, wgts) = x in
             Some ((AdjSet.add nodeFrom toIncoming), (toOutgoing), tolabel, wgts))
     ;;
 
@@ -412,6 +436,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (** [ incomingof identity (Graph.t) AdjSet.t]
     Incoming set of nodes *)
     let incomingof node game = let (inc, _, _, _) = NodeMap.find node game in inc
+    let incweights node game = let (inc, _, _, w) = NodeMap.find node game in (inc, w)
 
     (** [ incomingof identity (Graph.t) AdjSet.t]
     Outgoing set of nodes *)
@@ -436,9 +461,82 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         AdjSet.remove node (AdjSet.inter inc out)
     ;;
 
+    let incdeg node nodeMap = 
+        AdjSet.cardinal @@ incomingof node nodeMap
+    ;;
+
+    let outdeg node nodeMap = 
+        AdjSet.cardinal @@ outgoingof node nodeMap
+    ;;
+
     (** number of incoming and outgoing edges  *)
     let degree node nodeMap = 
-        AdjSet.cardinal @@ neighbours node nodeMap
+        incdeg node nodeMap + outdeg node nodeMap
+    ;;
+
+    (** incoming and outgoing degree *)
+    let iodeg node nodeMap = 
+        (incdeg node nodeMap, outdeg node nodeMap)
+    ;;
+
+    (** eulerian circuit test for undirected graphs (all edges visited exactly
+        once) *)
+    let undcircuit nodeMap = 
+        NodeMap.for_all (fun _ (i,o,_,_) -> 
+            (AdjSet.cardinal o + AdjSet.cardinal i) mod 2 == 0) nodeMap
+    ;;
+
+    (** eulerian circuit test for directed graphs (all edges visited exactly once) *)
+    let dircircuit nodeMap = 
+        NodeMap.for_all (fun _ (i,o,_,_) -> 
+            (AdjSet.cardinal o) == (AdjSet.cardinal i)) nodeMap
+    ;;
+
+    (** eulerian path for undirected graph return start and end points *)
+    let undeulpath nodeMap = 
+        let (_even, odd) = NodeMap.fold (fun  _k (i,o,_,_) (even, odd) -> 
+            let deg = (AdjSet.cardinal o + AdjSet.cardinal i) in
+            if deg mod 2 == 0  then
+                (even + 1, odd)
+            else
+                (even, odd + 1)
+        ) nodeMap (0, 0) in
+        (* either all vertices are even or exactly 2 have odd degree *)
+        (odd = 0) || odd = 2
+    ;;
+
+    (** eulerian path for directed graph return start and end points *)
+    let direulpath nodeMap = 
+        (* in = 1,  out = 1, eq, count *)
+        let (din, dou, deq, sze) = NodeMap.fold (fun  _k (i,o,_,_) (din, dout, deq, cn) -> 
+            let indeg = AdjSet.cardinal i in
+            let oudeg = AdjSet.cardinal o in
+            let io = Bool.to_int @@ ((indeg - oudeg) = 1) in
+            let ou = Bool.to_int @@ ((oudeg - indeg) = 1) in
+            let eq = Bool.to_int @@ ((indeg = oudeg)) in
+            (din + io, dout + ou, deq + eq, cn + 1)
+        ) nodeMap (0, 0, 0, 0) in
+        (* any circuit is an eulerian path *)
+        (din = 1) && (dou = 1) && (deq = sze - 2)
+    ;;
+
+    let allpairs nodeMap = 
+        NodeMap.fold (fun k (_, out, _, _) ac -> 
+            AdjSet.fold (fun el ac' -> (k, el) :: ac') out ac)  nodeMap []
+    ;;
+
+    let allweights nodeMap = 
+        NodeMap.fold (fun k (_, out, _, wg) ac -> 
+            AdjSet.fold (fun el ac' -> (k, el, Weights.find wg el) :: ac') out ac)  nodeMap []
+    ;;
+
+    (** Hierholzer algorithm *)
+    let _eulerian nodeMap = 
+        let  _ = 
+        dircircuit nodeMap && 
+        undcircuit nodeMap && 
+        undeulpath nodeMap in 
+        direulpath nodeMap
     ;;
 
     (** Removes a node from the graph - weights aren't altered and may still be
@@ -493,7 +591,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     let _   = AdjSet.iter (fun x -> Queue.add (Some label, x) nxt) (diff) in
                     iter (AdjSet.union diff vis) nxt acc'
                 in
-                (vis', b {prev=prev;elt=label; vis=vis'; acc=(acc'');})
+                (vis', b {prev=prev; elt=label; vis=vis'; acc=(acc'');})
         in let (_, acc) = iter visited que init in acc
     ;;
 
@@ -509,7 +607,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 (vis, acc)
             else
                 let (prev, label) = Stack.pop nxt in
-                let (stop, acc') = f {prev=prev;elt=label; vis=vis; acc=acc;} in
+                let (stop, acc') = f {prev=prev; elt=label; vis=vis; acc=acc;} in
                 let (vis', acc'') = (
                     if stop then
                         (vis, acc')
@@ -541,15 +639,18 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     let to_matrix nodeMap = 
         let sz   = NodeMap.cardinal nodeMap in
         let keys = NodeMap.to_list  nodeMap in
-        (* map outgoing edges to indices, return each ed *)
+        (* map outgoing edges to indices, return each elt and its index along
+           with the indexes of outgoing edges *)
         let adjs = List.mapi (fun i (k, (_, o, _, _)) -> 
             ((i, k), AdjSet.fold (fun elt acc -> 
+                (* return the index of the outgoing edge *)
                 Option.get (
                     List.find_index (fun (b, _) -> equal b elt) keys
                 ) :: acc
             ) o [])
         ) keys in
         let b = Array.init_matrix sz sz (fun i j -> 
+            (* bool value of whether j is in the outgoing index *)
             Bool.to_int @@ List.mem j (snd @@ List.nth adjs i)
         ) in
         (* return matrix and keys showing which elt is which index *)
@@ -571,6 +672,20 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             ) (index', []) iarr)) :: acc)
         ) (index, []) nodeMatrix in 
         of_list adj_list g
+    ;;
+
+    let degmatrix nodeMap = 
+        let sz, adjs = NodeMap.fold (fun key (inc, out, _, _) (idx, acc) -> 
+            (idx + 1), (((idx, key), (AdjSet.cardinal inc + AdjSet.cardinal out)) :: acc)
+        ) nodeMap (0, []) in
+        let b = Array.init_matrix sz sz (fun i j -> 
+            if i == j then
+                snd @@ List.nth adjs i
+            else
+                0
+        ) in
+        (* return matrix and keys showing which elt is which index *)
+        (b, List.map (fst) adjs)
     ;;
 
     (** swap the incoming and outgoing edge direction *)
@@ -616,12 +731,12 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let hasnode e x = equal x.node e
         ;;
 
-        (* creates a Map of ints -> ([], Graph.t) where the int is the link value.
+        (* creates a Map of (ints -> ([...], Graph.t)) where the int is the link value.
            it computes its neighbours into the list section of the Map value. 
            This makes more idiomatic to the outer graph structure which is also
            a map albeit with different values
         *)
-        let subgraphs nodeMap sccs =
+        let induced nodeMap sccs =
             SccTbl.fold (fun {link=lowlink;_} elt acc -> 
                 let edges = NodeMap.find elt nodeMap in
                 let (_, out, _, _) = edges in
@@ -998,13 +1113,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
                 due to commonality of the from origin
             *)
-            let rec pathresolve target acc = function 
+            let rec dijkstraresolve target acc = function 
                 | [] -> acc
                 | (from, next, value) :: rest -> 
                     if equal target next then
-                        (pathresolve[@tailcall]) from ((from, next, value) :: acc) rest
+                        (dijkstraresolve[@tailcall]) from ((next, value) :: acc) rest
                     else
-                        (pathresolve[@tailcall]) target acc rest
+                        (dijkstraresolve[@tailcall]) target acc rest
             ;;
 
             (* Single source shortest path  
@@ -1064,7 +1179,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             in
                                 iter ps'' h' ((u.via, u.next, u.value) :: elp)
                 in
-                    pathresolve target [] @@ iter (PathSet.singleton startp) init []
+                    dijkstraresolve target [] @@ iter (PathSet.singleton startp) init []
             ;;
 
             let astar heuristic start target graph = 
@@ -1117,7 +1232,82 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             in
                                 iter ps'' h' ((u.from, u.next, u.value) :: elp)
                 in
-                    pathresolve target [] @@ iter (PathSet.singleton startp) init []
+                    dijkstraresolve target [] @@ iter (PathSet.singleton startp) init []
+            ;;
+
+            module BellTable = Hashtbl.Make (struct 
+                type t       = elt
+                let  equal   = equal
+                let  hash    = Hashtbl.hash
+            end)
+            (* Hashtbl for tracking predecessors *)
+            let belltable   = BellTable.create (2) ;;
+
+            (* similar idea to dijkstraresolve *)
+            let bellresolve start target nodes =
+                    if PathSet.is_empty nodes then [] else 
+                    let rec iter target acc = 
+                        let {from; next=nxt; value;_} = PathSet.find_first (fun {from;_} -> equal from target) nodes in 
+                        if equal start from then
+                            (from, value) :: acc
+                        else
+                            if equal start nxt then
+                                let  {from=from'; value=value';_} = PathSet.find_first (fun {from;_} -> equal from start) nodes in 
+                                (from', value') :: ((from, value) :: acc)
+                            else
+                                iter nxt ((from, value) :: acc) 
+                    in  iter target []
+            ;;
+
+            (* 
+               the Bellman-Ford algorithm can handle directed and undirected graphs with non-negative weights
+               it can only handle directed graphs with negative weights, as long as we don't have negative cycles
+            *)
+            let bellmanford start target graph = 
+                (* Set initial distance at `Inf *)
+                let sz = (NodeMap.fold (fun k (_, _,_,w) acc -> 
+                    if equal k start then
+                        let _ =  BellTable.add belltable k (None, `Value Measure.zero, w) in acc + 1
+                    else
+                        let _ =  BellTable.add belltable k (None, `Inf, w) in acc + 1
+                ) graph 0) - 1 in
+                (*let _ = BellTable.replace belltable start (None, `Value Measure.zero, (snd @@ outweights start graph)) in*)
+                let rec iter sweep =
+                    if sweep = sz then () else
+                        let _ = NodeMap.iter (
+                            fun elt (inc, out, _, wgts) -> 
+                                let (_, sofar, _) =  BellTable.find belltable elt in
+                                let sofar'' = AdjSet.fold (fun prv sofar' -> 
+                                    let (_, value, wgts') = BellTable.find belltable prv in
+                                    let cost   = Vertex.edge2 elt wgts' |> Measure.measure  in
+                                    let value' = wbind (Measure.add) cost value in
+                                    (* relaxation *)
+                                    if wcompare (Measure.compare)  value' sofar' = -1 then
+                                        let _ = BellTable.replace belltable elt (Some prv, value', wgts) in 
+                                        value'
+                                    else
+                                        sofar'
+                                ) inc sofar in
+                                let _ = AdjSet.fold (fun nxt sofar'' -> 
+                                    let (_, value, wgts') = BellTable.find belltable nxt in
+                                    let cost    = Vertex.edge2 nxt wgts |> Measure.measure in
+                                    let value'  = wbind (Measure.add) cost sofar'' in
+                                    (* relaxation *)
+                                    if wcompare (Measure.compare) value' value = -1 then
+                                        let _ = BellTable.replace belltable nxt (Some elt, value', wgts') in 
+                                        sofar''
+                                    else
+                                        sofar''
+                                ) out sofar'' in ()
+                        ) graph in iter (sweep + 1)
+                in
+                let _  = iter 0 in
+                let pl = PathSet.of_seq @@ Seq.map (fun (k, (p,v,_)) -> 
+                    let p' = Option.value ~default:k p in mkpath k p' v
+                ) @@ BellTable.to_seq belltable in
+                let _  = BellTable.clear belltable in 
+                bellresolve start target pl
+                (*[]*)
             ;;
 
         end
@@ -1150,9 +1340,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
         (*
             Floyd warshall
-            Bellman ford
-            Djikstra
-            Astar
         *)
     end
 
@@ -1161,11 +1348,22 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     end
 
     (* TODO:
+        Efficient elt hash (bring own hash) ??
+
         Rodl nibble
         Dot
         IO
         Compressed ??
         DeBruijn
+        Infinite graphs via functor(GraphElt): Seq.t 
+
+        Properties (Isomorphism: ullman, planar, acyclic)
+        https://en.wikipedia.org/wiki/Glossary_of_graph_theory
+        https://en.wikipedia.org/wiki/Component_(graph_theory)
+
+        Spectral clustering
+        https://pages.discovery.wisc.edu/~sroy/teaching/network_biology/fall2018/lectures/Graphclustering_SpectralClustering_Lecture14.pdf
+        https://math.stackexchange.com/questions/277045/easiest-way-to-determine-all-disconnected-sets-from-a-graph
     *)
 
 end;;

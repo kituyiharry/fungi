@@ -16,7 +16,10 @@ module SGraph2 = Graph.MakeGraph(struct
 end);;
 module SGraph4 = Graph.MakeGraph(Graph.Plain(String));;
 
-let s = SGraph.empty;;
+let s  = SGraph.empty;;
+let s' = SGraph.empty;;
+let t  = SGraph.empty;;
+let t' = SGraph.empty;;
 
 let s_a = "A";;
 let s_b = "B";;
@@ -32,9 +35,13 @@ let s_k = "K";;
 let s_l = "L";;
 let s_s = "S";;
 
-let nodes = [ s_a; s_b; s_c; s_d; s_e; s_f; s_g; s_h; s_i; s_j; s_k; s_l; s_s ];;
+let nodes  = [ s_a; s_b; s_c; s_d; s_e; s_f; s_g; s_h; s_i; s_j; s_k; s_l; s_s ];;
+let nodes' = [ s_a; s_b; s_c; s_d; s_e; s_f; ];;
 
-let s = List.fold_right (SGraph.add) nodes s;;
+let s  = List.fold_right (SGraph.add) nodes  s;;
+let s' = List.fold_right (SGraph.add) nodes  s';;
+let t  = List.fold_right (SGraph.add) nodes' t;;
+let t' = List.fold_right (SGraph.add) nodes' t';;
 
 let _ = Printexc.record_backtrace true;;
 
@@ -52,7 +59,29 @@ let s_adjlist = [
     (s_g, [(s_e, 2.)]);
 ];;
 
+let t_adjlist = [
+    (s_a, [(s_d,  40.);  (s_b, 5.); (s_c, 35.)]);
+    (s_b, [(s_e,  25.);  (s_d, 20.)]);
+    (s_c, [(s_e, -30.);  (s_f, 30.)]);
+    (s_d, [(s_f,  20.);]);
+    (s_e, [(s_f,  25.);  (s_d, 45.)]);
+    (s_f, [(s_a,  -1.)]);
+]
+
+let t2_adjlist = [
+    (s_a, [(s_b,  40.);  (s_c, 5.)]);
+    (s_b, [(s_c,  25.);  (s_d, 20.)]);
+    (* create negative cycle with this edge
+    (s_c, [(s_d,  -10.);  (s_e, 30.)]);
+    *)
+    (s_c, [(s_d,  10.);  (s_e, 30.)]);
+    (s_d, [(s_e,  20.);  (s_f, 0.)]);
+    (s_e, [(s_f,  25.);  (s_a, 45.)]);
+    (s_f, [(s_a,  -1.);  (s_b, 0.)]);
+]
+
 let heuristics = Hashtbl.create (SGraph.cardinal s);;
+
 (* This heuristic table only works if the target is s_e!! *)
 Hashtbl.add heuristics s_s 10.;;
 Hashtbl.add heuristics s_a 9.;;
@@ -72,19 +101,21 @@ let e_heuristic elt = `Value (Hashtbl.find heuristics elt);;
 
 let pp_sgraph (g: SGraph.adj SGraph.NodeMap.t) = 
     Format.printf "G: {\n"; 
-    List.iter (fun (k, (_, v, _, _)) ->
+    List.iter (fun (k, (_, v, _, w)) ->
         let _ = Format.printf "\t%s ->\t" k in 
         let _ = SGraph.AdjSet.iter (fun y ->
-            Format.printf " %s " y
+            Format.printf " (%s: %F)" y (SGraph.Vertex.edge2 y w)
         ) v in 
         Format.print_newline ()
     ) (SGraph.NodeMap.bindings g);
   Format.printf "} "
 ;;
 
-#install_printer pp_sgraph;;
 
-let s = SGraph.of_weights2 s_adjlist s;;
+let s  = SGraph.of_weights2 s_adjlist  s;;
+let s' = SGraph.of_weights  s_adjlist  s';;
+let t  = SGraph.of_weights  t_adjlist  t;;
+let t' = SGraph.of_weights2 t2_adjlist t';;
 
 module SPath  = SGraph.Path.Compute(Graph.Biject(Float));;
 module SPath2 = SGraph.Path.Compute(struct 
@@ -94,6 +125,27 @@ module SPath2 = SGraph.Path.Compute(struct
         let  compare   = Float.compare
         let  measure e = `Value e
 end);;
+
+let pp_pset (p: SPath.PathList.t SPath.PathSet.set) = 
+    Format.printf "P: [\n"; 
+    SPath.PathSet.iter (fun {from; next; via; value} ->
+        Format.printf " (%s -> %s -> %s: %s)\n" from via next 
+            (Graph.wprint (Float.to_string) value)
+    ) p;
+  Format.printf "] "
+;;
+
+let pp_aset (p: string SGraph.AdjSet.set) = 
+    Format.printf "P: {"; 
+    SGraph.AdjSet.iter (fun elt ->
+        Format.printf " (%s) " elt
+    ) p;
+  Format.printf "} "
+;;
+
+#install_printer pp_pset;;
+#install_printer pp_aset;;
+#install_printer pp_sgraph;;
 
 let a_s = SGraph.Path.mkpath s_a s_s `Inf ;;
 
@@ -109,8 +161,14 @@ let (uvis, init) =
 ;;
 
 let _ , init3 = SPath.PathHeap.extract init;;
-let t = (SGraph.Path.mkpath s_d s_b `Inf);;
 
 module F  = Heap.MakeFibHeap (Heap.Surject(Int));;
 let    f  = F.of_list [1;1;1;1;1;1;1;1;1;1;1;1;22;3;2];;
 let d, f' = F.extract f;;
+
+let timeonly f =
+        let t = Unix.gettimeofday () in
+        let _res = f () in
+        Printf.printf "Execution time: %f secondsn" (Unix.gettimeofday () -. t)
+;;
+
