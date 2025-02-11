@@ -20,6 +20,9 @@ let s  = SGraph.empty;;
 let s' = SGraph.empty;;
 let t  = SGraph.empty;;
 let t' = SGraph.empty;;
+let q  = SGraph.empty;;
+let q' = SGraph.empty;;
+let v = SGraph.empty;;
 
 let s_a = "A";;
 let s_b = "B";;
@@ -42,9 +45,13 @@ let s  = List.fold_right (SGraph.add) nodes  s;;
 let s' = List.fold_right (SGraph.add) nodes  s';;
 let t  = List.fold_right (SGraph.add) nodes' t;;
 let t' = List.fold_right (SGraph.add) nodes' t';;
+let q  = List.fold_right (SGraph.add) nodes' q;;
+let q' = List.fold_right (SGraph.add) nodes' q';;
+let v  = List.fold_right (SGraph.add) nodes' v;;
 
 let _ = Printexc.record_backtrace true;;
 
+(* dijsktra *)
 let s_adjlist = [
     (s_a, [(s_s, 7.); (s_b, 3.); (s_d, 4.)]);
     (s_s, [(s_b, 2.); (s_c, 3.)]);
@@ -59,6 +66,7 @@ let s_adjlist = [
     (s_g, [(s_e, 2.)]);
 ];;
 
+(* bellman ford *)
 let t_adjlist = [
     (s_a, [(s_d,  40.);  (s_b, 5.); (s_c, 35.)]);
     (s_b, [(s_e,  25.);  (s_d, 20.)]);
@@ -68,6 +76,7 @@ let t_adjlist = [
     (s_f, [(s_a,  -1.)]);
 ]
 
+(* euler circuit *)
 let t2_adjlist = [
     (s_a, [(s_b,  40.);  (s_c, 5.)]);
     (s_b, [(s_c,  25.);  (s_d, 20.)]);
@@ -78,6 +87,35 @@ let t2_adjlist = [
     (s_d, [(s_e,  20.);  (s_f, 0.)]);
     (s_e, [(s_f,  25.);  (s_a, 45.)]);
     (s_f, [(s_a,  -1.);  (s_b, 0.)]);
+]
+
+(* euler path *)
+let q_adjlist = [
+    (s_a, [(s_b, 0.);(s_c, 0.)]);
+    (s_b, [(s_d, 0.)]);
+    (s_c, [(s_a, 0.);(s_b, 0.);(s_e, 0.)]);
+    (s_d, [(s_c, 0.);(s_f, 0.)]);
+    (s_e, [(s_f, 0.)]);
+    (s_f, [(s_c, 0.)]);
+]
+
+(* euler path - simpler DAG graph *)
+let q2_adjlist = [
+    (s_a, [(s_b, 0.);]);
+    (s_b, [(s_d, 0.);(s_c, 0.)]);
+    (s_c, [(s_b, 0.);]);
+    (s_d, [(s_e, 0.);]);
+    (s_e, [(s_f, 0.)]);
+    (s_f, []);
+]
+
+let topo = [
+    (s_a, []);
+    (s_b, []);
+    (s_c, [(s_d, 0.);]);
+    (s_d, [(s_a, 0.);]);
+    (s_e, [(s_a, 0.); (s_b, 0.)]);
+    (s_f, [(s_a, 0.); (s_c, 0.)]);
 ]
 
 let heuristics = Hashtbl.create (SGraph.cardinal s);;
@@ -116,6 +154,12 @@ let s  = SGraph.of_weights2 s_adjlist  s;;
 let s' = SGraph.of_weights  s_adjlist  s';;
 let t  = SGraph.of_weights  t_adjlist  t;;
 let t' = SGraph.of_weights2 t2_adjlist t';;
+let q  = SGraph.of_weights  q_adjlist  q;;
+let q' = SGraph.of_weights  q2_adjlist q';;
+let v  = SGraph.of_weights  topo v;;
+
+(* balance the edges out for an eulerian path *)
+let q  = SGraph.add_weight s_b s_k 0. @@ SGraph.add_weight s_k s_d 0. @@ SGraph.add s_k q;;
 
 module SPath  = SGraph.Path.Compute(Graph.Biject(Float));;
 module SPath2 = SGraph.Path.Compute(struct 

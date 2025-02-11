@@ -477,10 +477,10 @@ let sccgraphs g  =
 ;;
 
 
-let tarjanscc g = (ParityGame.Graph.Scc.subgraphs g (ParityGame.Graph.Scc.tarjan g).sccs)
+let tarjanscc g = (ParityGame.Graph.Scc.induced g (ParityGame.Graph.Scc.tarjan g).sccs)
 ;;
 
-let kosarajuscc g = (ParityGame.Graph.Scc.subgraphs g (ParityGame.Graph.Scc.kosaraju g).sccs)
+let kosarajuscc g = (ParityGame.Graph.Scc.induced g (ParityGame.Graph.Scc.kosaraju g).sccs)
 ;;
 
 (*a test ame with known edge cases *)
