@@ -272,7 +272,7 @@ module type Graph = sig
     val iodeg:       elt -> adj NodeMap.t -> (int * int)
     val undcircuit:  adj NodeMap.t -> bool
     val dircircuit:  adj NodeMap.t -> bool
-    val undeulpath:  adj NodeMap.t -> bool
+    val undeulpath:  adj NodeMap.t -> (elt * elt) option
     val direulpath:  adj NodeMap.t -> (elt * elt) option
     val incdeg:      elt -> adj NodeMap.t -> int
     val outdeg:      elt -> adj NodeMap.t -> int
@@ -494,28 +494,43 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             (AdjSet.cardinal o) == (AdjSet.cardinal i)) nodeMap
     ;;
 
-    (** eulerian path for undirected graph return start and end points *)
+    (** undirected eulerian path for undirected graph return start and end points *)
     let undeulpath nodeMap = 
-        let (_even, odd) = NodeMap.fold (fun  _k (i,o,_,_) (even, odd) -> 
-            let deg = (AdjSet.cardinal o + AdjSet.cardinal i) in
-            if deg mod 2 == 0  then
-                (even + 1, odd)
-            else
-                (even, odd + 1)
-        ) nodeMap (0, 0) in
+        let (even, odd, sz, pnts) = NodeMap.fold (
+            fun  k (i,o,_,_) (even, odd, sz', (l, r)) -> 
+                let deg = (AdjSet.cardinal o + AdjSet.cardinal i) in
+                if deg mod 2 == 0  then
+                    (even + 1, odd, sz' + 1, (l, r))
+                else
+                    if odd = 0 then
+                        (even, odd + 1, sz' + 1, (Some k, r))
+                    else
+                        (even, odd + 1, sz' + 1, (l, Some k))
+        ) nodeMap (0, 0, 0, (None, None)) in
         (* either all vertices are even or exactly 2 have odd degree *)
-        (odd = 0) || odd = 2
+        if even = sz then
+            (* all vertices are even - pick any 2 nodes *)
+            let  (k, _)  = NodeMap.min_binding nodeMap in 
+            let  (k',_)  = NodeMap.max_binding nodeMap in 
+            Some (k, k')
+        else if odd = 2 then
+            match pnts with
+            | Some l, Some r -> Some (l, r)
+            (* ideally unreachable when odd = 2 *)
+            | _  -> None
+        else
+            None
     ;;
 
-    (** eulerian path for directed graph return start and end points 
+    (** directed eulerian path for directed graph return start and end points 
         any circuit is an eulerian path
     *)
     let direulpath nodeMap = 
         (* in = 1,  out = 1, eq, count *)
         let (din, dou, deq, sze, pnts) = NodeMap.fold 
             (fun  k (i,o,_,_) (din, dout, deq, cn, (start, fin)) -> 
-                let indeg = AdjSet.cardinal i in
-                let oudeg = AdjSet.cardinal o in
+                let indeg = AdjSet.cardinal i  in
+                let oudeg = AdjSet.cardinal o  in
                 let io = ((indeg - oudeg) = 1) in
                 let ou = ((oudeg - indeg) = 1) in
                 let eq = ((indeg = oudeg)) in 
@@ -545,8 +560,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         | (false, _) -> 
             None
         | (true, (None, None)) -> 
-            let (k', _)  = NodeMap.min_binding nodeMap in 
-            let (k'',_)  = NodeMap.max_binding nodeMap in 
+            let  (k', _)  = NodeMap.min_binding nodeMap in 
+            let  (k'',_)  = NodeMap.max_binding nodeMap in 
             Some (k'', k')
         | (_, (Some x, Some y)) -> 
             (* NB: Verify there must be at least 2 points for start and end *)
@@ -571,7 +586,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let  _ = 
         dircircuit nodeMap && 
         undcircuit nodeMap && 
-        undeulpath nodeMap in 
+        Option.is_some @@ undeulpath nodeMap in 
         direulpath nodeMap
     ;;
 
@@ -1333,7 +1348,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     else
                         let _ =  BellTable.add belltable k (None, `Inf, w) in acc + 1
                 ) graph 0) - 1 in
-                (*let _ = BellTable.replace belltable start (None, `Value Measure.zero, (snd @@ outweights start graph)) in*)
                 let rec iter sweep =
                     if sweep = sz then () else
                         let _ = NodeMap.iter (
