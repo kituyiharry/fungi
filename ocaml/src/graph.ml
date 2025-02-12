@@ -285,6 +285,7 @@ module type Graph = sig
     val dfs:         ('b ctx -> 'b ctx) -> ('b ctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
     val adj_list_of: elt -> adj NodeMap.t -> elt list
     val transpose:   adj NodeMap.t -> adj NodeMap.t
+    val transpose2:  adj NodeMap.t -> adj NodeMap.t
     val outlist:     adj NodeMap.t -> (elt * elt AdjSet.set) list
     val to_matrix:   adj NodeMap.t -> int array array * (int * elt) list 
     val of_matrix:   int array array -> (int * elt) list -> adj NodeMap.t
@@ -382,6 +383,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
           (*Update with incoming*)
     (** Add bidirectional nodeFrom nodeTo with weight values on both ends  *)
     let add_weight2 nodeFrom nodeTo weightValue nodeMap =
+        (* TODO: is it better to duplicate the edge weights on both node values ??*)
         (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in 
             let _  = Weights.add wgts nodeTo weightValue in
             Some (AdjSet.add nodeTo fromIncoming, (AdjSet.add nodeTo fromOutgoing), label, wgts)) nodeMap)
@@ -708,6 +710,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         of_list adj_list g
     ;;
 
+    (* inout degree matrix along the diagonal *)
     let degmatrix nodeMap = 
         let sz, adjs = NodeMap.fold (fun key (inc, out, _, _) (idx, acc) -> 
             (idx + 1), (((idx, key), (AdjSet.cardinal inc + AdjSet.cardinal out)) :: acc)
@@ -722,18 +725,24 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         (b, List.map (fst) adjs)
     ;;
 
-    (** swap the incoming and outgoing edge direction 
-        FIXME: transpose should account for weights
-    *)
+    (** swap the incoming and outgoing edge direction - preserving edge weights *)
     let transpose (nodeMap: adj NodeMap.t) =
         NodeMap.map (
             fun (inc, out, label, wgts) ->
                 let wgts' = Weights.create (Weights.length wgts) in
-                let _     = AdjSet.iter (fun x -> 
-                    let edge = Vertex.edge x label nodeMap in
-                    Weights.add wgts' x edge
+                let _     = AdjSet.iter (fun x ->
+                    match Weights.find_opt (Vertex.weights x nodeMap) label with
+                        | Some edge -> Weights.add wgts' x edge
+                        | None -> ()
                 ) inc in
-                (out, inc, label, wgts')
+                    (out, inc, label, wgts')
+        ) nodeMap
+    ;;
+
+    (** swap the incoming and outgoing edge direction - WITHOUT preserving edge weights *)
+    let transpose2 (nodeMap: adj NodeMap.t) =
+        NodeMap.map (
+            fun (inc, out, label, wgts) -> (out, inc, label, wgts)
         ) nodeMap
     ;;
 
