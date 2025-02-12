@@ -967,7 +967,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
            we transpose the graph and pop from the stack, seeing which elements
            in the stack are still reachable on pop 
            time values are not really as relevant for this algorithm *)
-        (* FIXME: kosaraju error on some graphs *)
         let kosaraju graph =
             let count  = ref 0 in
             let rec iter node (_, out, _, _) scc =
@@ -997,7 +996,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             in
             let fscc = NodeMap.fold (iter) graph (empty (NodeMap.cardinal graph)) in 
             (* transpose the graph *)
-            let tgraph = transpose graph in
+            let tgraph = transpose2 graph in
             let iter2 scc sccnode =
                 (* if onst the we consider it already a part of an scc *)
                 if AdjSet.mem sccnode.node scc.onst then
@@ -1005,7 +1004,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 else
                     let _ = incr count in
                     (* find all reachable nodes *)
-                    let vstd = bfs
+                    let vstd = dfs
                         (fun s -> s) 
                         (fun {vis;_} -> vis) tgraph sccnode.node (AdjSet.empty)
                     in

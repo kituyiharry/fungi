@@ -484,7 +484,7 @@ let kosarajuscc g = (ParityGame.Graph.Scc.induced g (ParityGame.Graph.Scc.kosara
 ;;
 
 (*a test ame with known edge cases *)
-let g = Utils.smakerandomgame 42 15 6 4;;
+let g  = Utils.smakerandomgame 42 15 6 4;;
 let g2 = Utils.smakerandomgame 42 20 6 4;;
 
 let pp_scc (sccnode: ParityGame.Graph.Scc.sccnode) =
