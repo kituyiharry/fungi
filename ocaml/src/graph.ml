@@ -722,9 +722,19 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         (b, List.map (fst) adjs)
     ;;
 
-    (** swap the incoming and outgoing edge direction *)
-    let transpose nodeMap =
-        NodeMap.map (fun (inc, out, label, wgts) -> (out, inc, label, wgts)) nodeMap
+    (** swap the incoming and outgoing edge direction 
+        FIXME: transpose should account for weights
+    *)
+    let transpose (nodeMap: adj NodeMap.t) =
+        NodeMap.map (
+            fun (inc, out, label, wgts) ->
+                let wgts' = Weights.create (Weights.length wgts) in
+                let _     = AdjSet.iter (fun x -> 
+                    let edge = Vertex.edge x label nodeMap in
+                    Weights.add wgts' x edge
+                ) inc in
+                (out, inc, label, wgts')
+        ) nodeMap
     ;;
 
     (** toposort (happens-before) *)
@@ -733,11 +743,11 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             if AdjSet.mem x v then
                 (v, a)
             else
-                dfs (fun s -> {s with stop=false}) (fun s -> 
+                dfs (fun s -> { s with stop=false }) (fun s -> 
                     if AdjSet.mem s.elt (fst s.acc) then
                         s.acc
                     else
-                       (AdjSet.add s.elt (fst s.acc), s.elt :: (snd s.acc))
+                       AdjSet.add s.elt (fst s.acc), s.elt :: (snd s.acc)
                 ) nodeMap x (v, a) 
         ) nodeMap (AdjSet.empty, [])
     ;;
@@ -948,6 +958,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
            we transpose the graph and pop from the stack, seeing which elements
            in the stack are still reachable on pop 
            time values are not really as relevant for this algorithm *)
+        (* FIXME: kosaraju error on some graphs *)
         let kosaraju graph =
             let count  = ref 0 in
             let rec iter node (_, out, _, _) scc =
