@@ -22,7 +22,8 @@ let t  = SGraph.empty;;
 let t' = SGraph.empty;;
 let q  = SGraph.empty;;
 let q' = SGraph.empty;;
-let v = SGraph.empty;;
+let v  = SGraph.empty;;
+let n  = SGraph.empty;;
 
 let s_a = "A";;
 let s_b = "B";;
@@ -38,8 +39,20 @@ let s_k = "K";;
 let s_l = "L";;
 let s_s = "S";;
 
+let n_0 = "0";;
+let n_1 = "1";;
+let n_2 = "2";;
+let n_3 = "3";;
+let n_4 = "4";;
+(*let n_5 = "5";;*)
+let n_6 = "6";;
+let n_7 = "7";;
+let n_8 = "8";;
+let n_9 = "9";;
+
 let nodes  = [ s_a; s_b; s_c; s_d; s_e; s_f; s_g; s_h; s_i; s_j; s_k; s_l; s_s ];;
 let nodes' = [ s_a; s_b; s_c; s_d; s_e; s_f; ];;
+let nuns   = [ n_0; n_1; n_2; n_3; n_4; (*n_5;*) n_6; n_7; n_8; n_9; ];;
 
 let s  = List.fold_right (SGraph.add) nodes  s;;
 let s' = List.fold_right (SGraph.add) nodes  s';;
@@ -48,6 +61,7 @@ let t' = List.fold_right (SGraph.add) nodes' t';;
 let q  = List.fold_right (SGraph.add) nodes' q;;
 let q' = List.fold_right (SGraph.add) nodes' q';;
 let v  = List.fold_right (SGraph.add) nodes' v;;
+let n  = List.fold_right (SGraph.add) nuns   n;;
 
 let _ = Printexc.record_backtrace true;;
 
@@ -109,6 +123,18 @@ let q2_adjlist = [
     (s_f, []);
 ]
 
+let n_adjlist = [
+    (n_0, [n_2]);
+    (n_2, [n_1]);
+    (n_1, [n_3;]);
+    (n_3, [n_4; n_0]);
+    (*(n_4, [n_6]);*)
+    (n_6, [n_3; n_7]);
+    (n_7, [n_8]);
+    (n_8, [n_9]);
+    (n_9, [n_6]);
+]
+
 let topo = [
     (s_a, []);
     (s_b, []);
@@ -142,13 +168,15 @@ let pp_sgraph (g: SGraph.adj SGraph.NodeMap.t) =
     List.iter (fun (k, (_, v, _, w)) ->
         let _ = Format.printf "\t%s ->\t" k in 
         let _ = SGraph.AdjSet.iter (fun y ->
-            Format.printf " (%s: %F)" y (SGraph.Vertex.edge2 y w)
+            (*Format.printf " (%s: %F)" y (SGraph.Vertex.edge2 y w)*)
+            Format.printf " %s" y
         ) v in 
         Format.print_newline ()
     ) (SGraph.NodeMap.bindings g);
   Format.printf "} "
 ;;
 
+let (let*) = Option.bind;;
 
 let s  = SGraph.of_weights2 s_adjlist  s;;
 let s' = SGraph.of_weights  s_adjlist  s';;
@@ -157,6 +185,8 @@ let t' = SGraph.of_weights2 t2_adjlist t';;
 let q  = SGraph.of_weights  q_adjlist  q;;
 let q' = SGraph.of_weights  q2_adjlist q';;
 let v  = SGraph.of_weights  topo v;;
+let n  = SGraph.of_list     n_adjlist n;;
+let n' = SGraph.add_edge    n_4 n_6 n;;
 
 (* balance the edges out for an eulerian path *)
 let q  = SGraph.add_weight s_b s_k 0. @@ SGraph.add_weight s_k s_d 0. @@ SGraph.add s_k q;;

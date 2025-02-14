@@ -6,6 +6,8 @@
 open Treeset;;
 open Heap;;
 
+let (let*) = Option.bind
+
 module type SccImpl = sig 
 
     type elt
@@ -149,6 +151,7 @@ module type PathImpl = sig
 
     module NodeMap:  Map.S with type key  := elt
     module AdjSet:   TSet  with type t    := elt
+    module EdgeSet:  TSet  with type t    := (elt * elt)
 
     type 'c pathelt = { from: elt; next: elt; via: elt; value: 'c; }
 
@@ -301,12 +304,19 @@ module Plain(T: Set.OrderedType): GraphElt with type edge = unit = struct
     type edge    = unit
 end
 
+(* NB: 
+        It is not clear how to represent multiple edges between nodes  
+        but for now you can either introduce a new 'intermediary' node. 
+        this has the consequence of raising the number of nodes overall in the
+        graph which may not be desired - another approach will be considered 
+ 
+        Most algorithms should remain the same after that transformation !!
+*)
+
 module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edge := Unique.edge = struct
 
     type elt = Unique.t
     type edge= Unique.edge
-
-    let (let*) = Option.bind
 
     (** compare 2 nodes in the graph *)
     let equal lnode rnode = (Unique.compare lnode rnode) = 0
@@ -505,16 +515,15 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     (even + 1, odd, sz' + 1, (l, r))
                 else
                     if odd = 0 then
-                        (even, odd + 1, sz' + 1, (Some k, r))
-                    else
                         (even, odd + 1, sz' + 1, (l, Some k))
+                    else
+                        (even, odd + 1, sz' + 1, (Some k, l))
         ) nodeMap (0, 0, 0, (None, None)) in
         (* either all vertices are even or exactly 2 have odd degree *)
         if even = sz then
-            (* all vertices are even - pick any 2 nodes *)
-            let  (k, _)  = NodeMap.min_binding nodeMap in 
-            let  (k',_)  = NodeMap.max_binding nodeMap in 
-            Some (k, k', sz)
+            (* all vertices are even - pick any 2 nodes - or a circuit *)
+            let  (k, _)  = NodeMap.choose nodeMap in 
+            Some (k, k, sz)
         else if odd = 2 then
             match pnts with
             | Some l, Some r -> Some (l, r, sz)
@@ -559,18 +568,16 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         in
 
         match (check, pnts) with
-        | (false, _) -> 
-            None
-        | (true, (None, None)) -> 
-            let  (k', _)  = NodeMap.min_binding nodeMap in 
-            let  (k'',_)  = NodeMap.max_binding nodeMap in 
-            Some (k'', k', sze)
-        | (_, (Some x, Some y)) -> 
-            (* NB: Verify there must be at least 2 points for start and end *)
-            Some (x, y, sze)
-        | _ -> 
-            (* Ideally this case shouldn't be reached but it should mean *)
-            None
+            | (false, _) -> 
+                None
+            (* Even case: The circuit is the euler path *)
+            | (true, (None, None)) -> 
+                let  (k', _)  = NodeMap.choose nodeMap in 
+                Some (k', k', sze)
+            (* Odd case: Verify there must be at least 2 points for start and end *)
+            | (_, (Some x, Some y)) -> Some (x, y, sze)
+            (* Ideally this case shouldn't be reached but it should mean no path *)
+            | _ -> None
     ;;
 
     let allpairs nodeMap = 
@@ -610,7 +617,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     ;;
 
     type 'b ctx = { 
-        stop: bool;           (* whether to stop a resurse *)
+        stop: bool;           (* whether to stop a recurse *)
         prev: elt option;     (* the previous element, None if start *)
         elt:  elt;            (* the current node *)
         vis:  elt AdjSet.set; (* the visited nodes *)
@@ -740,7 +747,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     ;;
 
     let degtable tbl nodeMap = 
-        NodeMap.iter ( fun k (inc, out, _, _) -> 
+        NodeMap.iter (fun k (inc, out, _, _) -> 
             Hashtbl.add tbl k (AdjSet.cardinal inc, AdjSet.cardinal out)
         ) nodeMap
     ;;
@@ -1393,26 +1400,27 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 | z -> z
         end)
 
+        (* TODO: property test on random graphs and check if the output path can
+           be followed along the edges *)
+        (* construct an eulerian path *)
         let hierholzer ?(endpoints=direulpath) graph = 
-            let* start, _fin, size = endpoints graph in 
+            let* start, fin, size = endpoints graph in 
             let tbl = Hashtbl.create size in
             let _   = degtable tbl graph in
             let rec iter node vis path =
                 let (ileft, oleft) = Hashtbl.find tbl node in
                 if  oleft = 0 then
-                    (vis, node :: path)
+                    (vis, path)
                 else
                     let out  = outgoingof  node graph in
+                    let _    = Hashtbl.replace tbl node (ileft, oleft - 1) in
                     let (vis', path') = AdjSet.fold (fun elt (vis', path') -> 
                         if EdgeSet.mem (node, elt) vis then
                             (vis', path')
                         else
-                           let _    = Hashtbl.replace tbl node (ileft, oleft - 1) in
-                           iter elt (EdgeSet.add (node, elt) vis') path'
-                    ) out (vis, path) in
-                    (vis', node :: path')
-            in 
-            Some (snd @@ iter start EdgeSet.empty [])
+                            iter elt (EdgeSet.add (node, elt) vis') path'
+                    ) out (vis, path) in (vis', node :: path')
+            in Some (snd @@ iter start EdgeSet.empty [fin])
         ;;
 
         (* All pairs depth first walk until (f ctx -> bool) is true or all nodes
@@ -1438,16 +1446,16 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let naivebfs graph f start = 
             List.rev @@ bfs (fun s -> (
                 match s.prev with
-                | Some prev ->
-                    {  s with stop=f s;
-                        acc = (
-                            {
-                                from=prev; next=s.elt; via=prev; 
-                                value=(Vertex.edge prev s.elt graph); 
-                            } :: s.acc) 
-                    }
-                | None -> 
-                    { s with stop = f s; }
+                    | Some prev ->
+                        {  s with stop=f s; acc = (
+                                {
+                                    from=prev; next=s.elt; via=prev; 
+                                    value=(Vertex.edge prev s.elt graph); 
+                                } :: s.acc
+                            )
+                        }
+                    | None ->
+                        { s with stop = f s; }
             )) (fun s -> s.acc) graph start []
         ;;
 
