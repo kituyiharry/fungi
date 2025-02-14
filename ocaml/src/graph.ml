@@ -377,9 +377,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     ;;
 
     (*Find the tail of the directed edge*)
-      (*Update with outgoing*)
-        (*Find the head of the directed edge*)
-          (*Update with incoming*)
+    (*Update with outgoing*)
+    (*Find the head of the directed edge*)
+    (*Update with incoming*)
     (** Add nodeFrom nodeTo with weight values on from end  *)
     let add_weight nodeFrom nodeTo weightValue nodeMap =
         (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in 
@@ -390,9 +390,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     ;;
 
     (*Find the tail of the directed edge*)
-      (*Update with outgoing*)
-        (*Find the head of the directed edge*)
-          (*Update with incoming*)
+    (*Update with outgoing*)
+    (*Find the head of the directed edge*)
+    (*Update with incoming*)
     (** Add bidirectional nodeFrom nodeTo with weight values on both ends  *)
     let add_weight2 nodeFrom nodeTo weightValue nodeMap =
         (* TODO: is it better to duplicate the edge weights on both node values ??*)
@@ -510,14 +510,14 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     let undeulpath nodeMap = 
         let (even, odd, sz, pnts) = NodeMap.fold (
             fun  k (i,o,_,_) (even, odd, sz', (l, r)) -> 
-                let deg = (AdjSet.cardinal o + AdjSet.cardinal i) in
-                if deg mod 2 == 0  then
-                    (even + 1, odd, sz' + 1, (l, r))
-                else
-                    if odd = 0 then
-                        (even, odd + 1, sz' + 1, (l, Some k))
-                    else
-                        (even, odd + 1, sz' + 1, (Some k, l))
+            let deg = (AdjSet.cardinal o + AdjSet.cardinal i) in
+            if deg mod 2 == 0  then
+                (even + 1, odd, sz' + 1, (l, r))
+            else
+            if odd = 0 then
+                (even, odd + 1, sz' + 1, (l, Some k))
+            else
+                (even, odd + 1, sz' + 1, (Some k, l))
         ) nodeMap (0, 0, 0, (None, None)) in
         (* either all vertices are even or exactly 2 have odd degree *)
         if even = sz then
@@ -562,22 +562,22 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let check =
             (* all vertices have equal in and out degree *)
             (deq = sze)
-                ||
+            ||
             (* at most 1 has each of "greater by 1" degree *)
             (din = 1) && (dou = 1) && (deq = sze - 2) 
         in
 
         match (check, pnts) with
-            | (false, _) -> 
-                None
-            (* Even case: The circuit is the euler path *)
-            | (true, (None, None)) -> 
-                let  (k', _)  = NodeMap.choose nodeMap in 
-                Some (k', k', sze)
-            (* Odd case: Verify there must be at least 2 points for start and end *)
-            | (_, (Some x, Some y)) -> Some (x, y, sze)
-            (* Ideally this case shouldn't be reached but it should mean no path *)
-            | _ -> None
+        | (false, _) -> 
+            None
+        (* Even case: The circuit is the euler path *)
+        | (true, (None, None)) -> 
+            let  (k', _)  = NodeMap.choose nodeMap in 
+            Some (k', k', sze)
+        (* Odd case: Verify there must be at least 2 points for start and end *)
+        | (_, (Some x, Some y)) -> Some (x, y, sze)
+        (* Ideally this case shouldn't be reached but it should mean no path *)
+        | _ -> None
     ;;
 
     let allpairs nodeMap = 
@@ -642,11 +642,11 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 let {stop;acc=acc';_} = f {prev=prev;elt=label; vis=vis; acc=acc;stop=false} in
                 let (vis', acc'') = if stop then
                     (vis, acc')
-                else
-                    let out =  outgoingof label game in
-                    let diff= AdjSet.diff out vis in
-                    let _   = AdjSet.iter (fun x -> Queue.add (Some label, x) nxt) (diff) in
-                    iter (AdjSet.union diff vis) nxt acc'
+                    else
+                        let out =  outgoingof label game in
+                        let diff= AdjSet.diff out vis in
+                        let _   = AdjSet.iter (fun x -> Queue.add (Some label, x) nxt) (diff) in
+                        iter (AdjSet.union diff vis) nxt acc'
                 in
                 (vis', b {prev=prev; elt=label; vis=vis';acc=(acc'');stop=false;})
         in let (_, acc) = iter visited que init in acc
@@ -756,13 +756,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     let transpose (nodeMap: adj NodeMap.t) =
         NodeMap.map (
             fun (inc, out, label, wgts) ->
-                let wgts' = Weights.create (Weights.length wgts) in
-                let _     = AdjSet.iter (fun x ->
-                    match Weights.find_opt (Vertex.weights x nodeMap) label with
-                        | Some edge -> Weights.add wgts' x edge
-                        | None -> ()
-                ) inc in
-                    (out, inc, label, wgts')
+            let wgts' = Weights.create (Weights.length wgts) in
+            let _     = AdjSet.iter (fun x ->
+                match Weights.find_opt (Vertex.weights x nodeMap) label with
+                | Some edge -> Weights.add wgts' x edge
+                | None -> ()
+            ) inc in
+            (out, inc, label, wgts')
         ) nodeMap
     ;;
 
@@ -783,7 +783,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     if AdjSet.mem s.elt (fst s.acc) then
                         s.acc
                     else
-                       AdjSet.add s.elt (fst s.acc), s.elt :: (snd s.acc)
+                        AdjSet.add s.elt (fst s.acc), s.elt :: (snd s.acc)
                 ) nodeMap x (v, a) 
         ) nodeMap (AdjSet.empty, [])
     ;;
@@ -1204,7 +1204,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             ;;
 
             (* Single source shortest path  
-                
+
                 we choose between a log n insert or
                 linear decrease like below 
                 Since we can tolerate duplicates we
@@ -1258,9 +1258,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                     (PathSet.add pe p, PathHeap.decrease pe pe a)
                             ) out (ps, rest)
                             in
-                                iter ps'' h' ((u.via, u.next, u.value) :: elp)
+                            iter ps'' h' ((u.via, u.next, u.value) :: elp)
                 in
-                    dijkstraresolve target [] @@ iter (PathSet.singleton startp) init []
+                dijkstraresolve target [] @@ iter (PathSet.singleton startp) init []
             ;;
 
             let astar heuristic start target graph = 
@@ -1311,24 +1311,24 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                     (PathSet.add pe p, PathHeap.insert pe a)
                             ) out (ps, rest)
                             in
-                                iter ps'' h' ((u.from, u.next, u.value) :: elp)
+                            iter ps'' h' ((u.from, u.next, u.value) :: elp)
                 in
-                    dijkstraresolve target [] @@ iter (PathSet.singleton startp) init []
+                dijkstraresolve target [] @@ iter (PathSet.singleton startp) init []
             ;;
 
             (* similar idea to dijkstraresolve *)
             let bellresolve start target nodes =
-                    if PathSet.is_empty nodes then [] else 
+                if PathSet.is_empty nodes then [] else 
                     let rec iter target acc = 
                         let {from; next=nxt; value;_} = PathSet.find_first (fun {from;_} -> equal from target) nodes in 
                         if equal start from then
                             (from, value) :: acc
                         else
-                            if equal start nxt then
-                                let  {from=from'; value=value';_} = PathSet.find_first (fun {from;_} -> equal from start) nodes in 
-                                (from', value') :: ((from, value) :: acc)
-                            else
-                                iter nxt ((from, value) :: acc) 
+                        if equal start nxt then
+                            let  {from=from'; value=value';_} = PathSet.find_first (fun {from;_} -> equal from start) nodes in 
+                            (from', value') :: ((from, value) :: acc)
+                        else
+                            iter nxt ((from, value) :: acc) 
                     in  iter target []
             ;;
 
@@ -1356,31 +1356,31 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     if sweep = maxsz then () else
                         let _ = NodeMap.iter (
                             fun elt (inc, out, _, wgts) -> 
-                                let (_, sofar, _) =  Hashtbl.find belltable elt in
-                                (* All incoming edges *)
-                                let sofar'' = AdjSet.fold (fun prv sofar' -> 
-                                    let (_, value, wgts') = Hashtbl.find belltable prv in
-                                    let cost   = Vertex.edge2 elt wgts' |> Measure.measure  in
-                                    let value' = wbind (Measure.add) cost value in
-                                    (* relaxation *)
-                                    if wcompare (Measure.compare)  value' sofar' = -1 then
-                                        let _ = Hashtbl.replace belltable elt (Some prv, value', wgts) in 
-                                        value'
-                                    else
-                                        sofar'
-                                ) inc sofar in
-                                (* All outgoing edges *)
-                                let _ = AdjSet.fold (fun nxt sofar'' -> 
-                                    let (_, value, wgts') = Hashtbl.find belltable nxt in
-                                    let cost    = Vertex.edge2 nxt wgts |> Measure.measure in
-                                    let value'  = wbind (Measure.add) cost sofar'' in
-                                    (* relaxation *)
-                                    if wcompare (Measure.compare) value' value = -1 then
-                                        let _ = Hashtbl.replace belltable nxt (Some elt, value', wgts') in 
-                                        sofar''
-                                    else
-                                        sofar''
-                                ) out sofar'' in ()
+                            let (_, sofar, _) =  Hashtbl.find belltable elt in
+                            (* All incoming edges *)
+                            let sofar'' = AdjSet.fold (fun prv sofar' -> 
+                                let (_, value, wgts') = Hashtbl.find belltable prv in
+                                let cost   = Vertex.edge2 elt wgts' |> Measure.measure  in
+                                let value' = wbind (Measure.add) cost value in
+                                (* relaxation *)
+                                if wcompare (Measure.compare)  value' sofar' = -1 then
+                                    let _ = Hashtbl.replace belltable elt (Some prv, value', wgts) in 
+                                    value'
+                                else
+                                    sofar'
+                            ) inc sofar in
+                            (* All outgoing edges *)
+                            let _ = AdjSet.fold (fun nxt sofar'' -> 
+                                let (_, value, wgts') = Hashtbl.find belltable nxt in
+                                let cost    = Vertex.edge2 nxt wgts |> Measure.measure in
+                                let value'  = wbind (Measure.add) cost sofar'' in
+                                (* relaxation *)
+                                if wcompare (Measure.compare) value' value = -1 then
+                                    let _ = Hashtbl.replace belltable nxt (Some elt, value', wgts') in 
+                                    sofar''
+                                else
+                                    sofar''
+                            ) out sofar'' in ()
                         ) graph in iter (sweep + 1)
                 in
                 let _  = iter 0 in
@@ -1433,7 +1433,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     ({
                         s with stop=f s;
                         acc={from=prev; next=s.elt; via=prev;
-                        value=(Vertex.edge prev s.elt graph);} :: s.acc
+                            value=(Vertex.edge prev s.elt graph);} :: s.acc
                     })
                 | None ->
                     { s with stop = f s}
@@ -1446,16 +1446,16 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let naivebfs graph f start = 
             List.rev @@ bfs (fun s -> (
                 match s.prev with
-                    | Some prev ->
-                        {  s with stop=f s; acc = (
-                                {
-                                    from=prev; next=s.elt; via=prev; 
-                                    value=(Vertex.edge prev s.elt graph); 
-                                } :: s.acc
-                            )
-                        }
-                    | None ->
-                        { s with stop = f s; }
+                | Some prev ->
+                    {  s with stop=f s; acc = (
+                        {
+                            from=prev; next=s.elt; via=prev; 
+                            value=(Vertex.edge prev s.elt graph); 
+                        } :: s.acc
+                    )
+                    }
+                | None ->
+                    { s with stop = f s; }
             )) (fun s -> s.acc) graph start []
         ;;
 
