@@ -166,7 +166,7 @@ module type PathImpl = sig
 
         val dijkstra:    elt -> elt -> adj NodeMap.t -> ((elt * measure) list)
         val astar:       (elt -> measure) -> elt -> elt -> adj NodeMap.t -> (elt * measure) list
-        val bellmanford: elt -> elt -> adj NodeMap.t -> (elt * measure) list
+        val bellmanford: elt -> elt -> adj NodeMap.t -> ((elt * measure) list * (elt * elt) EdgeSet.set)
     end
 
     type path     := (edge pathelt) list
@@ -1153,6 +1153,14 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             { from=f; next=t; via=v; value=cost; }
         ;;
 
+        (* hold visited edges *)
+        module EdgeSet = TreeSet (struct
+            type t = (elt * elt)
+            let compare (x, y) (x', y') = match Unique.compare x x' with 
+                | 0 -> Unique.compare y y'
+                | z -> z
+        end)
+
         module Compute(Measure: Measurable with type t = edge and type edge = edge) = struct 
 
             type measure = Measure.t wrap
@@ -1335,9 +1343,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             (* 
                the Bellman-Ford algorithm can handle directed and undirected graphs with non-negative weights
                it can only handle directed graphs with negative weights, as long as we don't have negative cycles
-               TODO: extract a negative cycle??
+               If there is a negative cycle we return it as part of the EdgeSet
             *)
-            let bellmanford start target graph = 
+            let bellmanford start target (graph: adj NodeMap.t) = 
                 (* Set initial distance at `Inf *)
                 let (sz, lst) = (NodeMap.fold (fun k (_, _,_,w) (acc, lst) -> 
                     if equal k start then
@@ -1384,21 +1392,43 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                         ) graph in iter (sweep + 1)
                 in
                 let _  = iter 0 in
+                (* Do an extra iteration to detect a negative cycle by marking
+                   edges that relax as part of a negative cycle
+                   *)
+                let negcycles =  NodeMap.fold (
+                    fun elt (inc, out, _, wgts) acc -> 
+                    let (_, sofar, _) =  Hashtbl.find belltable elt in
+                    let (sofar'', acc') = AdjSet.fold (fun prv (sofar', acc') -> 
+                        let (_, value, wgts') = Hashtbl.find belltable prv in
+                        let cost   = Vertex.edge2 elt wgts' |> Measure.measure  in
+                        let value' = wbind (Measure.add) cost value in
+                        (* relaxation *)
+                        if wcompare (Measure.compare)  value' sofar' = -1 then
+                            let _ = Hashtbl.replace belltable elt (Some prv, value', wgts) in 
+                            (value', EdgeSet.add (prv, elt) acc')
+                        else
+                            (sofar', acc')
+                    ) inc (sofar, acc) in
+                    (* All outgoing edges *)
+                    let (_, acc'') = AdjSet.fold (fun nxt (sofar'', acc'') -> 
+                        let (_, value, wgts') = Hashtbl.find belltable nxt in
+                        let cost    = Vertex.edge2 nxt wgts |> Measure.measure in
+                        let value'  = wbind (Measure.add) cost sofar'' in
+                        (* relaxation *)
+                        if wcompare (Measure.compare) value' value = -1 then
+                            let _ = Hashtbl.replace belltable nxt (Some elt, value', wgts') in 
+                            (sofar'', EdgeSet.add (elt, nxt) acc'')
+                        else
+                            (sofar'', acc'')
+                    ) out (sofar'', acc') in acc''
+                ) graph EdgeSet.empty in
                 let pl = PathSet.of_seq @@ Seq.map (fun (k, (p,v,_)) -> 
                     let p' = Option.value ~default:k p in mkpath k p' v
                 ) @@ Hashtbl.to_seq belltable in
-                bellresolve start target pl
+                (bellresolve start target pl, negcycles)
             ;;
 
         end
-
-        (* hold visited edges *)
-        module EdgeSet = TreeSet (struct
-            type t = (elt * elt)
-            let compare (x, y) (x', y') = match Unique.compare x x' with 
-                | 0 -> Unique.compare y y'
-                | z -> z
-        end)
 
         (* TODO: property test on random graphs and check if the output path can
            be followed along the edges *)
@@ -1472,12 +1502,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         Efficient elt hash (bring own hash) ??
 
         Rodl nibble
-        Dot
+        Dot (https://graphviz.org/doc/info/lang.html)
         IO
         Compressed (Path compression) ??
         DeBruijn
 
         Properties (Isomorphism: ullman, planar, acyclic)
+        https://en.wikipedia.org/wiki/Sethi%E2%80%93Ullman_algorithm
         https://en.wikipedia.org/wiki/Glossary_of_graph_theory
         https://en.wikipedia.org/wiki/Component_(graph_theory)
 
