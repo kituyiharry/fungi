@@ -167,8 +167,9 @@ module type PathImpl = sig
     end
 
     type path     := (edge pathelt) list
-    val naivedfs: adj NodeMap.t -> (path ctx -> bool) -> elt -> path
-    val naivebfs: adj NodeMap.t -> (path ctx -> bool) -> elt -> path
+    val hierholzer: ?endpoints:(adj NodeMap.t -> (elt * elt * int) option) -> adj NodeMap.t -> (elt list) option
+    val naivedfs:   adj NodeMap.t -> (path ctx -> bool) -> elt -> path
+    val naivebfs:   adj NodeMap.t -> (path ctx -> bool) -> elt -> path
 end
 
 module type SpanImpl = sig 
@@ -272,8 +273,8 @@ module type Graph = sig
     val iodeg:       elt -> adj NodeMap.t -> (int * int)
     val undcircuit:  adj NodeMap.t -> bool
     val dircircuit:  adj NodeMap.t -> bool
-    val undeulpath:  adj NodeMap.t -> (elt * elt) option
-    val direulpath:  adj NodeMap.t -> (elt * elt) option
+    val undeulpath:  adj NodeMap.t -> (elt * elt * int) option
+    val direulpath:  adj NodeMap.t -> (elt * elt * int) option
     val incdeg:      elt -> adj NodeMap.t -> int
     val outdeg:      elt -> adj NodeMap.t -> int
     val allpairs:    adj NodeMap.t -> (elt * elt) list
@@ -290,6 +291,7 @@ module type Graph = sig
     val to_matrix:   adj NodeMap.t -> int array array * (int * elt) list 
     val of_matrix:   int array array -> (int * elt) list -> adj NodeMap.t
     val degmatrix:   adj NodeMap.t -> int array array * (int * elt) list
+    val degtable:    (elt, int * int) Hashtbl.t -> adj NodeMap.t -> unit
 end
 
 (* simple adapter for some types to save some boilerplate in some cases *)
@@ -512,10 +514,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             (* all vertices are even - pick any 2 nodes *)
             let  (k, _)  = NodeMap.min_binding nodeMap in 
             let  (k',_)  = NodeMap.max_binding nodeMap in 
-            Some (k, k')
+            Some (k, k', sz)
         else if odd = 2 then
             match pnts with
-            | Some l, Some r -> Some (l, r)
+            | Some l, Some r -> Some (l, r, sz)
             (* ideally unreachable when odd = 2 *)
             | _  -> None
         else
@@ -562,10 +564,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         | (true, (None, None)) -> 
             let  (k', _)  = NodeMap.min_binding nodeMap in 
             let  (k'',_)  = NodeMap.max_binding nodeMap in 
-            Some (k'', k')
+            Some (k'', k', sze)
         | (_, (Some x, Some y)) -> 
             (* NB: Verify there must be at least 2 points for start and end *)
-            Some (x, y)
+            Some (x, y, sze)
         | _ -> 
             (* Ideally this case shouldn't be reached but it should mean *)
             None
@@ -579,15 +581,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     let allweights nodeMap = 
         NodeMap.fold (fun k (_, out, _, wg) ac -> 
             AdjSet.fold (fun el ac' -> (k, el, Weights.find wg el) :: ac') out ac)  nodeMap []
-    ;;
-
-    (** Hierholzer algorithm *)
-    let _eulerian nodeMap = 
-        let  _ = 
-        dircircuit nodeMap && 
-        undcircuit nodeMap && 
-        Option.is_some @@ undeulpath nodeMap in 
-        direulpath nodeMap
     ;;
 
     (** Removes a node from the graph - weights aren't altered and may still be
@@ -616,7 +609,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ) graph
     ;;
 
-    type 'b ctx = { stop: bool; prev: elt option; elt: elt; vis: elt AdjSet.set; acc: 'b }
+    type 'b ctx = { 
+        stop: bool;           (* whether to stop a resurse *)
+        prev: elt option;     (* the previous element, None if start *)
+        elt:  elt;            (* the current node *)
+        vis:  elt AdjSet.set; (* the visited nodes *)
+        acc:  'b;             (* the accumulator *)
+    }
 
     (** breadth first search starting from start node applying f until returns
         true or queue is empty applying f on each node and b on backtrack 
@@ -740,6 +739,12 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         (b, List.map (fst) adjs)
     ;;
 
+    let degtable tbl nodeMap = 
+        NodeMap.iter ( fun k (inc, out, _, _) -> 
+            Hashtbl.add tbl k (AdjSet.cardinal inc, AdjSet.cardinal out)
+        ) nodeMap
+    ;;
+
     (** swap the incoming and outgoing edge direction - preserving edge weights *)
     let transpose (nodeMap: adj NodeMap.t) =
         NodeMap.map (
@@ -799,7 +804,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let hasnode e x = equal x.node e
         ;;
 
-        (* creates a Map of (ints -> ([...], Graph.t)) where the int is the link value.
+        (* creates a Map of (ints -> ([idx...], Graph.t)) where the int is the link value.
            it computes its neighbours into the list section of the Map value. 
            This makes more idiomatic to the outer graph structure which is also
            a map albeit with different values
@@ -811,7 +816,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 let keyseq = SccTbl.to_seq_keys sccs in
                 let sccedg = (AdjSet.fold (fun e ac ->
                     match Seq.find (hasnode e) keyseq with
-                    | Some v -> if v.link != lowlink then  v.link :: ac else ac
+                    | Some v -> if v.link != lowlink then v.link :: ac else ac
                     | None   -> ac
                 ) out []) in
                 SccMap.update lowlink (fun nodeEl -> match nodeEl with
@@ -1115,14 +1120,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             bk (AdjSet.empty) (keys) (AdjSet.empty) []
         ;;
 
-        let _hierholzer graph = 
-            let* start, _fin = direulpath graph in
-            Some start
-            (*dfs *)
-                (*(fun ctx -> (true, ctx.acc))*)
-                (*(fun ctx -> (ctx.acc))*)
-                (*start None graph*)
-        ;;
     end
 
     (*************************************************************************
@@ -1159,10 +1156,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 type t          = measure pathelt
                 type order      = measure
 
-                let  bind t       = t.value
+                let  bind t     = t.value
                 (* next node is enough to differentiate between 2 nodes *)
-                let  compare l r  = 
-                    match (Unique.compare l.next r.next) with 
+                let  compare l r= 
+                    match  Unique.compare l.next r.next with 
                     | 0 -> Unique.compare l.from r.from
                     | x ->  x
                 ;;
@@ -1170,7 +1167,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             end
 
             module PathHeap = MakeFibHeap (PathList)
-            module PathSet  = TreeSet (PathList)
+            module PathSet  = TreeSet     (PathList)
 
             let shorterpathto e p =  PathSet.find_first_opt (fun e' -> equal e'.next e) p
 
@@ -1312,14 +1309,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     dijkstraresolve target [] @@ iter (PathSet.singleton startp) init []
             ;;
 
-            module BellTable = Hashtbl.Make (struct 
-                type t       = elt
-                let  equal   = equal
-                let  hash    = Hashtbl.hash
-            end)
-            (* Hashtbl for tracking predecessors *)
-            let belltable   = BellTable.create (2) ;;
-
             (* similar idea to dijkstraresolve *)
             let bellresolve start target nodes =
                     if PathSet.is_empty nodes then [] else 
@@ -1339,38 +1328,48 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             (* 
                the Bellman-Ford algorithm can handle directed and undirected graphs with non-negative weights
                it can only handle directed graphs with negative weights, as long as we don't have negative cycles
+               TODO: extract a negative cycle??
             *)
             let bellmanford start target graph = 
                 (* Set initial distance at `Inf *)
-                let sz = (NodeMap.fold (fun k (_, _,_,w) acc -> 
+                let (sz, lst) = (NodeMap.fold (fun k (_, _,_,w) (acc, lst) -> 
                     if equal k start then
-                        let _ =  BellTable.add belltable k (None, `Value Measure.zero, w) in acc + 1
+                        acc + 1, 
+                        (k, (None, `Value Measure.zero, w)) :: lst
                     else
-                        let _ =  BellTable.add belltable k (None, `Inf, w) in acc + 1
-                ) graph 0) - 1 in
+                        acc + 1,
+                        (k, (None, `Inf, w)) :: lst
+                ) graph (0, [])) in
+                (* Hashtbl for tracking predecessors *)
+                let belltable = Hashtbl.create sz in
+                let _ = List.iter (fun (k, v) -> Hashtbl.add belltable k v) lst in
+                (* upper bound of n - 1 sweeps for convergence *)
+                let maxsz = sz - 1 in
                 let rec iter sweep =
-                    if sweep = sz then () else
+                    if sweep = maxsz then () else
                         let _ = NodeMap.iter (
                             fun elt (inc, out, _, wgts) -> 
-                                let (_, sofar, _) =  BellTable.find belltable elt in
+                                let (_, sofar, _) =  Hashtbl.find belltable elt in
+                                (* All incoming edges *)
                                 let sofar'' = AdjSet.fold (fun prv sofar' -> 
-                                    let (_, value, wgts') = BellTable.find belltable prv in
+                                    let (_, value, wgts') = Hashtbl.find belltable prv in
                                     let cost   = Vertex.edge2 elt wgts' |> Measure.measure  in
                                     let value' = wbind (Measure.add) cost value in
                                     (* relaxation *)
                                     if wcompare (Measure.compare)  value' sofar' = -1 then
-                                        let _ = BellTable.replace belltable elt (Some prv, value', wgts) in 
+                                        let _ = Hashtbl.replace belltable elt (Some prv, value', wgts) in 
                                         value'
                                     else
                                         sofar'
                                 ) inc sofar in
+                                (* All outgoing edges *)
                                 let _ = AdjSet.fold (fun nxt sofar'' -> 
-                                    let (_, value, wgts') = BellTable.find belltable nxt in
+                                    let (_, value, wgts') = Hashtbl.find belltable nxt in
                                     let cost    = Vertex.edge2 nxt wgts |> Measure.measure in
                                     let value'  = wbind (Measure.add) cost sofar'' in
                                     (* relaxation *)
                                     if wcompare (Measure.compare) value' value = -1 then
-                                        let _ = BellTable.replace belltable nxt (Some elt, value', wgts') in 
+                                        let _ = Hashtbl.replace belltable nxt (Some elt, value', wgts') in 
                                         sofar''
                                     else
                                         sofar''
@@ -1380,15 +1379,41 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 let _  = iter 0 in
                 let pl = PathSet.of_seq @@ Seq.map (fun (k, (p,v,_)) -> 
                     let p' = Option.value ~default:k p in mkpath k p' v
-                ) @@ BellTable.to_seq belltable in
-                let _  = BellTable.clear belltable in 
+                ) @@ Hashtbl.to_seq belltable in
                 bellresolve start target pl
             ;;
 
-            (*let hierholzer graph  =*)
-            (*;;*)
-
         end
+
+        (* hold visited edges *)
+        module EdgeSet = TreeSet (struct
+            type t = (elt * elt)
+            let compare (x, y) (x', y') = match Unique.compare x x' with 
+                | 0 -> Unique.compare y y'
+                | z -> z
+        end)
+
+        let hierholzer ?(endpoints=direulpath) graph = 
+            let* start, _fin, size = endpoints graph in 
+            let tbl = Hashtbl.create size in
+            let _   = degtable tbl graph in
+            let rec iter node vis path =
+                let (ileft, oleft) = Hashtbl.find tbl node in
+                if  oleft = 0 then
+                    (vis, node :: path)
+                else
+                    let out  = outgoingof  node graph in
+                    let (vis', path') = AdjSet.fold (fun elt (vis', path') -> 
+                        if EdgeSet.mem (node, elt) vis then
+                            (vis', path')
+                        else
+                           let _    = Hashtbl.replace tbl node (ileft, oleft - 1) in
+                           iter elt (EdgeSet.add (node, elt) vis') path'
+                    ) out (vis, path) in
+                    (vis', node :: path')
+            in 
+            Some (snd @@ iter start EdgeSet.empty [])
+        ;;
 
         (* All pairs depth first walk until (f ctx -> bool) is true or all nodes
            are exhausted. Requires the node edges to be weighted  Uses simple
