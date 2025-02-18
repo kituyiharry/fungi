@@ -77,18 +77,19 @@ let wcompare f l r = match (l, r) with
     | (`Value _,`Nan)     ->  1
 ;;
 
-(* fallback to polymorphic compare and takes least if not directly comparable *)
+(** apply f with the values in both l and r *)
 let wbind f l r = match (l, r) with 
     | (`Value l', `Value r') -> (`Value (f l' r'))
     | (x, `Value _) -> x 
     | (`Value _, y) -> y
-    | (x',      y') -> if wcompare (Stdlib.compare) x' y' = -1 then x' else y'
+    (* TODO:maybe fallback to polymorphic compare and takes least if not directly comparable *)
+    | (x',      _y') -> x'
 ;;
 
-let wprint f v = match v with
-    | `Inf ->     "`Inf"
-    | `NegInf ->  "`NegInf"
-    | `Nan ->     "`Nan"
+let string_of_wrap f v = match v with
+    | `Inf     ->  "`Inf"
+    | `NegInf  ->  "`NegInf"
+    | `Nan     ->  "`Nan"
     | `Value x -> Printf.sprintf (format_of_string "`Value %s") (f x)
 ;;
 
@@ -98,6 +99,8 @@ let wmin f l r = if (wcompare f l r) = -1 then l else r
 let wmax f l r = if (wcompare f l r) =  1 then l else r
 ;;
 
+(** Our space can be any ast you want, so far we mostly use zero and add for
+    dijkstra, astar and bellman-ford *)
 module type Space = sig
 
   type t
@@ -215,7 +218,8 @@ module type Graph = sig
     type 'b ctx = { stop: bool; prev: elt option; elt: elt; vis: elt AdjSet.set; acc: 'b }
     type adj    = (elt AdjSet.set * elt AdjSet.set * elt * edge Weights.t)
 
-    module NodeMap: Map.S     with type key := elt
+    module NodeMap: Map.S with type key := elt
+    module EdgeSet: TSet  with type t   := (elt * elt)
 
     module Vertex: VertexImpl with 
         type       elt     := elt
@@ -250,6 +254,7 @@ module type Graph = sig
         and type   'b ctx  := 'b ctx
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
+        and module EdgeSet := EdgeSet
 
     val empty:       adj NodeMap.t
     val equal:       elt -> elt -> bool
@@ -291,10 +296,12 @@ module type Graph = sig
     val transpose:   adj NodeMap.t -> adj NodeMap.t
     val transpose2:  adj NodeMap.t -> adj NodeMap.t
     val outlist:     adj NodeMap.t -> (elt * elt AdjSet.set) list
-    val to_matrix:   adj NodeMap.t -> int array array * (int * elt) list 
     val of_matrix:   int array array -> (int * elt) list -> adj NodeMap.t
+    val adjmatrix:   adj NodeMap.t -> int array array * (int * elt) list 
     val degmatrix:   adj NodeMap.t -> int array array * (int * elt) list
+    val incmatrix:   adj NodeMap.t -> int array array * elt array * (elt * elt) array
     val degtable:    (elt, int * int) Hashtbl.t -> adj NodeMap.t -> unit
+    val edgeset:     adj NodeMap.t -> (elt * elt) EdgeSet.set 
 end
 
 (* simple adapter for some types to save some boilerplate in some cases *)
@@ -337,6 +344,12 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
     (** Module for manipulating the Map (Node -> (set , set , label)) *)
     module NodeMap = Map.Make(Unique)
+    module EdgeSet = TreeSet (struct
+        type t = (elt * elt)
+        let compare (x, y) (x', y') = match Unique.compare x x' with 
+            | 0 -> Unique.compare y y'
+            | z -> z
+    end)
 
     (*  Incoming nodes  Outgoing nodes data *)
     module Vertex  = struct 
@@ -693,11 +706,29 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     ;;
 
     (* graph to 2d array and a key list defining the elt for each array index *)
-    let to_matrix nodeMap = 
+    let adjmatrix nodeMap = 
         let sz   = NodeMap.cardinal nodeMap in
         let keys = NodeMap.to_list  nodeMap in
         (* map outgoing edges to indices, return each elt and its index along
-           with the indexes of outgoing edges *)
+           with the indexes of outgoing edges 
+
+            {
+                1: [2,3]
+                2: [1]
+                3: []
+                ....
+            }
+
+            becomes 
+
+                idx node out
+            [ 
+                ((0, 1), [1,2]),
+                ((1, 2), [0]),
+                ((2, 3), []),
+            ]
+
+           *)
         let adjs = List.mapi (fun i (k, (_, o, _, _)) -> 
             ((i, k), AdjSet.fold (fun elt acc -> 
                 (* return the index of the outgoing edge *)
@@ -714,7 +745,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         (b, List.map (fst) adjs)
     ;;
 
-    (* graph from 2d matrix with keys defining which elt maps to what index *)
+    (* graph from 2d adjacency matrix with keys defining which elt maps to what index *)
     let of_matrix nodeMatrix keys =
         let g = List.fold_right (fun (_, e) a  -> add e a) keys empty  in
         let index = 0 in
@@ -750,6 +781,39 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         NodeMap.iter (fun k (inc, out, _, _) -> 
             Hashtbl.add tbl k (AdjSet.cardinal inc, AdjSet.cardinal out)
         ) nodeMap
+    ;;
+
+    let edgeset nodeMap = 
+        NodeMap.fold (fun el (_, ou, _, _) a -> 
+            AdjSet.fold (fun nx a' -> EdgeSet.add (el, nx) a' ) ou a
+        ) nodeMap EdgeSet.empty
+    ;;
+
+    (* like edgeset but returns the size to avoid recomputing if needed *)
+    let edgesetsz nodeMap = 
+        NodeMap.fold (fun el (_, ou, _, _) (g, e, a) -> 
+        let e', a' =  AdjSet.fold (fun nx (e', a') -> e'+1, EdgeSet.add (el, nx) a' ) ou (e, a) in
+            g+1, e', a'
+        ) nodeMap (0, 0, EdgeSet.empty)
+    ;;
+
+    (* graph -> incidence matrix, node array, elt array  *)
+    let incmatrix nodeMap = 
+        let r,c, edgeset = (edgesetsz nodeMap) in 
+        let (t,_) = NodeMap.choose nodeMap in
+        let idx   = ref 0 in
+        let nodes = Array.make r t in
+        let edges = Array.make c (t,t) in
+        let belongs i (f, t) = equal i f || equal i t in
+        let _ = NodeMap.iter (fun n _ -> let _ = nodes.(!idx) <- n in incr idx) nodeMap in
+        let _ = idx := 0 in
+        let _ = EdgeSet.iter (fun e   -> let _ = edges.(!idx) <- e in incr idx) edgeset in 
+        Array.init_matrix r c (fun r' c' -> 
+            if belongs nodes.(r') edges.(c') then
+                1
+            else
+                0
+        ), nodes, edges
     ;;
 
     (** swap the incoming and outgoing edge direction - preserving edge weights *)
@@ -1153,14 +1217,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             { from=f; next=t; via=v; value=cost; }
         ;;
 
-        (* hold visited edges *)
-        module EdgeSet = TreeSet (struct
-            type t = (elt * elt)
-            let compare (x, y) (x', y') = match Unique.compare x x' with 
-                | 0 -> Unique.compare y y'
-                | z -> z
-        end)
-
         module Compute(Measure: Measurable with type t = edge and type edge = edge) = struct 
 
             type measure = Measure.t wrap
@@ -1513,6 +1569,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         https://en.wikipedia.org/wiki/Component_(graph_theory)
 
         Spectral clustering
+            - graph laplacian matrix 
+                transpose A * incidence matrix of a graph or degree matrix
         https://pages.discovery.wisc.edu/~sroy/teaching/network_biology/fall2018/lectures/Graphclustering_SpectralClustering_Lecture14.pdf
         https://math.stackexchange.com/questions/277045/easiest-way-to-determine-all-disconnected-sets-from-a-graph
     *)

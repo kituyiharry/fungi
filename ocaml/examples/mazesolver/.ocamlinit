@@ -204,7 +204,7 @@ let pp_pset (p: SPath.PathList.t SPath.PathSet.set) =
     Format.printf "P: [\n"; 
     SPath.PathSet.iter (fun {from; next; via; value} ->
         Format.printf " (%s -> %s -> %s: %s)\n" from via next 
-            (Graph.wprint (Float.to_string) value)
+            (Graph.string_of_wrap (Float.to_string) value)
     ) p;
   Format.printf "] "
 ;;
