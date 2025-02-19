@@ -288,6 +288,7 @@ module type Graph = sig
     val allpairs:    adj NodeMap.t -> (elt * elt) list
     val allweights:  adj NodeMap.t -> (elt * elt * edge) list
     val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
+    val remove_edge: adj NodeMap.t -> elt -> elt -> adj NodeMap.t
     val cull:        adj NodeMap.t -> adj NodeMap.t
     val toposort:    adj NodeMap.t -> elt list
     val bfs:         ('b ctx -> 'b ctx) -> ('b ctx -> 'b) -> adj NodeMap.t -> elt -> 'b -> 'b
@@ -298,6 +299,7 @@ module type Graph = sig
     val outlist:     adj NodeMap.t -> (elt * elt AdjSet.set) list
     val of_matrix:   int array array -> (int * elt) list -> adj NodeMap.t
     val adjmatrix:   adj NodeMap.t -> int array array * (int * elt) list 
+    val wgtmatrix:   edge -> adj NodeMap.t -> (edge array array) * ((int * elt) list)
     val degmatrix:   adj NodeMap.t -> int array array * (int * elt) list
     val incmatrix:   adj NodeMap.t -> int array array * elt array * (elt * elt) array
     val degtable:    (elt, int * int) Hashtbl.t -> adj NodeMap.t -> unit
@@ -617,6 +619,15 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ) (AdjSet.union incoming outgoing) nodeMap)
     ;;
 
+    (* edge removal, call twice flipped if undirected graph *)
+    let remove_edge nodeMap nodeFrom nodeTo =
+        (NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in 
+            Some (fromIncoming, (AdjSet.remove nodeTo fromOutgoing), label, wgts)) nodeMap)
+        |>
+        (NodeMap.update nodeTo (fun x -> let* (toIncoming, toOutgoing, tolabel, wgts) = x in
+            Some ((AdjSet.remove nodeFrom toIncoming), (toOutgoing), tolabel, wgts)))
+    ;;
+
     (** Remove self edges from a graph - TODO: could be more efficient - perhaps *)
     let cull graph =
         graph
@@ -737,13 +748,39 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 ) :: acc
             ) o [])
         ) keys in
-        let b = Array.init_matrix sz sz (fun i j -> 
+        let b = Array.init_matrix sz sz (fun row col -> 
             (* bool value of whether j is in the outgoing index *)
-            Bool.to_int @@ List.mem j (snd @@ List.nth adjs i)
+            Bool.to_int @@ List.mem col (snd @@ List.nth adjs row)
         ) in
         (* return matrix and keys showing which elt is which index *)
         (b, List.map (fst) adjs)
     ;;
+    
+    (* graph to 2d weights array and a key list defining the elt for each array index *)
+    let wgtmatrix defval nodeMap = 
+        let sz   = NodeMap.cardinal nodeMap in
+        let keys = NodeMap.to_list  nodeMap in
+        let adjs = List.mapi (fun i (k, (_, o, _, wgt)) -> 
+            (* any outgoing node has to be in the keys list *)
+            ((i, k), AdjSet.fold (fun elt acc -> 
+                (* return the index of the outgoing edge *)
+                (Option.get (
+                    (List.find_index (fun (b, _) -> equal b elt) keys)
+                ), Vertex.edge2 elt wgt) :: acc
+            ) o [])
+        ) keys in
+        let b = Array.init_matrix sz sz (fun i j -> 
+            (* bool value of whether j is in the outgoing index *)
+            let v = List.find_opt (fun (idx, _) -> idx = j) @@ (snd @@ List.nth adjs i)
+            in match v with 
+                | Some (_, msr) -> msr 
+                | _             -> defval
+        ) in
+        (* return matrix and keys showing which elt is which index *)
+        (b, List.map (fst) adjs)
+    ;;
+
+
 
     (* graph from 2d adjacency matrix with keys defining which elt maps to what index *)
     let of_matrix nodeMatrix keys =
@@ -785,19 +822,20 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
     let edgeset nodeMap = 
         NodeMap.fold (fun el (_, ou, _, _) a -> 
-            AdjSet.fold (fun nx a' -> EdgeSet.add (el, nx) a' ) ou a
+            AdjSet.fold (fun nx a' -> EdgeSet.add (el, nx) a') ou a
         ) nodeMap EdgeSet.empty
     ;;
 
     (* like edgeset but returns the size to avoid recomputing if needed *)
     let edgesetsz nodeMap = 
         NodeMap.fold (fun el (_, ou, _, _) (g, e, a) -> 
-        let e', a' =  AdjSet.fold (fun nx (e', a') -> e'+1, EdgeSet.add (el, nx) a' ) ou (e, a) in
+        let e', a' =  AdjSet.fold (fun nx (e', a') -> e'+1, EdgeSet.add (el, nx) a') ou (e, a) in
             g+1, e', a'
         ) nodeMap (0, 0, EdgeSet.empty)
     ;;
 
-    (* graph -> incidence matrix, node array, elt array  *)
+    (* graph -> incidence matrix, node array, elt array  
+       useful in spectral clustering: https://math.stackexchange.com/a/3726603 *)
     let incmatrix nodeMap = 
         let r,c, edgeset = (edgesetsz nodeMap) in 
         let (t,_) = NodeMap.choose nodeMap in
@@ -1191,6 +1229,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             bk (AdjSet.empty) (keys) (AdjSet.empty) []
         ;;
 
+        let _girvannewman _nodeMap = () 
+        ;;
+
     end
 
     (*************************************************************************
@@ -1568,10 +1609,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         https://en.wikipedia.org/wiki/Glossary_of_graph_theory
         https://en.wikipedia.org/wiki/Component_(graph_theory)
 
-        Spectral clustering
-            - graph laplacian matrix 
-                transpose A * incidence matrix of a graph or degree matrix
-        https://pages.discovery.wisc.edu/~sroy/teaching/network_biology/fall2018/lectures/Graphclustering_SpectralClustering_Lecture14.pdf
         https://math.stackexchange.com/questions/277045/easiest-way-to-determine-all-disconnected-sets-from-a-graph
     *)
 
