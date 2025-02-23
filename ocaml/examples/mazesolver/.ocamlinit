@@ -189,7 +189,7 @@ let n  = SGraph.of_list     n_adjlist n;;
 let n' = SGraph.add_edge    n_4 n_6 n;;
 
 (* balance the edges out for an eulerian path *)
-let q  = SGraph.add_weight s_b s_k 0. @@ SGraph.add_weight s_k s_d 0. @@ SGraph.add s_k q;;
+let q  = SGraph.add_weight 0. s_b s_k @@ SGraph.add_weight 0. s_k s_d @@ SGraph.add s_k q;;
 
 module SPath  = SGraph.Path.Compute(Graph.Biject(Float));;
 module SPath2 = SGraph.Path.Compute(struct 
