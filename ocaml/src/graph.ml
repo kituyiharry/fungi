@@ -263,7 +263,7 @@ module type Graph = sig
     val empty:       adj NodeMap.t
     val equal:       elt -> elt -> bool
     val add:         elt -> adj NodeMap.t -> adj NodeMap.t
-    val ensure:      elt -> adj -> adj NodeMap.t -> adj NodeMap.t
+    val ensure:      elt -> adj NodeMap.t -> adj NodeMap.t
     val add_edge:    elt -> elt -> adj NodeMap.t -> adj NodeMap.t
     val add_all:     elt -> elt list -> adj NodeMap.t -> adj NodeMap.t
     val allweighted: elt -> (elt * edge) list -> adj NodeMap.t -> adj NodeMap.t
@@ -310,7 +310,7 @@ module type Graph = sig
     val incmatrix:   adj NodeMap.t -> int array array * elt array * (elt * elt) array
     val degtable:    (elt, int * int) Hashtbl.t -> adj NodeMap.t -> unit
     val edgeset:     adj NodeMap.t -> (elt * elt) EdgeSet.set
-    val bfstree:     bool -> elt -> adj NodeMap.t -> adj NodeMap.t
+    (*val bfstree:     bool -> elt -> adj NodeMap.t -> adj NodeMap.t*)
 end
 
 (* simple adapter for some types to save some boilerplate in some cases *)
@@ -385,9 +385,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
     (** only adds and updates if the value was not already present, otherwise
         leaves as is *)
-    let ensure nodeKey nodeValue nodeMap = 
+    let ensure nodeKey nodeMap = 
         NodeMap.update nodeKey (fun v -> match v with 
-            | None -> Some nodeValue
+            | None -> Some (Vertex.empty nodeKey)
             | v'   -> v'
         ) nodeMap
     ;;
@@ -667,8 +667,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         elt:  elt;            (* the current node *)
         vis:  elt AdjSet.set; (* the visited nodes *)
         acc:  'b;             (* the accumulator *)
-        vtx:  adj; (* the outgoing node *)
-        (*out:  Vertex.t; (* the outgoing node *)*)
+        vtx:  adj;            (* the node vertex information *)
     }
 
     (** breadth first search starting from start node applying f until returns
@@ -920,6 +919,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ) nodeMap (AdjSet.empty, [])
     ;;
 
+    (* How to fix a weight value *)
     let wedge directed (_,_,_,wgt) f t g =
         if directed then
             add_edge f t g
@@ -927,21 +927,48 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             add_weight (Vertex.edge2 t wgt) f t g
     ;;
 
-    (** build a tree like acyclic graph from a bfs traversal, with edges
-        emanating from the start *)
-    let bfstree isdir start (graph: adj NodeMap.t) = 
-        snd @@ bfs 
-            (fun ctx -> 
-                let acc' = (
-                    let v, g = ctx.acc in
-                    let (_,out,_,_) = ctx.vtx in
-                    let o'  = AdjSet.diff out v in
-                    let g'  = AdjSet.fold (fun el acc -> ensure el (Vertex.empty el) acc) o' g in
-                    let g'' = AdjSet.fold (wedge isdir ctx.vtx ctx.elt) o' (ensure ctx.elt (Vertex.empty ctx.elt) g') in 
-                        (AdjSet.add ctx.elt (AdjSet.union o' v), g'')
-                ) in { ctx with acc = acc' }
-            ) (Fun.id) graph start ((AdjSet.empty), (NodeMap.empty))
+    let _has_edge f t nodeMap = 
+        AdjSet.mem t (outgoingof f nodeMap)
     ;;
+
+    (** build a tree like graph from a bfs traversal, with edges
+        emanating from the start *)
+
+   (*
+    *
+    *   let bfstree isweight start (graph: adj NodeMap.t) = 
+    *       snd @@ bfs 
+    *           (fun ({ acc; elt; vtx; _ } as ctx) -> 
+    *               let acc' = (
+    *                   let v, g = acc in
+    *                   let (_,out,_,_) = vtx in
+    *                   let o'  = AdjSet.diff out v in
+    *                   let g'  = AdjSet.fold (ensure) o' g in
+    *                   (* Does this set have links with each other *)
+    *                   let f'  = AdjSet.union v o' in
+    *                   let h   = AdjSet.fold (fun x a -> 
+    *                       AdjSet.fold (fun x' a' -> 
+    *                           if _has_edge x x' graph then
+    *                               if _has_edge x' x graph then
+    *                                   wedge isweight (vertexof x  graph) x  x' @@ 
+    *                                   wedge isweight (vertexof x' graph) x' x a'
+    *                               else
+    *                                   wedge isweight (vertexof x graph)  x  x' a'
+    *                           else
+    *                               if _has_edge x' x graph then
+    *                                   wedge isweight (vertexof x' graph) x' x a'
+    *                               else
+    *                                   a'
+    *                       (* does this resolve undiscovered back edges ?? *)
+    *                       ) (f') a
+    *                   ) (f') g' in
+    *                   let g'' = AdjSet.fold (wedge isweight vtx elt) o' (ensure elt h) in 
+    *                   (AdjSet.add elt (AdjSet.union o' v), g'')
+    *               ) in { ctx with acc = acc' }
+    *           ) (Fun.id) graph start (AdjSet.empty, NodeMap.empty)
+    *   ;;
+    *
+    *)
 
     (*************************************************************************
     *                    Strongly connected Components                       *

@@ -24,6 +24,8 @@ let q  = SGraph.empty;;
 let q' = SGraph.empty;;
 let v  = SGraph.empty;;
 let n  = SGraph.empty;;
+let g  = SGraph.empty;;
+let g2 = SGraph.empty;;
 
 let s_a = "A";;
 let s_b = "B";;
@@ -62,6 +64,8 @@ let q  = List.fold_right (SGraph.add) nodes' q;;
 let q' = List.fold_right (SGraph.add) nodes' q';;
 let v  = List.fold_right (SGraph.add) nodes' v;;
 let n  = List.fold_right (SGraph.add) nuns   n;;
+let g  = List.fold_right (SGraph.add) nodes' g;;
+let g2 = List.fold_right (SGraph.add) nodes' g2;;
 
 let _ = Printexc.record_backtrace true;;
 
@@ -144,6 +148,26 @@ let topo = [
     (s_f, [(s_a, 0.); (s_c, 0.)]);
 ]
 
+(* girvan newman *)
+let g_adjlist = [
+    (s_a, [s_b; s_c]);
+    (s_b, [s_a; s_d; s_f]);
+    (s_c, [s_a; s_d; s_e]);
+    (s_d, [s_c; s_b]);
+    (s_e, [s_c;]);
+    (s_f, [s_b;]);
+]
+
+(* Girvan newman weighted *)
+let g2_adjlist = [
+    (s_a, [(s_b, 1.); (s_c, 1.)]);
+    (s_b, [(s_a, 1.); (s_d, 1.); (s_f, 1.)]);
+    (s_c, [(s_a, 1.); (s_d, 1.); (s_e, 1.)]);
+    (s_d, [(s_c, 1.); (s_b, 1.)]);
+    (s_e, [(s_c, 1.);]);
+    (s_f, [(s_b, 1.);]);
+]
+
 let heuristics = Hashtbl.create (SGraph.cardinal s);;
 
 (* This heuristic table only works if the target is s_e!! *)
@@ -184,9 +208,11 @@ let t  = SGraph.of_weights  t_adjlist  t;;
 let t' = SGraph.of_weights2 t2_adjlist t';;
 let q  = SGraph.of_weights  q_adjlist  q;;
 let q' = SGraph.of_weights  q2_adjlist q';;
-let v  = SGraph.of_weights  topo v;;
-let n  = SGraph.of_list     n_adjlist n;;
-let n' = SGraph.add_edge    n_4 n_6 n;;
+let v  = SGraph.of_weights  topo       v;;
+let n  = SGraph.of_list     n_adjlist  n;;
+let n' = SGraph.add_edge    n_4 n_6    n;;
+let g  = SGraph.of_list     g_adjlist  g;;
+let g2 = SGraph.of_weights2 g2_adjlist g2;;
 
 (* balance the edges out for an eulerian path *)
 let q  = SGraph.add_weight 0. s_b s_k @@ SGraph.add_weight 0. s_k s_d @@ SGraph.add s_k q;;
