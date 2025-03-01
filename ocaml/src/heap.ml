@@ -329,7 +329,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
             if tree.index > trunk.index then
                 { trunk with succ = tree  :: trunk.succ }
             else
-                { tree with succ  = trunk :: tree.succ }
+                { tree with  succ = trunk :: tree.succ }
         (* bubbling elements to maintain heap properties  *)
         else if cmp tree.data trunk.data then
             (* bubble down the tree *)
@@ -402,8 +402,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     (* joins subtrees of equal degrees 
        The ntree is added back into the hashtable to be
        rejoined with the one there if it existed.
-       this creates the binomial tree situation which sees the
-       degree
+       this creates the binomial tree situation 
     *)
     let consolidate ?(cmp=minify) trees  =
         (* push all nodes by degree *)
@@ -578,7 +577,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                         if wasfound then
                             if hd.churn > (!churn_threshold) then
                                 (* many children have died, we die as well :-( *)
-                                let _ = (parent.churn <- parent.churn + 1) in
+                                let _ = (parent.churn <- (parent.churn + 1)) in
                                 (tl, { hd with succ=nt } :: lf, wasfound)
                             else
                                 ({ hd with succ=nt } :: tl, lf, wasfound)
@@ -623,7 +622,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                         if wasfound then
                             if hd.churn > (!churn_threshold) then
                                 (* many children have died, we die as well :-( *)
-                                let _ = (parent.churn <- parent.churn + 1) in
+                                let _ = (parent.churn <- (parent.churn + 1)) in
                                 (tl, { hd with succ=nt } :: lf, wasfound)
                             else
                                 ({ hd with succ=nt } :: tl, lf, wasfound)

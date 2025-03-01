@@ -26,6 +26,7 @@ let v  = SGraph.empty;;
 let n  = SGraph.empty;;
 let g  = SGraph.empty;;
 let g2 = SGraph.empty;;
+let fl = SGraph.empty;;
 
 let s_a = "A";;
 let s_b = "B";;
@@ -55,6 +56,7 @@ let n_9 = "9";;
 let nodes  = [ s_a; s_b; s_c; s_d; s_e; s_f; s_g; s_h; s_i; s_j; s_k; s_l; s_s ];;
 let nodes' = [ s_a; s_b; s_c; s_d; s_e; s_f; ];;
 let nuns   = [ n_0; n_1; n_2; n_3; n_4; (*n_5;*) n_6; n_7; n_8; n_9; ];;
+let n3     = [ n_1; n_2; n_3; n_4; ];;
 
 let s  = List.fold_right (SGraph.add) nodes  s;;
 let s' = List.fold_right (SGraph.add) nodes  s';;
@@ -66,6 +68,8 @@ let v  = List.fold_right (SGraph.add) nodes' v;;
 let n  = List.fold_right (SGraph.add) nuns   n;;
 let g  = List.fold_right (SGraph.add) nodes' g;;
 let g2 = List.fold_right (SGraph.add) nodes' g2;;
+let g2 = List.fold_right (SGraph.add) nodes' g2;;
+let fl = List.fold_right (SGraph.add) n3     fl;;
 
 let _ = Printexc.record_backtrace true;;
 
@@ -142,31 +146,65 @@ let n_adjlist = [
 let topo = [
     (s_a, []);
     (s_b, []);
-    (s_c, [(s_d, 0.);]);
-    (s_d, [(s_a, 0.);]);
-    (s_e, [(s_a, 0.); (s_b, 0.)]);
-    (s_f, [(s_a, 0.); (s_c, 0.)]);
+    (s_c, [(s_d, 1.);]);
+    (s_d, [(s_a, 1.);]);
+    (s_e, [(s_a, 1.); (s_b, 1.)]);
+    (s_f, [(s_a, 1.); (s_c, 1.)]);
 ]
 
-(* girvan newman *)
-let g_adjlist = [
-    (s_a, [s_b; s_c]);
-    (s_b, [s_a; s_d; s_f]);
-    (s_c, [s_a; s_d; s_e]);
-    (s_d, [s_c; s_b]);
-    (s_e, [s_c;]);
-    (s_f, [s_b;]);
+(* Floyd warshall weighted *)
+let fl_adjlist = [
+    (n_1, [(n_2, 3.); (n_4, 7.)]);
+    (n_2, [(n_1, 8.); (n_3, 2.)]);
+    (n_3, [(n_1, 5.); (n_4, 1.)]);
+    (n_4, [(n_1, 2.)]);
 ]
 
-(* Girvan newman weighted *)
-let g2_adjlist = [
-    (s_a, [(s_b, 1.); (s_c, 1.)]);
-    (s_b, [(s_a, 1.); (s_d, 1.); (s_f, 1.)]);
-    (s_c, [(s_a, 1.); (s_d, 1.); (s_e, 1.)]);
-    (s_d, [(s_c, 1.); (s_b, 1.)]);
-    (s_e, [(s_c, 1.);]);
-    (s_f, [(s_b, 1.);]);
-]
+let floydwarshall graph = 
+    let dist, map = SGraph.wgtmatrix (fun x -> `Val x) `Inf graph in
+    let sz = List.length map in
+    let karr = Array.init sz (fun _k -> 
+        Array.init_matrix sz sz (fun i j -> 
+            (* set the diagonals to 0 if they do not exist i.e `Inf *)
+            let diag = dist.(i).(j) in
+            if i = j && Graph.wcompare (Float.compare) diag `Inf = 0 then
+                `Val Float.zero
+            else
+                diag
+        )
+    ) in
+    let idx = sz - 1 in
+
+    let _ = Format.printf "=================+============================================================\n" in
+    let _ = Format.printf " (k) (i) (j)\t | \t ij\t\t ik\t\t kj\t\tik_kj\t\n=================+============================================================\n" in
+    let _ =
+        (for k = 1 to idx do 
+            let k' = k - 1 in
+            for i = 0 to idx do 
+                if i = k' then () else
+                    for j = 0 to idx do 
+                        if j = k' || i = j then () else
+                            let ij    = karr.(k').(i).(j) in
+                            let ik    = karr.(k').(i).(k') in
+                            let kj    = karr.(k').(k').(j) in
+                            let ik_kj = Graph.wbind (Float.add) ik kj in
+
+                            let _ = Format.printf "  %d   %d   %d\t |  \t%s\t\t%s\t\t%s\t\t%s\t\n" 
+                                (k) (i+1) (j+1)
+                                (Graph.string_of_wrap (Float.to_string) ij)
+                                (Graph.string_of_wrap (Float.to_string) ik)
+                                (Graph.string_of_wrap (Float.to_string) kj)
+                                (Graph.string_of_wrap (Float.to_string) ik_kj)
+                            in
+
+                            if Graph.wcompare (Float.compare) ik_kj ij = -1 then
+                                karr.(k).(i).(j) <- ik_kj
+                    done
+            done
+        done) in
+    let _ = Format.printf "=================+============================================================\n" in
+    karr
+;;
 
 let heuristics = Hashtbl.create (SGraph.cardinal s);;
 
@@ -185,19 +223,21 @@ Hashtbl.add heuristics s_j 4.;;
 Hashtbl.add heuristics s_k 3.;;
 Hashtbl.add heuristics s_l 6.;;
 
-let e_heuristic elt = `Value (Hashtbl.find heuristics elt);; 
+let e_heuristic elt = `Val (Hashtbl.find heuristics elt);; 
 
 let pp_sgraph (g: SGraph.adj SGraph.NodeMap.t) = 
     Format.printf "G: {\n"; 
     List.iter (fun (k, (_, v, _, w)) ->
         let _ = Format.printf "\t%s ->\t" k in 
         let _ = SGraph.AdjSet.iter (fun y ->
-            (*Format.printf " (%s: %F)" y (SGraph.Vertex.edge2 y w)*)
-            Format.printf " %s" y
+            try  Format.printf " (%s: %F)" y (SGraph.Vertex.edge2 y w)
+            with 
+                | Not_found -> 
+                Format.printf " %s" y
         ) v in 
         Format.print_newline ()
     ) (SGraph.NodeMap.bindings g);
-  Format.printf "} "
+    Format.printf "} "
 ;;
 
 let (let*) = Option.bind;;
@@ -211,19 +251,18 @@ let q' = SGraph.of_weights  q2_adjlist q';;
 let v  = SGraph.of_weights  topo       v;;
 let n  = SGraph.of_list     n_adjlist  n;;
 let n' = SGraph.add_edge    n_4 n_6    n;;
-let g  = SGraph.of_list     g_adjlist  g;;
-let g2 = SGraph.of_weights2 g2_adjlist g2;;
+let fl = SGraph.of_weights  fl_adjlist fl;;
 
 (* balance the edges out for an eulerian path *)
 let q  = SGraph.add_weight 0. s_b s_k @@ SGraph.add_weight 0. s_k s_d @@ SGraph.add s_k q;;
 
 module SPath  = SGraph.Path.Compute(Graph.Biject(Float));;
 module SPath2 = SGraph.Path.Compute(struct 
-        include Float
-        type t         = float
-        type edge      = float
-        let  compare   = Float.compare
-        let  measure e = `Value e
+    include Float
+    type t         = float
+    type edge      = float
+    let  compare   = Float.compare
+    let  measure e = `Val e
 end);;
 
 let pp_pset (p: SPath.PathList.t SPath.PathSet.set) = 
@@ -232,7 +271,7 @@ let pp_pset (p: SPath.PathList.t SPath.PathSet.set) =
         Format.printf " (%s -> %s -> %s: %s)\n" from via next 
             (Graph.string_of_wrap (Float.to_string) value)
     ) p;
-  Format.printf "] "
+    Format.printf "] "
 ;;
 
 let pp_aset (p: string SGraph.AdjSet.set) = 
@@ -240,7 +279,7 @@ let pp_aset (p: string SGraph.AdjSet.set) =
     SGraph.AdjSet.iter (fun elt ->
         Format.printf " (%s) " elt
     ) p;
-  Format.printf "} "
+    Format.printf "} "
 ;;
 
 #install_printer pp_pset;;
@@ -267,8 +306,8 @@ let    f  = F.of_list [1;1;1;1;1;1;1;1;1;1;1;1;22;3;2];;
 let d, f' = F.extract f;;
 
 let timeonly f =
-        let t = Unix.gettimeofday () in
-        let _res = f () in
-        Printf.printf "Execution time: %f secondsn" (Unix.gettimeofday () -. t)
+    let t = Unix.gettimeofday () in
+    let _res = f () in
+    Printf.printf "Execution time: %f secondsn" (Unix.gettimeofday () -. t)
 ;;
 

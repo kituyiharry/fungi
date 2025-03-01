@@ -55,34 +55,45 @@ end
 (* Axioms *)
 (* we have to use a wrap type to denote extremes, ideally this is just a float
    but the challenge is we don't know they final type ahead of time so we
-   prefigure it as we need it for some algorithms e.g djikstra *)
-type +!'a wrap = [`Inf | `NegInf | `Nan | `Value of 'a]
+   prefigure it as we need it for some algorithms e.g djikstra 
+
+    `Inf for positive infinity
+    `NegInf for negative infinity
+    `Val x for x which is a realised value
+    `Nan for not a number and a substitute for "null" or least element
+
+*)
+type +!'a wrap = [`Inf | `NegInf | `Nan | `Val of 'a]
 
 let wcompare f l r = match (l, r) with
-    | (`Value l',`Value r' ) ->  f l' r'
+    | (`Val l',`Val r') ->  f l' r'
     | (`Inf,    `Inf)     ->  0
     | (`NegInf, `NegInf)  ->  0
     | (`Nan,    `Nan)     ->  0
     | (`NegInf, `Inf)     -> -1
-    | (`NegInf, `Value _) -> -1
-    | (`Value _,`Inf)     -> -1
+    | (`NegInf, `Val _) -> -1
+    | (`Val _,`Inf)     -> -1
     | (`Nan,    `Inf)     -> -1
     | (`Nan,    `NegInf)  -> -1
-    | (`Nan,    `Value _) -> -1
+    | (`Nan,    `Val _) -> -1
     | (`Inf,    `NegInf)  ->  1
-    | (`Value _,`NegInf)  ->  1
-    | (`Inf,    `Value _) ->  1
+    | (`Val _,`NegInf)  ->  1
+    | (`Inf,    `Val _) ->  1
     | (`Inf,    `Nan)     ->  1
     | (`NegInf, `Nan)     ->  1
-    | (`Value _,`Nan)     ->  1
+    | (`Val _,`Nan)     ->  1
+;;
+
+let wapply f l = match l with
+    | `Val x -> f x
+    |  _     -> raise Not_found
 ;;
 
 (** apply f with the values in both l and r *)
 let wbind f l r = match (l, r) with
-    | (`Value l', `Value r') -> (`Value (f l' r'))
-    | (x, `Value _) -> x
-    | (`Value _, y) -> y
-    (* TODO:maybe fallback to polymorphic compare and takes least if not directly comparable *)
+    | (`Val l', `Val r') -> (`Val (f l' r'))
+    | (x, `Val _) -> x
+    | (`Val _, y) -> y
     | (x',      _y') -> x'
 ;;
 
@@ -90,7 +101,7 @@ let string_of_wrap f v = match v with
     | `Inf     ->  "`Inf"
     | `NegInf  ->  "`NegInf"
     | `Nan     ->  "`Nan"
-    | `Value x -> Printf.sprintf (format_of_string "`Value %s") (f x)
+    | `Val x -> Printf.sprintf (format_of_string "`Val %s") (f x)
 ;;
 
 let wmin f l r = if (wcompare f l r) = -1 then l else r
@@ -141,7 +152,7 @@ module Biject(T: Space): Measurable with type edge = T.t and type t = T.t = stru
     type edge      = t
 
     let  compare   = T.compare
-    let  measure e = `Value e
+    let  measure e = `Val e
 end
 
 (* simple adapter for some types to save some boilerplate in some cases *)
@@ -167,9 +178,11 @@ module type PathImpl = sig
         module PathHeap: FibHeap with type node  = measure pathelt and type order = measure
         module PathSet : TSet    with type t    := measure pathelt
 
-        val dijkstra:    elt -> elt -> adj NodeMap.t -> ((elt * measure) list)
-        val astar:       (elt -> measure) -> elt -> elt -> adj NodeMap.t -> (elt * measure) list
-        val bellmanford: elt -> elt -> adj NodeMap.t -> ((elt * measure) list * (elt * elt) EdgeSet.set)
+        val dijkstra:      elt -> elt -> adj NodeMap.t -> ((elt * measure) list)
+        val astar:         (elt -> measure) -> elt -> elt -> adj NodeMap.t -> (elt * measure) list
+        val bellmanford:   elt -> elt -> adj NodeMap.t -> ((elt * measure) list * (elt * elt) EdgeSet.set)
+        val floydwarshallresolve: elt -> elt -> measure array array -> int wrap array array -> (int * elt) list -> (elt * measure) list option
+        val floydwarshall: ?negcycles:(bool) -> adj NodeMap.t -> (measure array array * int wrap array array * (int * elt) list)
     end
 
     type path     := (edge pathelt) list
@@ -218,8 +231,8 @@ module type Graph = sig
     (* TODO: make edge Weights.t an option type *)
     type adj    = (elt AdjSet.set * elt AdjSet.set * elt * edge Weights.t)
     type 'b ctx = { 
-        stop: bool; prev: elt option; elt: elt; 
-        vis: elt AdjSet.set; acc: 'b; vtx: adj 
+        stop: bool; prev: elt option; elt: elt;
+        vis: elt AdjSet.set; acc: 'b; vtx: adj;
     }
 
     module NodeMap: Map.S with type key := elt
@@ -305,12 +318,12 @@ module type Graph = sig
     val outlist:     adj NodeMap.t -> (elt * elt AdjSet.set) list
     val of_matrix:   int array array -> (int * elt) list -> adj NodeMap.t
     val adjmatrix:   adj NodeMap.t -> int array array * (int * elt) list
-    val wgtmatrix:   edge -> adj NodeMap.t -> (edge array array) * ((int * elt) list)
+    val wgtmatrix:   (edge -> 'b) -> 'b -> adj NodeMap.t -> ('b array array) * ((int * elt) list)
     val degmatrix:   adj NodeMap.t -> int array array * (int * elt) list
     val incmatrix:   adj NodeMap.t -> int array array * elt array * (elt * elt) array
     val degtable:    (elt, int * int) Hashtbl.t -> adj NodeMap.t -> unit
     val edgeset:     adj NodeMap.t -> (elt * elt) EdgeSet.set
-    (*val bfstree:     bool -> elt -> adj NodeMap.t -> adj NodeMap.t*)
+    val has_edge:    elt -> elt -> adj NodeMap.t -> bool
 end
 
 (* simple adapter for some types to save some boilerplate in some cases *)
@@ -784,10 +797,11 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     ;;
 
     (* graph to 2d weights and a key list defining the elt for each array index *)
-    let wgtmatrix defval nodeMap =
+    let wgtmatrix transform defval nodeMap =
         let sz   = NodeMap.cardinal nodeMap in
         let keys = NodeMap.to_list  nodeMap in
-        let adjs = List.mapi (fun i (k, (_, o, _, wgt)) ->
+        (* map each key to its index and list of outgoing indices *)
+        let (adjs) = List.mapi (fun i (k, (_, o, _, wgt)) ->
             (* any outgoing node has to be in the keys list *)
             ((i, k), AdjSet.fold (fun elt acc ->
                 (* return the index of the outgoing edge *)
@@ -800,7 +814,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             (* bool value of whether j is in the outgoing index *)
             let v = List.find_opt (fun (idx, _) -> idx = j) @@ (snd @@ List.nth adjs i)
             in match v with
-                | Some (_, msr) -> msr
+                | Some (_, msr) -> transform msr
                 | _             -> defval
         ) in
         (* return matrix and keys showing which elt is which index *)
@@ -826,7 +840,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         of_list adj_list g
     ;;
 
-    (* inout degree matrix along the diagonal *)
+    (* inout degree matrix along the diagonal - can be used to construct a
+       laplacian *)
     let degmatrix nodeMap =
         let sz, adjs = NodeMap.fold (fun key (inc, out, _, _) (idx, acc) ->
             (idx + 1), (((idx, key), (AdjSet.cardinal inc + AdjSet.cardinal out)) :: acc)
@@ -919,56 +934,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ) nodeMap (AdjSet.empty, [])
     ;;
 
-    (* How to fix a weight value *)
-    let wedge directed (_,_,_,wgt) f t g =
-        if directed then
-            add_edge f t g
-        else
-            add_weight (Vertex.edge2 t wgt) f t g
-    ;;
-
-    let _has_edge f t nodeMap = 
+    (* whether edge from f to t exists in nodeMap *)
+    let has_edge f t nodeMap = 
         AdjSet.mem t (outgoingof f nodeMap)
     ;;
-
-    (** build a tree like graph from a bfs traversal, with edges
-        emanating from the start *)
-
-   (*
-    *
-    *   let bfstree isweight start (graph: adj NodeMap.t) = 
-    *       snd @@ bfs 
-    *           (fun ({ acc; elt; vtx; _ } as ctx) -> 
-    *               let acc' = (
-    *                   let v, g = acc in
-    *                   let (_,out,_,_) = vtx in
-    *                   let o'  = AdjSet.diff out v in
-    *                   let g'  = AdjSet.fold (ensure) o' g in
-    *                   (* Does this set have links with each other *)
-    *                   let f'  = AdjSet.union v o' in
-    *                   let h   = AdjSet.fold (fun x a -> 
-    *                       AdjSet.fold (fun x' a' -> 
-    *                           if _has_edge x x' graph then
-    *                               if _has_edge x' x graph then
-    *                                   wedge isweight (vertexof x  graph) x  x' @@ 
-    *                                   wedge isweight (vertexof x' graph) x' x a'
-    *                               else
-    *                                   wedge isweight (vertexof x graph)  x  x' a'
-    *                           else
-    *                               if _has_edge x' x graph then
-    *                                   wedge isweight (vertexof x' graph) x' x a'
-    *                               else
-    *                                   a'
-    *                       (* does this resolve undiscovered back edges ?? *)
-    *                       ) (f') a
-    *                   ) (f') g' in
-    *                   let g'' = AdjSet.fold (wedge isweight vtx elt) o' (ensure elt h) in 
-    *                   (AdjSet.add elt (AdjSet.union o' v), g'')
-    *               ) in { ctx with acc = acc' }
-    *           ) (Fun.id) graph start (AdjSet.empty, NodeMap.empty)
-    *   ;;
-    *
-    *)
 
     (*************************************************************************
     *                    Strongly connected Components                       *
@@ -1376,15 +1345,15 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                resolve djikstra path by skipping over non-interlinked nodes
                e.g. for a sample output path
 
-               [("G", "E", `Value 7.); ("S", "A", `Value 7.); ("B", "D", `Value 6.);
-                ("H", "F", `Value 6.); ("B", "A", `Value 5.); ("H", "G", `Value 5.);
-                ("C", "L", `Value 5.); ("S", "C", `Value 3.); ("B", "H", `Value 3.);
-                ("S", "B", `Value 2.); ("S", "S", `Value 0.)]
+               [("G", "E", `Val 7.); ("S", "A", `Val 7.); ("B", "D", `Val 6.);
+                ("H", "F", `Val 6.); ("B", "A", `Val 5.); ("H", "G", `Val 5.);
+                ("C", "L", `Val 5.); ("S", "C", `Val 3.); ("B", "H", `Val 3.);
+                ("S", "B", `Val 2.); ("S", "S", `Val 0.)]
 
                 we interlink on edges and reverse the path
 
-               [("S", "S", `Value 0.); ("S", "B", `Value 2.); ("B", "H", `Value 3.);
-                ("H", "G", `Value 5.); ("G", "E", `Value 7.)]
+               [("S", "S", `Val 0.); ("S", "B", `Val 2.); ("B", "H", `Val 3.);
+                ("H", "G", `Val 5.); ("G", "E", `Val 7.)]
 
                 due to commonality of the from origin
             *)
@@ -1409,7 +1378,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             *)
             let dijkstra start target graph =
                 (* we take the path to ourselves as 0 *)
-                let startp = (viapath start start start (`Value Measure.zero)) in
+                let startp = (viapath start start start (`Val Measure.zero)) in
                 (*
                 Set all start to out edges to infinity except the pseudo edge to
                 self to denote the start point of dijkstra
@@ -1459,7 +1428,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
             let astar heuristic start target graph =
                 (* we take the path to ourselves as 0 *)
-                let startp = (mkpath start start (`Value Measure.zero)) in
+                let startp = (mkpath start start (`Val Measure.zero)) in
                 (*
                 Set all start to out edges to infinity except the pseudo edge to
                 self to denote the start point of dijkstra
@@ -1513,7 +1482,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             (* similar idea to dijkstraresolve *)
             let bellresolve start target nodes =
                 if PathSet.is_empty nodes then [] else
-                    let rec iter target acc =
+                    let rec iter target cycle acc =
                         let {from; next=nxt; value;_} = PathSet.find_first (fun {from;_} -> equal from target) nodes in
                         if equal start from then
                             (from, value) :: acc
@@ -1522,8 +1491,11 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             let  {from=from'; value=value';_} = PathSet.find_first (fun {from;_} -> equal from start) nodes in
                             (from', value') :: ((from, value) :: acc)
                         else
-                            iter nxt ((from, value) :: acc)
-                    in  iter target []
+                        if EdgeSet.mem (from, nxt) cycle then
+                            failwith "cycle in resolution"
+                        else
+                            iter nxt (EdgeSet.add (from, nxt) cycle) ((from, value) :: acc)
+                    in  iter target EdgeSet.empty []
             ;;
 
             (*
@@ -1536,7 +1508,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 let (sz, lst) = (NodeMap.fold (fun k (_, _,_,w) (acc, lst) ->
                     if equal k start then
                         acc + 1,
-                        (k, (None, `Value Measure.zero, w)) :: lst
+                        (k, (None, `Val Measure.zero, w)) :: lst
                     else
                         acc + 1,
                         (k, (None, `Inf, w)) :: lst
@@ -1612,6 +1584,82 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     let p' = Option.value ~default:k p in mkpath k p' v
                 ) @@ Hashtbl.to_seq belltable in
                 (bellresolve start target pl, negcycles)
+            ;;
+
+            let floydwarshallresolve start target dist pred map = 
+                (* decode node indices *)
+                let  decode idx = snd @@ List.find (fun (i, _n) -> i = idx) map in
+                let* sidx = List.find_opt (fun (_i, n) -> equal n start)  map in
+                let* tidx = List.find_opt (fun (_i, n) -> equal n target) map in
+                let  s,e = fst sidx, fst tidx in
+                let rec iter at path  = 
+                    if not (at = s) then
+                        let d   = dist.(s).(at) in
+                        let at' = pred.(s).(at) in
+                        if wcompare (Int.compare) at' `Nan = 0  then
+                            (* denote a negative cycle! *)
+                            Some ((target, `Nan) :: path)
+                        else
+                            let v  = decode at in
+                            let c' = wapply (Fun.id) at' in
+                            iter c' ((v, d) :: path)
+                    else
+                        Some ((start, `Val Measure.zero) :: path)
+                in iter e []
+            ;;
+
+            (** All pairs shortest path, negative cycles are not detected by
+                default  *)
+            let floydwarshall ?(negcycles=false) (graph: adj NodeMap.t) = 
+                (* get distance matrix with non-existent edges at infinity *)
+                let dist, map = wgtmatrix (fun x -> `Val x) `Inf graph in
+
+                let sz = List.length map in
+                (* reconstruction matrix should point to j by default or null *)
+                let next = Array.init_matrix sz sz (fun i j -> 
+                    if wcompare (Measure.compare) dist.(i).(j) `Inf != 0 then
+                        `Val i
+                    else
+                        `Nan
+                ) in
+
+                let idx = sz - 1 in
+                let _ =
+
+                    (for k = 0 to idx do 
+                        for i = 0 to idx do 
+                            for j = 0 to idx do 
+                                let ij    = dist.(i).(j) in
+                                let ik    = dist.(i).(k) in
+                                let kj    = dist.(k).(j) in
+                                let ik_kj = wbind (Measure.add) ik kj in
+                                (* min (i->j), ((i->k at k') + (k->j at k')) *)
+                                if wcompare (Measure.compare) ik_kj ij = -1 then
+                                    let _ = next.(i).(j) <- next.(k).(j) in
+                                    dist.(i).(j) <- ik_kj
+                            done
+                        done
+                    done) in
+
+                let _ = if not negcycles then () else 
+                    (* extra iterations which check if a path is improved to
+                       detect a negative cycle similar to bellmanford *)
+                    (for k = 0 to idx do 
+                        for i = 0 to idx do 
+                            for j = 0 to idx do 
+                                let ik     = dist.(i).(k) in
+                                let kj     = dist.(k).(j) in
+                                let ik_kj  = wbind (Measure.add) ik kj in
+                                let ik_kj' = dist.(i).(j) in
+                                (* compare widist.th current calculation *)
+                                if wcompare (Measure.compare) ik_kj ik_kj' = -1 then
+                                    let _ = Format.printf "Found negcycle!\n" in
+                                    let _ = next.(i).(j) <- `NegInf in
+                                    dist.(i).(j) <- `NegInf
+                            done
+                        done
+                    done) in
+                dist, next, map
             ;;
 
         end
