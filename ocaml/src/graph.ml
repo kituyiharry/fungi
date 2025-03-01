@@ -1615,7 +1615,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 let dist, map = wgtmatrix (fun x -> `Val x) `Inf graph in
 
                 let sz = List.length map in
-                (* reconstruction matrix should point to j by default or null *)
+                (* reconstruction matrix should point to i by default or null *)
                 let next = Array.init_matrix sz sz (fun i j -> 
                     if wcompare (Measure.compare) dist.(i).(j) `Inf != 0 then
                         `Val i
