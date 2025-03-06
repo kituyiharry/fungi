@@ -101,7 +101,7 @@ let string_of_wrap f v = match v with
     | `Inf     ->  "`Inf"
     | `NegInf  ->  "`NegInf"
     | `Nan     ->  "`Nan"
-    | `Val x   -> Printf.sprintf (format_of_string "`Val %s") (f x)
+    | `Val x   -> Format.sprintf ("`Val %s") (f x)
 ;;
 
 let wmin f l r = if (wcompare f l r) = -1 then l else r
@@ -206,6 +206,17 @@ module type VertexImpl = sig
     val update : elt -> weights -> edge -> unit
 end
 
+module type SerDe = sig 
+    type elt
+    type edge
+
+    val string_of_elt: elt  -> string
+    val string_of_wgt: edge -> string
+
+    val elt_of_string: string -> elt
+    val wgt_of_string: string -> edge
+end
+
 module type GraphElt = sig
     type edge
     include Set.OrderedType
@@ -264,6 +275,22 @@ module type Graph = sig
         and module NodeMap := NodeMap
         and module AdjSet  := AdjSet
         and module EdgeSet := EdgeSet
+
+    module Serialize(_:SerDe with type elt := elt and type edge := edge): sig
+
+        module StyleTbl: Hashtbl.S with type key = string 
+        module AttrbTbl: Hashtbl.S with type key = string 
+        module ClstrTbl: Hashtbl.S with type key = int
+
+        type attrs   := string StyleTbl.t 
+        type attrmap := (string StyleTbl.t) AttrbTbl.t
+        type clstmap := (string StyleTbl.t) ClstrTbl.t
+
+        val to_csv: adj NodeMap.t -> ((unit -> string) Seq.t) Seq.t
+        val to_dot: ?dir:bool -> ?sub:bool -> string -> attrs -> attrmap -> attrmap -> adj NodeMap.t -> (unit -> string) Seq.t Seq.t
+        val to_dot_cluster: ?dir:bool -> string -> (int -> int list -> string) -> attrs -> clstmap  -> attrmap -> attrmap -> (int list * adj NodeMap.t) Scc.SccMap.t -> (unit -> string) Seq.t Seq.t
+
+    end
 
     val empty:       adj NodeMap.t
     val equal:       elt -> elt -> bool
@@ -1270,19 +1297,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             bk (AdjSet.empty) (keys) (AdjSet.empty) []
         ;;
 
-
-        module Compute(Measure: Measurable with type t = edge and type edge = edge) = struct
-
-            (* Edge betweenness of an element *)
-            let _edgebtn _node _nodeMap =
-              ()
-            ;;
-
-        end
-
-        (*let girvannewman nodeMap = ()*)
-        (*;;*)
-
     end
 
     (*************************************************************************
@@ -1647,7 +1661,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
             (** allpairs shortest paths best suited for sparse weighted directed graphs
                 if temp is equal to any value in the graph it will overwrite it
-                so it needs to be chosen carefully *)
+                so it needs to be chosen carefully - we don't check for negative
+                cycles here! *)
             let johnsons temp graph = 
                 (* temporary external source node *)
                 let g', sz = NodeMap.fold (fun e _ (g, sz') -> 
@@ -1749,15 +1764,153 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
     module Flow = struct
         (* Ford-Fulkerson (flow) *)
+        (* Edmund karp *)
+        (* Dinic *)
+    end
+
+    module Serialize(Serde: SerDe with type edge := edge and type elt := elt) = struct
+
+        module StyleTbl: Hashtbl.S with type key = string = Hashtbl.Make (String)
+        module AttrbTbl: Hashtbl.S with type key = string = Hashtbl.Make (String)
+        module ClstrTbl: Hashtbl.S with type key = int    = Hashtbl.Make (Int)
+
+        let to_csv graph =
+            NodeMap.to_seq graph 
+            |> Seq.map (fun (elt, (_inc, out, _, wgt)) ->
+                if Weights.length wgt > 0 then
+                    Seq.cons (fun () -> 
+                        Format.sprintf ("\n%s,") (Serde.string_of_elt elt)) 
+                        (AdjSet.to_seq out |> Seq.map (fun el -> 
+                            fun () -> Format.sprintf ("%s %s,")
+                                (Serde.string_of_elt el) (Serde.string_of_wgt (Vertex.edge2 el wgt)))
+                        )
+                else
+                    Seq.cons (fun () -> 
+                        Format.sprintf ("\n%s,") (Serde.string_of_elt elt)) 
+                        (AdjSet.to_seq out |> Seq.map (fun el -> 
+                            fun () -> Format.sprintf ("%s,")
+                                (Serde.string_of_elt el))
+                        )
+            )
+        ;;
+
+        let to_dot ?(dir=false) ?(sub=false) name gattrs nattrs eattrs graph = 
+            let header = if dir then "digraph" else "graph" in
+            let edglnk = if dir then "->" else "--" in
+            (* can be reused in a subgraph *)
+            let header = if sub then "subgraph" else header in
+            let visedg = ref EdgeSet.empty in
+            Seq.cons (
+                Seq.cons (fun () -> Format.sprintf ("%s %s {\n") header name) 
+                    (* global attributes *)
+                    (StyleTbl.to_seq gattrs |> Seq.map (fun (k, v) ->
+                        fun () -> Format.sprintf ("\t%s=\"%s\";\n") k v))
+            )  (Seq.append (NodeMap.to_seq graph
+                    |> Seq.map (fun (elt, (_inc, out, _, wgt)) ->
+                        (* no neighbours - check only for attributes *)
+                        let eltkey = (Serde.string_of_elt elt) in
+                        let weighted = Weights.length wgt > 0 in
+                        if AdjSet.is_empty out then
+                            match AttrbTbl.find_opt nattrs eltkey with
+                            (* Some node attributes *)
+                            | Some attrs -> 
+                                Seq.cons (fun () -> 
+                                    Format.sprintf "\t%s\t[" eltkey
+                                ) (StyleTbl.to_seq attrs 
+                                        |> Seq.map (fun (k,v) -> 
+                                            fun () -> Format.sprintf "%s=%s, " k v
+                                        ) |> (Fun.flip Seq.append (Seq.return (fun () -> "];\n")))
+                                    )
+                            (* no node attributes or neighbours *)
+                            | _ -> 
+                                Seq.cons (fun () -> Format.sprintf "\t%s;\n" (Serde.string_of_elt elt)) Seq.empty
+                        (* handle neighbours and attributes *)
+                        else
+                            AdjSet.to_seq out 
+                            (* handle edge attributes, edge key follows 'f-t' *)
+                            |> Seq.map (fun x -> 
+                                let xs     = (Serde.string_of_elt x) in
+                                let ek, ev = (eltkey ^ "-" ^ xs, xs) in
+                                let dne = let vis = !visedg in
+                                    if EdgeSet.mem (x, elt) vis then
+                                        true
+                                    else
+                                        let _  = visedg := (EdgeSet.add (elt, x) vis) in
+                                        false
+                                in if dne then (fun () -> "") else
+                                    let label  = 
+                                        if not weighted then "" else
+                                            Format.sprintf "label=\"%s\"" (Serde.string_of_wgt @@ Vertex.edge2 x wgt) 
+                                    in
+                                    match AttrbTbl.find_opt eattrs ek with
+                                    | Some iattr -> 
+                                        fun () -> let attrs = 
+                                            if StyleTbl.length iattr = 0 then 
+                                                (if weighted then 
+                                                    "\t[ " ^ label ^ " ]"
+                                                    else 
+                                                        label
+                                                ) 
+                                            else 
+                                                (* all attributes *)
+                                                (Seq.fold_left (^) "\t[ "
+                                                    (
+                                                        (StyleTbl.to_seq iattr |>
+                                                            Seq.map (fun (k,v) -> 
+                                                                Format.sprintf "%s=\"%s\", " k v
+                                                            )
+                                                        ) |> (Fun.flip Seq.append (Seq.return (Format.sprintf "%s ]" label)))
+                                                    )
+                                                ) 
+                                        in Format.sprintf "\t%s %s %s %s;\n" eltkey edglnk ev attrs
+                                    | None -> 
+                                        fun () -> 
+                                        Format.sprintf "\t%s %s %s\t[ %s ];\n" eltkey edglnk ev label
+                            ) |> (Seq.append (Seq.return (fun () -> 
+                                match AttrbTbl.find_opt nattrs eltkey with
+                                (* Some node attributes *)
+                                | Some attrs -> Seq.fold_left (^) (Format.sprintf "\t%s\t[ " eltkey)
+                                    (StyleTbl.to_seq attrs 
+                                        |> Seq.map (fun (k,v) -> 
+                                            Format.sprintf "%s=%s, " k v
+                                        ) |> (Fun.flip Seq.append (Seq.return " ];\n"))
+                                    )
+                                (* no node attributes or neighbours *)
+                                | _ -> 
+                                    Format.sprintf "\t%s;\n" (Serde.string_of_elt elt)
+                            )))
+                    )
+                ) (Seq.return (Seq.return (fun () -> "}\n"))))
+        ;;
+
+        (* render a graph with subgraph clusters into dot format *)
+        let to_dot_cluster ?(dir=false) name onname gattrs clattrs nattrs eattrs graphs = 
+            let header = if dir then "digraph" else "graph" in
+            let tmpclstr = StyleTbl.create 0 in
+            Seq.cons (
+                Seq.cons (fun () -> Format.sprintf ("%s %s {\n") header name) 
+                    (* global attributes *)
+                    (StyleTbl.to_seq gattrs |> Seq.map (fun (k, v) ->
+                        fun () -> Format.sprintf ("\t%s=\"%s\";\n") k v)
+                    )
+            )  (Seq.append (Scc.SccMap.to_seq graphs
+                    |> Seq.map (fun (idx, (ngbrs, cluster)) ->
+                        let name = (onname idx ngbrs) in
+                        match ClstrTbl.find_opt clattrs idx with
+                        | Some clattr ->
+                            (to_dot ~dir:dir ~sub:true name clattr nattrs eattrs cluster)
+                            |> Seq.concat
+                        | _ -> 
+                            (to_dot ~dir:dir ~sub:true name tmpclstr nattrs eattrs cluster)
+                            |> Seq.concat
+                )
+            ) (Seq.return (Seq.return (fun () -> "}\n"))))
+        ;;
+
     end
 
     (* TODO:
-        Efficient elt hash (bring own hash) ??
-
         Rodl nibble and Erdos-renyi
-        Dot (https://graphviz.org/doc/info/lang.html)
-        IO
-        Compressed (Path compression) ??
         DeBruijn
 
         Properties (Isomorphism: ullman, planar, acyclic)

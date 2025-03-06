@@ -27,6 +27,7 @@ let n  = SGraph.empty;;
 let g  = SGraph.empty;;
 let g2 = SGraph.empty;;
 let fl = SGraph.empty;;
+let scc = SGraph.empty;;
 
 let s_a = "A";;
 let s_b = "B";;
@@ -47,7 +48,7 @@ let n_1 = "1";;
 let n_2 = "2";;
 let n_3 = "3";;
 let n_4 = "4";;
-(*let n_5 = "5";;*)
+let n_5 = "5";;
 let n_6 = "6";;
 let n_7 = "7";;
 let n_8 = "8";;
@@ -56,6 +57,7 @@ let n_9 = "9";;
 let nodes  = [ s_a; s_b; s_c; s_d; s_e; s_f; s_g; s_h; s_i; s_j; s_k; s_l; s_s ];;
 let nodes' = [ s_a; s_b; s_c; s_d; s_e; s_f; ];;
 let nuns   = [ n_0; n_1; n_2; n_3; n_4; (*n_5;*) n_6; n_7; n_8; n_9; ];;
+let nuns2  = [ n_1; n_2; n_3; n_4; n_5; n_6; n_7; n_8; ];;
 let n3     = [ n_1; n_2; n_3; n_4; ];;
 
 let s  = List.fold_right (SGraph.add) nodes  s;;
@@ -70,8 +72,22 @@ let g  = List.fold_right (SGraph.add) nodes' g;;
 let g2 = List.fold_right (SGraph.add) nodes' g2;;
 let g2 = List.fold_right (SGraph.add) nodes' g2;;
 let fl = List.fold_right (SGraph.add) n3     fl;;
+let scc= List.fold_right (SGraph.add) nuns2  scc;;
 
 let _ = Printexc.record_backtrace true;;
+
+(* scc *)
+let scc_adjlist =
+  [
+    (n_1,  [n_2;n_3]);
+    (n_2,  [n_1;n_4]);
+    (n_3,  [n_4;]);
+    (n_4,  [n_5;n_6]);
+    (n_5,  [n_6;n_3;n_7]);
+    (n_6,  [n_8]);
+    (n_7,  [n_6]);
+    (n_8,  [n_7]);
+]
 
 (* dijsktra *)
 let s_adjlist = [
@@ -208,6 +224,45 @@ let floydwarshall graph =
 
 let heuristics = Hashtbl.create (SGraph.cardinal s);;
 
+module Ser = struct 
+    let string_of_elt = Fun.id
+    let string_of_wgt = (Float.to_string)
+    let elt_of_string = Fun.id
+    let wgt_of_string = Float.of_string
+end;;
+
+module SGSer = SGraph.Serialize (Ser);;
+
+(* global attributes *)
+let gt   = SGSer.StyleTbl.create 1;;
+
+(* node or edge attributes *)
+let st'  = SGSer.StyleTbl.create 1;;
+let st'' = SGSer.StyleTbl.create 1;;
+let st3  = SGSer.StyleTbl.create 1;;
+
+let est  = SGSer.StyleTbl.create 1;;
+
+(* per node style attributes *)
+let at   = SGSer.AttrbTbl.create 1;;
+
+(* per edge style attributes *)
+let et   = SGSer.AttrbTbl.create 1;;
+
+SGSer.StyleTbl.add gt "rankdir" "LR";;
+
+SGSer.StyleTbl.add st'  "color" "green";;
+SGSer.StyleTbl.add st'' "color" "red";;
+SGSer.StyleTbl.add st3  "color" "orange";;
+
+SGSer.StyleTbl.add est  "style" "dashed";;
+
+SGSer.AttrbTbl.add at s_s st' ;;
+SGSer.AttrbTbl.add at s_b st3 ;;
+SGSer.AttrbTbl.add at s_l st'';;
+
+SGSer.AttrbTbl.add et (s_a^"-"^s_b) est;;
+
 (* This heuristic table only works if the target is s_e!! *)
 Hashtbl.add heuristics s_s 10.;;
 Hashtbl.add heuristics s_a 9.;;
@@ -224,6 +279,8 @@ Hashtbl.add heuristics s_k 3.;;
 Hashtbl.add heuristics s_l 6.;;
 
 let e_heuristic elt = `Val (Hashtbl.find heuristics elt);; 
+
+let tarjanscc = SGraph.Scc.tarjan;;
 
 let pp_sgraph (g: SGraph.adj SGraph.NodeMap.t) = 
     Format.printf "G: {\n"; 
@@ -250,6 +307,7 @@ let q  = SGraph.of_weights  q_adjlist  q;;
 let q' = SGraph.of_weights  q2_adjlist q';;
 let v  = SGraph.of_weights  topo       v;;
 let n  = SGraph.of_list     n_adjlist  n;;
+let scc = SGraph.of_list    scc_adjlist scc;;
 let n' = SGraph.add_edge    n_4 n_6    n;;
 let fl = SGraph.of_weights  fl_adjlist fl;;
 
