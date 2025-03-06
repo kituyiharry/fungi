@@ -2,6 +2,7 @@
 #load "../../_build/default/src/fungi.cma";;
 
 open Fungi;;
+open Fungi.Graph;;
 
 module SGraph = Graph.MakeGraph(struct 
     type t     = string
@@ -284,7 +285,7 @@ let tarjanscc = SGraph.Scc.tarjan;;
 
 let pp_sgraph (g: SGraph.adj SGraph.NodeMap.t) = 
     Format.printf "G: {\n"; 
-    List.iter (fun (k, (_, v, _, w)) ->
+    List.iter (fun (k, {SGraph.out=v; SGraph.edg=w; _}) ->
         let _ = Format.printf "\t%s ->\t" k in 
         let _ = SGraph.AdjSet.iter (fun y ->
             try  Format.printf " (%s: %F)" y (SGraph.Vertex.edge2 y w)
