@@ -1,13 +1,109 @@
 (******************************************************************************
-*                                                                             *
-*     Simplest Functional Directed Graph Implementation (Adjacency list)      *
-*                                                                             *
-*******************************************************************************)
+ *                                                                            *
+ *                                Fungi Graph                                 *
+ *                        Functional Graph algorithms                         *
+ *                             harryk@harryk.dev                              *
+ *                                                                            *
+ ******************************************************************************)
 open Treeset;;
 open Heap;;
 open Axiom;;
 
-let (let*) = Option.bind
+(**
+    {1:graph Fungi Graph Library}
+
+
+    The graph is held as an adjacency list representation with an optional
+    Hashtbl to hold edge weights. Self edges are supported by their presence in
+    both incoming and outgoing sets
+
+    {v 
+    Map
+        elt =>  inc       out       adj(Hashtbl)
+    {
+        "A" => ("B")     ("C")     <["C" -> 10.]>
+        "B" => ("C","B") ("A","B") <["A" -> 20., "B" -> 30.]>
+        "C" => ("A")     ("B")     <["B" -> 40.]>
+    }
+    v}
+
+    {2:build building the graph}
+    we can construct the graph above by defining our GraphElt with a string
+    element and float edge like so.
+
+    {@ocaml[
+        module SGraph = Graph.MakeGraph(struct 
+            type t      = string
+            type edge   = float
+            let  compare= String.compare
+        end);;
+    ]}
+
+    then we can add our elements into the graph.
+
+    {@ocaml[
+        let sg = SGraph.empty
+            |> SGraph.add "A"
+            |> SGraph.add "B"
+            |> SGraph.add "C"
+        ;;
+    ]}
+
+    then we can connect edges between elements. in our case we want a directed
+    graph with float weights like so. (For unweighted graphs a separate {i
+    SGraph.add_edge } to connect edges)
+
+    {@ocaml[
+        let sg = sg 
+            |> SGraph.add_weight 10. "A" "C"
+            |> SGraph.add_weight 20. "B" "A"
+            |> SGraph.add_weight 30. "B" "B"
+            |> SGraph.add_weight 40. "C" "A"
+        ;;
+    ]}
+
+    we could also construct an adjacency list representation ahead and add all
+    at once. This may still need the elements to have already been added in the
+    graph.
+
+    {@ocaml[
+        [
+            ("A", [("C", 10.);]);
+            ("B", [("A", 20.);("B", 30.)]);
+            ("C", [("A", 40.);]);
+        ] |> SGraph.of_weights adjlist
+    ]}
+
+    {3:undirected Undirected graphs }
+
+    For undirected graphs, the edges representation will be such that the
+    element will be mirrored in both incoming of the head and outgoing of the
+    tail. Here we use {i SGraph.of_weights2 } which creates a bidirectional edge
+    which is structurally an undirected graph (we use {i SGraph.ensure } to
+    ensure the elements are already in the graph!).
+
+    {@ocaml[
+        [
+            ("A", [("C", 10.);]);
+            ("B", [("A", 20.);("B", 30.)]);
+            ("C", [("A", 40.);]);
+        ] |> SGraph.of_weights2 adjlist 
+          (List.fold_left 
+            (Fun.flip (SGraph.ensure)) SGraph.empty ["A";"B";"C";])
+    ]}
+
+    the graph will structurally look like so:
+
+    {v 
+    Map
+        elt =>  inc       out       adj(Hashtbl)
+    {
+        "A" => ("B")     ("C","B")  <["C" -> 10., "B" -> 20.]>
+        "B" => ("C","B") ("A","B")  <["A" -> 20., "B" -> 30., "C" -> 40.]>
+        "C" => ("A","B") ("B","A")  <["B" -> 40., "A" -> 10.]>
+    }
+    v}
+*)
 
 (** Implementation signature for algorithms for working with strongly connected
     components *)
@@ -347,6 +443,8 @@ end
 *)
 
 module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edge := Unique.edge = struct
+
+    let (let*) = Option.bind
 
     type elt  = Unique.t
     type edge = Unique.edge

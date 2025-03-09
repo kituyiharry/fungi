@@ -1,23 +1,33 @@
 (******************************************************************************
 *                                                                             *
-*   Simplest Indexed Fibonacci (d-ary)  heap                                  *
-*     - Every node's key is less(default cmp) than or equal to its children   * 
-*       keys as given by the Entry.compare function                           *
-*     - The minimum|maximum element is always in the root list depending      *
-*       on your compare function                                              *
-*     - Unlike binary heaps, there's no enforced structure                    *
-*     - Duplicates are tolerated as they can be introduced by decrease and    *
-*       increase operations                                                   *
-*     - A node can have any number of children                                *
-*     - Children can be added or removed freely                               *
-*     - no redundancy (if 2 nodes are the same their trees are assumed to     *
-*       be the same)                                                          *
-*     - For simplicity we don't have a min pointer at the root list but it may*
-*       be added in the future, we so have to walk the root list to get the   *
-*       min                                                                   *
+*                             Fungi Heap                                      *
+*                      Functional Fibonacci Heap                              *
+*                         harryk@harryk.dev                                   *
 *                                                                             *
 *******************************************************************************)
 
+(**
+
+   {1:fibheap Fibonacci Heap Implementation }
+
+    Simplest Indexed Fibonacci (d-ary) heap                                    
+      - Every node's key is less(default cmp) than or equal to its children     
+        keys as given by the Entry.compare function                            
+      - The minimum|maximum element is always in the root list depending       
+        on your compare function                                               
+      - Unlike binary heaps, there's no enforced structure                     
+      - Duplicates are tolerated as they can be introduced by decrease and     
+        increase operations                                                    
+      - A node can have any number of children                                 
+      - Children can be added or removed freely                                
+      - no redundancy (if 2 nodes are the same their trees are assumed to      
+        be the same)                                                           
+      - For simplicity we don't have a min pointer at the root list but it may 
+        be added in the future, we so have to walk the root list to get the    
+        min                                                                    
+
+*)
+ 
 module type Ordinal = sig 
     (* The full type *)
     type t
@@ -81,6 +91,25 @@ module type FibHeap = sig
     val find_opt:    (node -> bool) -> elts list -> node option
 end
 
+(** 
+    {2:create Create a Fibonacci Heap}
+
+    {@ocaml[ 
+        module F  = Heap.MakeFibHeap (struct
+            (* the main type *)
+            type t         = int
+            (* how to determine order *)
+            type order     = int
+            let  bind    e = e
+            (* compare to orders *)
+            let  order     = Int.compare
+            (* compare to nodes *)
+            let  compare   = Int.compare
+        end);; 
+    ]}
+
+
+*)
 module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type order = Entry.order = struct
 
     type node  = Entry.t

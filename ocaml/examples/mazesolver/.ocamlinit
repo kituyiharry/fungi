@@ -3,6 +3,7 @@
 
 open Fungi;;
 open Fungi.Graph;;
+open Fungi.Axiom;;
 
 module SGraph = Graph.MakeGraph(struct 
     type t     = string
@@ -184,7 +185,7 @@ let floydwarshall graph =
         Array.init_matrix sz sz (fun i j -> 
             (* set the diagonals to 0 if they do not exist i.e `Inf *)
             let diag = dist.(i).(j) in
-            if i = j && Graph.wcompare (Float.compare) diag `Inf = 0 then
+            if i = j && Axiom.wcompare (Float.compare) diag `Inf = 0 then
                 `Val Float.zero
             else
                 diag
@@ -204,17 +205,17 @@ let floydwarshall graph =
                             let ij    = karr.(k').(i).(j) in
                             let ik    = karr.(k').(i).(k') in
                             let kj    = karr.(k').(k').(j) in
-                            let ik_kj = Graph.wbind (Float.add) ik kj in
+                            let ik_kj = Axiom.wbind (Float.add) ik kj in
 
                             let _ = Format.printf "  %d   %d   %d\t |  \t%s\t\t%s\t\t%s\t\t%s\t\n" 
                                 (k) (i+1) (j+1)
-                                (Graph.string_of_wrap (Float.to_string) ij)
-                                (Graph.string_of_wrap (Float.to_string) ik)
-                                (Graph.string_of_wrap (Float.to_string) kj)
-                                (Graph.string_of_wrap (Float.to_string) ik_kj)
+                                (Axiom.string_of_wrap (Float.to_string) ij)
+                                (Axiom.string_of_wrap (Float.to_string) ik)
+                                (Axiom.string_of_wrap (Float.to_string) kj)
+                                (Axiom.string_of_wrap (Float.to_string) ik_kj)
                             in
 
-                            if Graph.wcompare (Float.compare) ik_kj ij = -1 then
+                            if Axiom.wcompare (Float.compare) ik_kj ij = -1 then
                                 karr.(k).(i).(j) <- ik_kj
                     done
             done
@@ -328,7 +329,7 @@ let pp_pset (p: SPath.PathList.t SPath.PathSet.set) =
     Format.printf "P: [\n"; 
     SPath.PathSet.iter (fun {from; next; via; value} ->
         Format.printf " (%s -> %s -> %s: %s)\n" from via next 
-            (Graph.string_of_wrap (Float.to_string) value)
+            (Axiom.string_of_wrap (Float.to_string) value)
     ) p;
     Format.printf "] "
 ;;
