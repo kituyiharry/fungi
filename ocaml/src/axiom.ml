@@ -26,6 +26,11 @@ module type Space = sig
   val add  : t -> t -> t
   val sub  : t -> t -> t
 
+  val min  : t -> t -> t
+  val max  : t -> t -> t
+
+  val neg  : t -> t
+
 end
 
 (** wraps a value a for our internal use *)
@@ -104,4 +109,12 @@ let wmin f l r = if (wcompare f l r) = -1 then l else r
 
 (** maximum value with compare function f *)
 let wmax f l r = if (wcompare f l r) =  1 then l else r
+;;
+
+(** negates a value *)
+let wneg f v = match v with 
+    | `Inf     ->  `NegInf
+    | `NegInf  ->  `Inf
+    | `Nan     ->  `Nan
+    | `Val x   ->  `Val (f x)
 ;;

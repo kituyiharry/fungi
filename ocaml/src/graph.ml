@@ -240,6 +240,7 @@ module type VertexImpl = sig
     val edge   : elt -> elt -> adj NodeMap.t -> edge
     val edge2  : elt -> weights -> edge
     val update : elt -> weights -> edge -> unit
+    val ensure : elt -> weights -> edge -> unit
 end
 
 (** Routines for dumping out graphs *)
@@ -285,8 +286,7 @@ module type Graph = sig
     (** traversal context for breadth and depth first search *)
     type 'b ctx = { 
         stop: bool;           (* whether to stop a recurse *)
-        prev: elt option;     (* the previous element, None if start *)
-        pvtx: adj option;     (* the previous node vertex data, None if start *)
+        prev: (elt * adj) option; (* the previous element, None if start *)
         elt:  elt;            (* the current node *)
         vis:  elt AdjSet.set; (* the visited nodes *)
         acc:  'b;             (* the accumulator *)
@@ -351,6 +351,13 @@ module type Graph = sig
 
     end
 
+    module Flow(Measure: Measurable with type t = edge and type edge = edge): sig
+        type measure = Measure.t wrap
+
+        module Captbl: Hashtbl.S with type key = (elt * elt)
+        val fordfulkerson: edge Captbl.t -> elt -> elt -> adj NodeMap.t -> measure
+    end
+
     val empty:       adj NodeMap.t
     val equal:       elt -> elt -> bool
     val add:         elt -> adj NodeMap.t -> adj NodeMap.t
@@ -389,8 +396,9 @@ module type Graph = sig
     val cull:        adj NodeMap.t -> adj NodeMap.t
     val toposort:    adj NodeMap.t -> elt list
     val bfs:         ('b ctx -> 'b ctx) -> ('b ctx -> 'b ctx) -> adj NodeMap.t -> elt -> 'b -> 'b
-    val dfs:         ('b ctx -> 'b ctx) -> ('b ctx -> 'b ctx) -> adj NodeMap.t -> elt -> 'b -> 'b
+    val dfs:         (((elt * adj) option * elt) Stack.t -> 'b ctx -> 'b ctx) -> (((elt * adj) option * elt) Stack.t -> 'b ctx -> 'b ctx) -> adj NodeMap.t -> elt -> 'b -> 'b
     val adj_list_of: elt -> adj NodeMap.t -> elt list
+    val adj_seq_of:  elt -> adj NodeMap.t -> elt Seq.t
     val transpose:   adj NodeMap.t -> adj NodeMap.t
     val transpose2:  adj NodeMap.t -> adj NodeMap.t
     val outlist:     adj NodeMap.t -> (elt * elt AdjSet.set) list
@@ -401,6 +409,7 @@ module type Graph = sig
     val incmatrix:   adj NodeMap.t -> int array array * elt array * (elt * elt) array
     val degtable:    (elt, int * int) Hashtbl.t -> adj NodeMap.t -> unit
     val edgeset:     adj NodeMap.t -> (elt * elt) EdgeSet.set
+    val edgeseq:     adj NodeMap.t -> (elt * elt) Seq.t
     val has_edge:    elt -> elt -> adj NodeMap.t -> bool
     val is_acyclic : adj NodeMap.t -> bool
 end
@@ -489,6 +498,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let edge  f t g = Weights.find (weights f g) t
         let edge2   t o = Weights.find o t
         let update t o v= Weights.replace o t v
+        let ensure t o v= if Weights.mem o t then () else Weights.add o t v
     end
 
     (** Adjacency list graph definition **)
@@ -789,8 +799,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
     type 'b ctx = {
         stop: bool;           (* whether to stop a recurse *)
-        prev: elt option;     (* the previous element, None if start *)
-        pvtx: adj option;     (* the previous node vertex data *)
+        prev: (elt * adj) option;     (* the previous node vertex data *)
         elt:  elt;            (* the current node *)
         vis:  elt AdjSet.set; (* the visited nodes *)
         acc:  'b;             (* the accumulator *)
@@ -804,29 +813,27 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         backedges will not be visited twice
     *)
 
-    let mkctx p t l v a s o =  {prev=p; pvtx=t; elt=l; vis=v; acc=a;stop=s; vtx=o;} 
+    let mkctx p l v a s o =  {prev=p; elt=l; vis=v; acc=a;stop=s; vtx=o;} 
     ;;
 
     let bfs f b graph start init =
         let que     = Queue.create () in
         let _       = Queue.add (None, start) que in
         let visited = AdjSet.empty in
-        let rec iter vis nxt pvtx acc =
+        let rec iter vis nxt acc =
             if Queue.is_empty nxt then
                 (vis, acc)
             else
                 let (prev, label) = Queue.take nxt in
                 let vtx = vertexof label graph in
                 let {out;_} = vtx in
-                let {stop;acc=acc';_} = f (mkctx prev pvtx label vis acc false vtx) in
-                let (vis', acc'') = if stop then
-                    (vis, acc')
-                    else
-                        let diff= AdjSet.diff out vis in
-                        let _   = AdjSet.iter (fun x -> Queue.add (Some label, x) nxt) (diff) in
-                        iter (AdjSet.union diff vis) nxt (Some vtx) acc'
-                in (vis', (b (mkctx prev pvtx label vis' acc'' false vtx)).acc)
-        in let (_, acc) = iter visited que None init in acc
+                let {stop;vis=vis';acc=acc';_} = f (mkctx (prev) label vis acc false vtx) in
+                let (vis'', acc'') = if stop then (vis', acc') else
+                    let diff= AdjSet.diff out vis' in
+                    let _   = AdjSet.iter (fun x -> Queue.add ((Some (label, vtx)), x) nxt) (diff) in
+                    iter (AdjSet.union diff vis') nxt acc'
+                in (vis'', (b (mkctx prev label vis'' acc'' stop vtx)).acc)
+        in let (_, acc) = iter visited que init in acc
     ;;
 
     (** depth first search starting from start node applying f until returns
@@ -836,31 +843,40 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let stck    = Stack.create () in
         let _       = Stack.push (None, start) stck in
         let visited = AdjSet.empty in
-        let rec iter vis nxt pvtx acc =
-            if Stack.is_empty stck then
+        let rec iter vis nxt acc =
+            if Stack.is_empty nxt then
                 (vis, acc)
             else
                 let (prev, label) = Stack.pop nxt in
-                let vtx = vertexof label graph in
-                let {out;_} = vtx in
-                let {stop;acc=acc';_} = f  (mkctx prev pvtx label vis acc false vtx) in
-                let (vis', acc'') = (
-                    if stop then
-                        (vis, acc')
-                    else
-                    if AdjSet.mem label vis then
-                        iter (vis) nxt (Some vtx) acc'
-                    else
-                        let _   = AdjSet.iter (fun x -> Stack.push (Some label, x) nxt) (out) in
-                        iter (AdjSet.add label vis) nxt (Some vtx) acc'
-                ) in (vis', (b (mkctx prev pvtx label vis' acc'' false vtx)).acc)
-        in let (_, acc) = iter visited stck None init in acc
+                if AdjSet.mem label vis then
+                    iter (vis) nxt acc
+                else
+                    let vtx = vertexof label graph in
+                    let {out;_} = vtx in
+                    (* callback can functionally rewrite these values *)
+                    let {stop;acc=acc';vis=vis';_} = f nxt (mkctx (prev) label vis acc false vtx) in
+                    let (vis'', acc'') = (
+                        if stop then
+                            (vis', acc')
+                        else
+                            let _   = AdjSet.iter (fun x -> Stack.push ((Some (label, vtx)), x) nxt) (out) in
+                            iter (AdjSet.add label vis') nxt acc'
+                    ) in 
+                    let { acc=acc'''; vis=vis'''; _ } = (b nxt (mkctx (prev) label vis'' acc'' stop vtx)) in
+                    (vis''', acc''')
+        in let (_, acc) = iter visited stck init in acc
     ;;
 
     (** Get adjacency list of a node *)
     let adj_list_of node nodeMap =
         let {inc=incoming;out=outgoing; _}= NodeMap.find node nodeMap in
         AdjSet.to_list (AdjSet.union incoming outgoing)
+    ;;
+
+    (** Get adjacency list of a node *)
+    let adj_seq_of node nodeMap =
+        let {inc=incoming;out=outgoing; _}= NodeMap.find node nodeMap in
+        AdjSet.to_seq (AdjSet.union incoming outgoing)
     ;;
 
     (* collect graph into a simple [(key,  adj list), ...] *)
@@ -982,7 +998,16 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ) nodeMap EdgeSet.empty
     ;;
 
-    (* like edgeset but returns the size to avoid recomputing if needed *)
+    (* lazier edge sequences *)
+    let edgeseq nodeMap =
+        (NodeMap.to_seq nodeMap) 
+        |> Seq.map (fun (el, {out=ou;_}) ->
+            AdjSet.to_seq ou |> Seq.map (fun nx -> (el, nx)) 
+        ) |> Seq.concat
+    ;;
+
+    (* like edgeset but returns the size to avoid recomputing if needed returns
+       the node count, edge count and edge set in that order *)
     let edgesetsz nodeMap =
         NodeMap.fold (fun el {out=ou;_} (g, e, a) ->
         let e', a' =  AdjSet.fold (fun nx (e', a') -> e'+1, EdgeSet.add (el, nx) a') ou (e, a) in
@@ -1029,21 +1054,22 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ) nodeMap
     ;;
 
-    (** toposort (happens-before) *)
-    let toposort nodeMap =
+    (** toposort (happens-before) - assumes the graph is acyclic (DAG) otherwise the
+        result is wrong. *)
+    let toposort graph =
         snd @@ NodeMap.fold (fun x _y (v, a) ->
             if AdjSet.mem x v then
                 (v, a)
             else
-                dfs (fun s -> { s with stop=false }) (fun s ->
+                dfs (fun _ s -> { s with stop=false }) (fun _ s ->
                     if AdjSet.mem s.elt (fst s.acc) then
                         s
                     else
                         { s with 
                             acc = AdjSet.add s.elt (fst s.acc), s.elt :: (snd s.acc)
                         }
-                ) nodeMap x (v, a)
-        ) nodeMap (AdjSet.empty, [])
+                ) graph x (v, a)
+        ) graph (AdjSet.empty, [])
     ;;
 
     (* whether edge from f to t exists in nodeMap *)
@@ -1054,10 +1080,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (* acyclic if i cant form a cycle from each element *)
     let is_acyclic graph = 
         NodeMap.for_all (fun x _y ->
-            not @@ dfs (fun s -> 
+            not @@ dfs (fun _ s -> 
                 let cyc = (AdjSet.mem x s.vtx.out) in
                 { s with acc=cyc; stop=cyc }
-            ) (Fun.id) graph x false
+            ) (fun _ -> Fun.id) graph x false
         ) graph
     ;;
 
@@ -1304,8 +1330,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 else
                     let _ = incr count in
                     (* find all reachable nodes *)
-                    let vstd = dfs (Fun.id)
-                        (fun s' -> { s' with acc=s'.vis }) tgraph sccnode.node (AdjSet.empty)
+                    let vstd = dfs (fun _ -> Fun.id)
+                        (fun _ s' -> { s' with acc=s'.vis }) tgraph sccnode.node (AdjSet.empty)
                     in
                     (* popelements into an scc while they are visited *)
                     popwhile (fun e -> AdjSet.mem e.node vstd) scc (!count)
@@ -1827,13 +1853,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             in Some (snd @@ iter start EdgeSet.empty [fin])
         ;;
 
-        (* All pairs depth first walk until (f ctx -> bool) is true or all nodes
+        (** single source depth first walk until (f ctx -> bool) is true or all nodes
            are exhausted. Requires the node edges to be weighted  Uses simple
            dfs to append edges and their corresponding weights to a list *)
         let naivedfs graph f start =
-            List.rev @@ dfs (fun s -> (
+            List.rev @@ dfs (fun _ s -> (
                 match s.prev with
-                | Some prev ->
+                | Some (prev, _adj) ->
                     ({
                         s with stop=f s;
                         acc={from=prev; next=s.elt; via=prev;
@@ -1841,16 +1867,16 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     })
                 | None ->
                     { s with stop = f s}
-            )) (Fun.id) graph start []
+            )) (fun _ -> Fun.id) graph start []
         ;;
 
-        (* All pairs breadth first walk until (f ctx -> bool) is true or all nodes
+        (** single source breadth first walk until (f ctx -> bool) is true or all nodes
            are exhausted. Requires the node edges to be weighted. Uses simple
            bfs to append edges and their corresponding weights to a list *)
         let naivebfs graph f start =
             List.rev @@ bfs (fun s -> (
                 match s.prev with
-                | Some prev ->
+                | Some (prev, _adj) ->
                     {  s with stop=f s; acc = (
                         {
                             from=prev; next=s.elt; via=prev;
@@ -1865,30 +1891,99 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     end
 
     module Flow(Measure: Measurable with type t = edge and type edge = edge) = struct
-        (* DFS Ford-Fulkerson (max-flow) - no augmenting paths *)
-        (* 
-         *  module Captbl = Hashtbl.Make (struct 
-         *      type t = (elt * elt)
-         *      let equal (x, y) (x', y') = match Unique.compare x x' with
-         *          | 0 -> (Unique.compare y y') = 0
-         *          | _ -> false
-         *      let hash = Hashtbl.hash
-         *  end)
-         *
-         *  let fordfulkerson source sink (graph: adj NodeMap.t) =
-         *      let iter capacity = 
-         *          let cf = dfs (fun s -> (
-         *              match s.prev with
-         *              | Some prev ->
-         *                  ({
-         *                      s with stop=(equal s.elt sink);
-         *                      acc= (Vertex.edge2) :: s.acc
-         *                  })
-         *              | None -> { s with stop = (equal s.elt sink) }
-         *          )) (Fun.id) graph source [] in cf
-         *      in iter Measure.zero
-         *  ;;
-         *)
+        (* NB: Capacity is always non negative *)
+         type measure = Measure.t wrap
+
+        module Captbl = Hashtbl.Make (struct 
+            type t = (elt * elt)
+            let equal (x, y) (x', y') = match Unique.compare x x' with
+                | 0 -> (Unique.compare y y') = 0
+                | _ -> false
+            let hash = Hashtbl.hash
+        end)
+
+        (*let wgrtr x y = wcompare (Measure.compare) x y =  1*)
+
+        (* dfs ford fulkerson - exists to grok the idea behind flow *)
+        let fordfulkerson cap source sink graph =
+
+            let _ = edgeseq graph |> Seq.iter (fun (k, v) -> 
+                let _ = Captbl.replace cap (k,v) (Measure.zero) in 
+                        Captbl.replace cap (v,k) (Measure.zero) 
+            ) in
+
+            (* back edges need to be available *)
+            let graph = NodeMap.fold (fun elt {out;_} acc -> 
+                AdjSet.fold (fun elt' acc' -> 
+                    let {edg=edg';_} = vertexof elt' acc' in
+                    if Weights.mem edg' elt then
+                        acc'
+                    else
+                        add_weight Measure.zero elt' elt acc'
+                ) out acc
+            ) graph graph in
+
+            let break = ref false in
+
+            let rec iter prev node flow vis path = 
+                if equal node sink then
+                    (flow, AdjSet.add node vis, Seq.cons (prev, sink) path)
+                else if !break then
+                    (flow, AdjSet.add node vis, path)
+                else
+                    let {out;edg;_} = NodeMap.find node graph in 
+                    let (flow', vis', path') = AdjSet.fold (fun el (flow', vis', path') -> 
+                        if !break || AdjSet.mem el vis' then
+                            (flow', vis', path')
+                        else
+                            let mcap = Vertex.edge2 el edg in
+                            let cflw = Captbl.find cap (node, el) in
+
+                            let favl = Measure.sub mcap cflw in
+
+                            if Measure.compare favl Measure.zero = 1 then
+                                let (flow'', vis'', path'') = iter (Some (node, mcap)) el (`Val favl) vis' path' in 
+                                (* is there and augmenting path *)
+                                if wcompare (Measure.compare) flow'' (`Val Measure.zero) = 1 then
+                                    let _ = break := true in
+                                    (flow'', vis'', path'')
+                                else
+                                    (flow', vis'',  path')
+                            else
+                                (flow', vis', path')
+                    ) out (flow, (AdjSet.add node vis), path) in 
+
+                    if !break then
+                        let minflow = (wmin (Measure.compare) flow flow') in
+                        (minflow, vis', Seq.cons (prev, node) path')
+                    else
+                        (`Val Measure.zero, vis', path')
+            in 
+
+            (* setup a loop *)
+            let rec terminal maxf = 
+                (* reset flow control *)
+                let _ = break := false in
+                let (x, _y, z) = (iter None source `Inf AdjSet.empty Seq.empty) in 
+                let _ = Seq.iter (fun (f, t) -> 
+                    match f with
+                    | Some (f',_) ->  
+                        let fwd  = Captbl.find cap (f', t)  in
+                        let bwd  = Captbl.find cap (t, f')  in
+                        let fwd' = wapply (Measure.add fwd) x in
+                        let bwd' = wapply (Measure.sub bwd) x in
+                        let _    = Captbl.replace cap (f', t) fwd' in
+                        let _    = Captbl.replace cap (t, f') bwd' in
+                        ()
+                    | _ -> ()
+                ) z in
+                if wcompare (Measure.compare) x (`Val Measure.zero) = 0 then
+                    (maxf, z)
+                else
+                    (terminal[@tailcall]) @@ wbind (Measure.add) maxf x 
+            in fst @@ terminal (`Val Measure.zero)
+        ;;
+
         (* Edmund karp *)
         (* Dinic *)
     end
@@ -1911,7 +2006,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                         (AdjSet.to_seq out |> Seq.map (fun el -> 
                             fun () -> Format.sprintf ("%s %s,")
                                 (Serde.string_of_elt el) (Serde.string_of_wgt (Vertex.edge2 el wgt))
-                            )
+                        )
                         )
                 else
                     Seq.cons (fun () -> 
@@ -1919,8 +2014,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                         (AdjSet.to_seq out |> Seq.map (fun el -> 
                             fun () -> Format.sprintf ("%s,")
                                 (Serde.string_of_elt el)
-                            ) 
                         )
+                    )
             )
         ;;
 
@@ -2033,8 +2128,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                         | _ -> 
                             (to_dot ~dir:dir ~sub:true name tmpclstr nattrs eattrs cluster)
                             |> Seq.concat
-                )
-            ) (Seq.return (Seq.return (fun () -> "}\n"))))
+                    )
+                ) (Seq.return (Seq.return (fun () -> "}\n"))))
         ;;
 
     end

@@ -54,7 +54,7 @@ signature TSet = sig
     val singleton: t -> t set
     val min_elt_opt: t set -> t option
     val max_elt_opt: t set -> t option
-    (*val of_seq: t Seq.t -> t t set*)
+    val of_seq: t Sequence.seq -> t set
 end
 
 functor TreeSet(structure Ord: OrderedType) :> TSet where type t = Ord.t  = struct

@@ -30,6 +30,9 @@ let g  = SGraph.empty;;
 let g2 = SGraph.empty;;
 let fl = SGraph.empty;;
 let scc = SGraph.empty;;
+let ffl = SGraph.empty;;
+let ffk = SGraph.empty;;
+let ffb = SGraph.empty;;
 
 let s_a = "A";;
 let s_b = "B";;
@@ -58,9 +61,12 @@ let n_9 = "9";;
 
 let nodes  = [ s_a; s_b; s_c; s_d; s_e; s_f; s_g; s_h; s_i; s_j; s_k; s_l; s_s ];;
 let nodes' = [ s_a; s_b; s_c; s_d; s_e; s_f; ];;
+let nfulk  = [ s_a; s_b; s_c; s_d; ];;
 let nuns   = [ n_0; n_1; n_2; n_3; n_4; (*n_5;*) n_6; n_7; n_8; n_9; ];;
 let nuns2  = [ n_1; n_2; n_3; n_4; n_5; n_6; n_7; n_8; ];;
 let n3     = [ n_1; n_2; n_3; n_4; ];;
+let sn     = [ s_a; n_0; n_1; n_2; n_3; s_d ];;
+let sn2    = [ s_a; n_0; n_1; n_2; n_3; n_4; n_5; n_6; n_7; n_8; s_d ];;
 
 let s  = List.fold_right (SGraph.add) nodes  s;;
 let s' = List.fold_right (SGraph.add) nodes  s';;
@@ -75,6 +81,9 @@ let g2 = List.fold_right (SGraph.add) nodes' g2;;
 let g2 = List.fold_right (SGraph.add) nodes' g2;;
 let fl = List.fold_right (SGraph.add) n3     fl;;
 let scc= List.fold_right (SGraph.add) nuns2  scc;;
+let ffl= List.fold_right (SGraph.add) nfulk   ffl;;
+let ffk= List.fold_right (SGraph.add) sn   ffk;;
+let ffb= List.fold_right (SGraph.add) sn2   ffb;;
 
 let _ = Printexc.record_backtrace true;;
 
@@ -178,51 +187,47 @@ let fl_adjlist = [
     (n_4, [(n_1, 2.)]);
 ]
 
-let floydwarshall graph = 
-    let dist, map = SGraph.wgtmatrix (fun x -> `Val x) `Inf graph in
-    let sz = List.length map in
-    let karr = Array.init sz (fun _k -> 
-        Array.init_matrix sz sz (fun i j -> 
-            (* set the diagonals to 0 if they do not exist i.e `Inf *)
-            let diag = dist.(i).(j) in
-            if i = j && Axiom.wcompare (Float.compare) diag `Inf = 0 then
-                `Val Float.zero
-            else
-                diag
-        )
-    ) in
-    let idx = sz - 1 in
+(* ford fulkerson wikipedia example - good edge case *)
+let ffulk = [
+    (s_a, [(s_b, 1000.); (s_c, 1000.)]);
+    (s_b, [(s_c, 1.);    (s_d, 1000.)]);
+    (s_c, [(s_d, 1000.);]);
+    (s_d, []);
+];;
 
-    let _ = Format.printf "=================+============================================================\n" in
-    let _ = Format.printf " (k) (i) (j)\t | \t ij\t\t ik\t\t kj\t\tik_kj\t\n=================+============================================================\n" in
-    let _ =
-        (for k = 1 to idx do 
-            let k' = k - 1 in
-            for i = 0 to idx do 
-                if i = k' then () else
-                    for j = 0 to idx do 
-                        if j = k' || i = j then () else
-                            let ij    = karr.(k').(i).(j) in
-                            let ik    = karr.(k').(i).(k') in
-                            let kj    = karr.(k').(k').(j) in
-                            let ik_kj = Axiom.wbind (Float.add) ik kj in
+(* ffulk 2 - fismet *)
 
-                            let _ = Format.printf "  %d   %d   %d\t |  \t%s\t\t%s\t\t%s\t\t%s\t\n" 
-                                (k) (i+1) (j+1)
-                                (Axiom.string_of_wrap (Float.to_string) ij)
-                                (Axiom.string_of_wrap (Float.to_string) ik)
-                                (Axiom.string_of_wrap (Float.to_string) kj)
-                                (Axiom.string_of_wrap (Float.to_string) ik_kj)
-                            in
+let ffulk2 = [
+    (s_a, [(n_0, 10.); (n_1, 10.)]);
+    (n_0, [(n_2, 25.);]);
+    (n_1, [(n_3, 15.);]);
+    (n_2, [(s_d, 10.);]);
+    (n_3, [(s_d, 10.); (n_0, 6.);]);
+    (s_d, []);
+];;
 
-                            if Axiom.wcompare (Float.compare) ik_kj ij = -1 then
-                                karr.(k).(i).(j) <- ik_kj
-                    done
-            done
-        done) in
-    let _ = Format.printf "=================+============================================================\n" in
-    karr
-;;
+let ffulk2 = [
+    (s_a, [(n_0, 10.); (n_1, 10.)]);
+    (n_0, [(n_2, 25.);]);
+    (n_1, [(n_3, 15.);]);
+    (n_2, [(s_d, 10.);]);
+    (n_3, [(s_d, 10.); (n_0, 6.);]);
+    (s_d, []);
+];;
+
+let ffulkb = [
+    (s_a, [(n_0, 7.);  (n_1, 2.); (n_2, 1.)]);
+    (n_0, [(n_3, 2.);  (n_4, 4.); ]);
+    (n_1, [(n_4, 5.);  (n_5, 6.); ]);
+    (n_2, [(n_3, 4.);  (n_7, 8.); ]);
+    (n_3, [(n_6, 7.);  (n_7, 1.); ]);
+    (n_4, [(n_6, 3.);  (n_8, 3.); (n_5, 8.)]);
+    (n_5, [(n_3, 3.);  ]);
+    (n_6, [(s_d, 1.);  ]);
+    (n_7, [(s_d, 3.);  ]);
+    (n_8, [(s_d, 4.);  ]);
+    (s_d, []);
+];;
 
 let heuristics = Hashtbl.create (SGraph.cardinal s);;
 
@@ -301,29 +306,47 @@ let pp_sgraph (g: SGraph.adj SGraph.NodeMap.t) =
 
 let (let*) = Option.bind;;
 
-let s  = SGraph.of_weights2 s_adjlist  s;;
-let s' = SGraph.of_weights  s_adjlist  s';;
-let t  = SGraph.of_weights  t_adjlist  t;;
-let t' = SGraph.of_weights2 t2_adjlist t';;
-let q  = SGraph.of_weights  q_adjlist  q;;
-let q' = SGraph.of_weights  q2_adjlist q';;
-let v  = SGraph.of_weights  topo       v;;
-let n  = SGraph.of_list     n_adjlist  n;;
+let s   = SGraph.of_weights2 s_adjlist  s;;
+let s'  = SGraph.of_weights  s_adjlist  s';;
+let t   = SGraph.of_weights  t_adjlist  t;;
+let t'  = SGraph.of_weights2 t2_adjlist t';;
+let q   = SGraph.of_weights  q_adjlist  q;;
+let q'  = SGraph.of_weights  q2_adjlist q';;
+let v   = SGraph.of_weights  topo       v;;
+let n   = SGraph.of_list     n_adjlist  n;;
 let scc = SGraph.of_list    scc_adjlist scc;;
-let n' = SGraph.add_edge    n_4 n_6    n;;
-let fl = SGraph.of_weights  fl_adjlist fl;;
+let n'  = SGraph.add_edge    n_4 n_6    n;;
+let fl  = SGraph.of_weights  fl_adjlist fl;;
+let ffl = SGraph.of_weights ffulk      ffl;;
+let ffk = SGraph.of_weights ffulk2     ffk;;
+let ffb = SGraph.of_weights ffulkb     ffb;;
 
 (* balance the edges out for an eulerian path *)
 let q  = SGraph.add_weight 0. s_b s_k @@ SGraph.add_weight 0. s_k s_d @@ SGraph.add s_k q;;
 
-module SPath  = SGraph.Path.Compute(Graph.Biject(Float));;
-module SPath2 = SGraph.Path.Compute(struct 
-    include Float
-    type t         = float
-    type edge      = float
-    let  compare   = Float.compare
-    let  measure e = `Val e
-end);;
+module SPath = SGraph.Path.Compute(Graph.Biject(Float));;
+module SFlow = SGraph.Flow(Graph.Biject(Float));;
+
+let sccsets g = 
+    SGraph.Scc.SccSet.iter (fun {link=link;node=x} -> 
+        let _ = Format.printf "lowlink: %03d\t" link in
+        let _ = Format.printf ">-> node value: " in
+        let _ = Format.printf "%s" x in
+        Format.printf "\n"
+    ) g
+;;
+
+let sccgraphs g  =   
+    SGraph.Scc.SccMap.iter (fun index (out, elts) -> 
+        let _ = Format.printf "+------------------------------------- Scc Low Link: %03d -------------------------------------+\n"  index in
+        let _ = List.iter (fun x -> Format.printf " %d " x) out in
+        let _ = Format.printf "\n|                                                                                             |\n"  in
+        let _ = pp_sgraph elts in
+        let _ = Format.printf "\n|                                                                                             |\n"  in
+        let _ = Format.printf "+---------------------------------------------------------------------------------------------+\n"  in
+        Format.printf "\n"
+    ) g
+;;
 
 let pp_pset (p: SPath.PathList.t SPath.PathSet.set) = 
     Format.printf "P: [\n"; 
@@ -345,6 +368,8 @@ let pp_aset (p: string SGraph.AdjSet.set) =
 #install_printer pp_pset;;
 #install_printer pp_aset;;
 #install_printer pp_sgraph;;
+#install_printer sccsets;;
+#install_printer sccgraphs;;
 
 let a_s = SGraph.Path.mkpath s_a s_s `Inf ;;
 
@@ -371,3 +396,13 @@ let timeonly f =
     Printf.printf "Execution time: %f secondsn" (Unix.gettimeofday () -. t)
 ;;
 
+let pp_captbl cap = 
+    SFlow.Captbl.iter (fun (pr, nx) ms ->   
+        Format.printf "%s\t%s:\t %f\n" pr nx ms
+    ) cap
+;;
+
+#install_printer pp_captbl;;
+
+(* flow capacity table *)
+let cap = SFlow.Captbl.create 4;;
