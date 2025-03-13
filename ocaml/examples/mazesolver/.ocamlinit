@@ -404,5 +404,122 @@ let pp_captbl cap =
 
 #install_printer pp_captbl;;
 
+let edmondskarp ?(maxit=Int.max_int) cap source sink graph =
+
+            let _ = SGraph.edgeseq graph |> Seq.iter (fun (k, v) -> 
+                let _ = SFlow.Captbl.replace cap (k,v) (Float.zero) in 
+                        SFlow.Captbl.replace cap (v,k) (Float.zero) 
+            ) in
+
+            let que = Queue.create () in
+
+            (* back edges need to be available *)
+            let graph' = SGraph.NodeMap.fold (fun elt {SGraph.out;SGraph.inc;_} acc -> 
+                SGraph.AdjSet.fold (fun elt' acc' -> 
+                    if SGraph.AdjSet.mem elt' inc then
+                        acc'
+                    else
+                        SGraph.add_weight Float.zero elt' elt acc'
+                ) out acc
+            ) graph graph in
+
+            let break = ref false in
+
+            let fmin  = wmin     (Float.compare) in
+            (*let fcmp  = wcompare (Float.compare) in*)
+
+            let rec iter flow vis path = 
+                if Queue.is_empty que then
+                    (`Val Float.zero, vis, [])
+                else
+                    let prev, cur  = Queue.pop que in
+                    let _ = Format.printf "trying: %s\n" cur in
+                    let {SGraph.out;SGraph.edg;_} = SGraph.vertexof cur graph' in
+                    let diff = SGraph.AdjSet.fold (fun nxt vis -> 
+                        if !break || SGraph.AdjSet.mem nxt vis then 
+                            vis
+                        else
+                            let mcap = SGraph.Vertex.edge2 nxt edg in
+                            let cflw = SFlow.Captbl.find cap (cur, nxt) in
+                            let favl = Float.sub mcap cflw in
+                            if Float.compare favl Float.zero = 1 then
+                                if SGraph.equal nxt sink then
+                                    let _ = Format.printf "found: %s\n" nxt in
+                                    let _ = break := true in 
+                                    (SGraph.AdjSet.add nxt vis)
+                                else
+                                    let _ = Queue.add (Some (cur, mcap), nxt) que in
+                                    (SGraph.AdjSet.add nxt vis)
+                            else
+                                let _ = Format.printf "ignored: %s\n" nxt in
+                                vis
+                    ) out vis in 
+                    if !break then
+                        let mcap = SGraph.Vertex.edge2 sink edg in
+                        let cflw = SFlow.Captbl.find  cap (cur, sink) in
+                        let favl = Float.sub  mcap cflw in
+                        let btnk = fmin (`Val favl) flow in
+                        let cpth = (Some (cur, mcap)) in
+                        let path'= (prev, cur) :: (cpth, sink) :: path in
+                        match prev with
+                        | Some (_pelt, pcap) ->
+                            (fmin (`Val pcap) btnk), (SGraph.AdjSet.union diff vis), path'
+                        | None ->
+                            btnk, (SGraph.AdjSet.union diff vis), path'
+                    else
+                        let f, v, p = iter flow (SGraph.AdjSet.union diff vis) path
+                        in if !break then 
+                            match prev with
+                            | Some (_pelt, pcap) ->
+                                (fmin (`Val pcap) (fmin f flow)), v, (prev, cur) :: p
+                            | None ->
+                                (fmin f flow), v, (prev, cur) :: p
+                        else 
+                            `Val Float.zero, v, p
+            in 
+
+            let maxiter = ref 0 in 
+
+            (* setup a loop *)
+            let rec terminal maxf path = 
+                (* reset flow control *)
+                let _ = break := false in
+                if !maxiter = maxit then
+                    (maxf, path) 
+                else
+                    let _ = incr maxiter in
+                    let _ = Queue.clear que in
+                    let _ = Queue.push (None, source) que in
+                    let _ = Format.printf "=========================\n" in
+                    let (x, _, z) = (iter `Inf (SGraph.AdjSet.singleton source) []) in
+                    let _ = Format.printf "=========================\n" in
+                    let z = List.rev z in
+                    if wcompare (Float.compare) x (`Val Float.zero) = 0 then
+                        (*(maxf, z)*)
+                        (x, z)
+                    else
+                        (* 
+                        *) 
+                        let (_, _z') = List.fold_left (fun (sink', p) (f, t)-> 
+                            match f with
+                            | Some (f',_) ->  
+                                if SGraph.equal sink' t then
+                                    let fwd  = SFlow.Captbl.find cap (f', t)  in
+                                    let bwd  = SFlow.Captbl.find cap (t, f')  in
+                                    let fwd' = wapply (Float.add fwd) x in
+                                    let bwd' = wapply (Float.sub bwd) x in
+                                    let _    = SFlow.Captbl.replace cap (f', t) fwd' in
+                                    let _    = SFlow.Captbl.replace cap (t, f') bwd' in
+                                    (f', sink' :: p)
+                                else
+                                    (sink', p)
+                            | _ -> 
+                                (sink', sink' :: p)
+                        ) (sink, []) z in
+                        (*let maxf' = wbind (Float.add) maxf x in*)
+                        (terminal[@tailcall]) x z
+            in terminal (`Val Float.zero) []
+        ;;
+
 (* flow capacity table *)
 let cap = SFlow.Captbl.create 4;;

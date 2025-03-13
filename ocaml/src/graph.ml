@@ -355,7 +355,9 @@ module type Graph = sig
         type measure = Measure.t wrap
 
         module Captbl: Hashtbl.S with type key = (elt * elt)
-        val fordfulkerson: edge Captbl.t -> elt -> elt -> adj NodeMap.t -> measure
+        val fordfulkerson: ?maxit:int -> edge Captbl.t -> elt -> elt -> adj NodeMap.t -> measure
+        val edmondskarp: ?maxit:int -> edge Captbl.t -> elt -> elt -> adj NodeMap.t -> measure
+
     end
 
     val empty:       adj NodeMap.t
@@ -1905,7 +1907,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         (*let wgrtr x y = wcompare (Measure.compare) x y =  1*)
 
         (* dfs ford fulkerson - exists to grok the idea behind flow *)
-        let fordfulkerson cap source sink graph =
+        let fordfulkerson ?(maxit=Int.max_int) cap source sink graph =
 
             let _ = edgeseq graph |> Seq.iter (fun (k, v) -> 
                 let _ = Captbl.replace cap (k,v) (Measure.zero) in 
@@ -1913,10 +1915,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             ) in
 
             (* back edges need to be available *)
-            let graph = NodeMap.fold (fun elt {out;_} acc -> 
+            let graph' = NodeMap.fold (fun elt {out;inc;_} acc -> 
                 AdjSet.fold (fun elt' acc' -> 
-                    let {edg=edg';_} = vertexof elt' acc' in
-                    if Weights.mem edg' elt then
+                    (* if on incoming then assume edge already exists *)
+                    if AdjSet.mem elt' inc then
                         acc'
                     else
                         add_weight Measure.zero elt' elt acc'
@@ -1931,16 +1933,15 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 else if !break then
                     (flow, AdjSet.add node vis, path)
                 else
-                    let {out;edg;_} = NodeMap.find node graph in 
+                    let {out;edg;_} = NodeMap.find node graph' in 
+                    (* TODO: refactor to favor 'take_while' style *)
                     let (flow', vis', path') = AdjSet.fold (fun el (flow', vis', path') -> 
                         if !break || AdjSet.mem el vis' then
                             (flow', vis', path')
                         else
                             let mcap = Vertex.edge2 el edg in
                             let cflw = Captbl.find cap (node, el) in
-
                             let favl = Measure.sub mcap cflw in
-
                             if Measure.compare favl Measure.zero = 1 then
                                 let (flow'', vis'', path'') = iter (Some (node, mcap)) el (`Val favl) vis' path' in 
                                 (* is there and augmenting path *)
@@ -1958,10 +1959,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                         (minflow, vis', Seq.cons (prev, node) path')
                     else
                         (`Val Measure.zero, vis', path')
-            in 
-
+            in
+            let maxiter = ref 0 in 
             (* setup a loop *)
             let rec terminal maxf = 
+                if !maxiter = maxit then
+                    raise Not_found
+                else
                 (* reset flow control *)
                 let _ = break := false in
                 let (x, _y, z) = (iter None source `Inf AdjSet.empty Seq.empty) in 
@@ -1978,13 +1982,125 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     | _ -> ()
                 ) z in
                 if wcompare (Measure.compare) x (`Val Measure.zero) = 0 then
-                    (maxf, z)
+                    maxf
                 else
                     (terminal[@tailcall]) @@ wbind (Measure.add) maxf x 
-            in fst @@ terminal (`Val Measure.zero)
+            in terminal (`Val Measure.zero)
         ;;
 
-        (* Edmund karp *)
+        (* Edmund karp - depends more on Edges and Vertices and not the flow
+           itself,
+           tends to find shorter paths with bfs whereas dfs can zigzag through
+           small capacity weights *)
+        let edmondskarp ?(maxit=Int.max_int) cap source sink graph =
+
+            let _ = edgeseq graph |> Seq.iter (fun (k, v) -> 
+                let _ = Captbl.replace cap (k,v) (Measure.zero) in 
+                        Captbl.replace cap (v,k) (Measure.zero) 
+            ) in
+
+            let que = Queue.create () in
+
+            (* back edges need to be available *)
+            let graph' = NodeMap.fold (fun elt {out;inc;_} acc -> 
+                AdjSet.fold (fun elt' acc' -> 
+                    if AdjSet.mem elt' inc then
+                        acc'
+                    else
+                        add_weight Measure.zero elt' elt acc'
+                ) out acc
+            ) graph graph in
+
+            let break = ref false in
+
+            let fmin  = wmin     (Measure.compare) in
+            let fcmp  = wcompare (Measure.compare) in
+
+            let rec iter flow vis path = 
+                if Queue.is_empty que then
+                    (`Val Measure.zero, vis, [])
+                else
+                    let prev, cur  = Queue.pop que in
+                    let {out;edg;_} = vertexof cur graph' in
+                    (* be careful not to add all paths as only some need to be considered *)
+                    let diff = AdjSet.fold (fun nxt vis -> 
+                        if !break || AdjSet.mem nxt vis then 
+                            vis
+                        else
+                            let mcap = Vertex.edge2 nxt edg in
+                            let cflw = Captbl.find cap (cur, nxt) in
+                            let favl = Measure.sub mcap cflw in
+                            if Measure.compare favl Measure.zero = 1 then
+                                if equal nxt sink then
+                                    let _ = break := true in 
+                                    (AdjSet.add nxt vis)
+                                else
+                                    let _ = Queue.add (Some (cur, favl), nxt) que in
+                                    (AdjSet.add nxt vis)
+                            else
+                                vis
+                    ) out vis in 
+                    if !break then
+                        let mcap = Vertex.edge2 sink edg in
+                        let cflw = Captbl.find  cap (cur, sink) in
+                        let favl = Measure.sub  mcap cflw in
+                        let btnk = fmin (`Val favl) flow in
+                        let cpth = (Some (cur, favl)) in
+                        let path'= (prev, cur) :: (cpth, sink) :: path in
+                        match prev with
+                        | Some (_pelt, pcap) ->
+                            (fmin (`Val pcap) btnk), (AdjSet.union diff vis), path'
+                        | None ->
+                            btnk, (AdjSet.union diff vis), path'
+                    else
+                        let f, v, p = iter flow (AdjSet.union diff vis) path
+                        in if !break then 
+                            match prev with
+                            | Some (_pelt, pcap) ->
+                                (fmin (`Val pcap) (fmin f flow)), v, (prev, cur) :: p
+                            | None ->
+                                (fmin f flow), v, (prev, cur) :: p
+                        else 
+                            `Val Measure.zero, v, p
+            in 
+
+            let maxiter = ref 0 in 
+
+            (* setup a loop *)
+            let rec terminal maxf = 
+                if !maxiter = maxit then
+                    raise Not_found
+                else
+                    (* reset flow control *)
+                    let _ = break := false in
+                    let _ = incr maxiter in
+                    let _ = Queue.clear que in
+                    let _ = Queue.push (None, source) que in
+                    let (x, _, z) = (iter `Inf (AdjSet.singleton source) []) in
+                    if fcmp x (`Val Measure.zero) = 0 then
+                        maxf
+                    else
+                        let (_, _z') = List.fold_right (fun  (f, t) (sink', p) -> 
+                            match f with
+                            | Some (f',_) ->  
+                                if equal sink' t then
+                                    let fwd  = Captbl.find cap (f', t)  in
+                                    let bwd  = Captbl.find cap (t, f')  in
+                                    let fwd' = wapply (Measure.add fwd) x in
+                                    let bwd' = wapply (Measure.sub bwd) x in
+                                    let _    = Captbl.replace cap (f', t) fwd' in
+                                    let _    = Captbl.replace cap (t, f') bwd' in
+                                    (f', sink' :: p)
+                                else
+                                    (sink', p)
+                            | _ -> 
+                                (sink', sink' :: p)
+                        ) z (sink, []) in
+                        let maxf' = wbind (Measure.add) maxf x in
+                        (terminal[@tailcall]) maxf'
+            in terminal (`Val Measure.zero)
+        ;;
+
         (* Dinic *)
     end
 
@@ -2007,7 +2123,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             fun () -> Format.sprintf ("%s %s,")
                                 (Serde.string_of_elt el) (Serde.string_of_wgt (Vertex.edge2 el wgt))
                         )
-                        )
+                    )
                 else
                     Seq.cons (fun () -> 
                         Format.sprintf ("\n%s,") (Serde.string_of_elt elt)) 
