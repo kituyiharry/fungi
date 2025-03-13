@@ -1904,9 +1904,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             let hash = Hashtbl.hash
         end)
 
-        (*let wgrtr x y = wcompare (Measure.compare) x y =  1*)
-
-        (* dfs ford fulkerson - exists to grok the idea behind flow *)
+        (* dfs ford fulkerson - exists to grok the idea behind flow
+           TODO: Capacity scaling or Dinics level graph heuristic ??? *)
         let fordfulkerson ?(maxit=Int.max_int) cap source sink graph =
 
             let _ = edgeseq graph |> Seq.iter (fun (k, v) -> 
@@ -1988,8 +1987,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             in terminal (`Val Measure.zero)
         ;;
 
-        (* Edmund karp - depends more on Edges and Vertices and not the flow
-           itself,
+        (* Edmund karp - depends more on Edges and Vertices and not the
+           capacity values itself,
            tends to find shorter paths with bfs whereas dfs can zigzag through
            small capacity weights *)
         let edmondskarp ?(maxit=Int.max_int) cap source sink graph =
@@ -2251,9 +2250,20 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     end
 
     (* TODO:
-        Rodl nibble and Erdos-renyi
-        DeBruijn
-        https://en.wikipedia.org/wiki/Blossom_algorithm
+        Random:
+            Rodl nibble and Erdos-renyi
+            Blossom algo
+        Flow:
+            Goldberg Tarjan
+        Bipartite Matching
+            Stable marriage and Stable roommate problem
+            Hungarian Algorithm
+            Hopcroft craft
+        Kruskal and Prim
+            Union find
+        Planar:
+            Boyer-Myrovold 
+            Euler formula: V - E + F = 2
     *)
 
 end;;
