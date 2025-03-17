@@ -43,7 +43,7 @@ functor RedBlackMap(Ord: OrderedType) : sig include MAP where type key = Ord.t e
     (* Insert a key-value pair into the tree *)
     fun insert' (x, v, EMPTY) = NODE(RED, (x, v), EMPTY, EMPTY)
       | insert' (x, v, NODE(color, (y, yv), a, b)) =
-        case Ord.compare(x, y) of
+        case Ord.compare x y of
             LESS => balance color (y, yv) (insert'(x, v, a)) b
           | GREATER => balance color (y, yv) a (insert'(x, v, b))
           | EQUAL => NODE(color, (x, v), a, b)
@@ -57,7 +57,7 @@ functor RedBlackMap(Ord: OrderedType) : sig include MAP where type key = Ord.t e
     (* Lookup a value in the map *)
     fun lookup (key, EMPTY) = NONE
       | lookup (key, NODE(_, (k, v), left, right)) =
-        case Ord.compare(key, k) of
+        case Ord.compare key k of
             LESS => lookup(key, left)
           | GREATER => lookup(key, right)
           | EQUAL => SOME v
@@ -74,7 +74,7 @@ functor RedBlackMap(Ord: OrderedType) : sig include MAP where type key = Ord.t e
 
             fun remove' EMPTY = EMPTY
               | remove' (NODE(color, (k, v), left, right)) =
-                case Ord.compare(key, k) of
+                case Ord.compare key k of
                     LESS => balance color (k, v) (remove' left) right
                   | GREATER => balance color (k, v) left (remove' right)
                   | EQUAL =>

@@ -57,7 +57,7 @@ signature TSet = sig
     val of_seq: t Sequence.seq -> t set
 end
 
-functor TreeSet(structure Ord: OrderedType) :> TSet where type t = Ord.t  = struct
+functor TreeSet(Ord: OrderedType) :> TSet where type t = Ord.t = struct
 
     type t = Ord.t
 
