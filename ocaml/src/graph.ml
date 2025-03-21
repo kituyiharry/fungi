@@ -353,10 +353,13 @@ module type Graph = sig
 
     module Flow(Measure: Measurable with type t = edge and type edge = edge): sig
         type measure = Measure.t wrap
-        module Captbl: Hashtbl.S with type key = (elt * elt)
-        (* holds mainly relabel values *)
-        val fordfulkerson:  ?maxit:int -> edge Captbl.t -> elt -> elt -> adj NodeMap.t -> measure
-        val edmondskarp:    ?maxit:int -> edge Captbl.t -> elt -> elt -> adj NodeMap.t -> measure
+        type state = {
+            mutable flow: edge
+        }
+        module Flowtbl: Hashtbl.S with type key = (elt * elt)
+
+        val fordfulkerson:  ?maxit:int -> state Flowtbl.t -> elt -> elt -> adj NodeMap.t -> measure
+        val edmondskarp:    ?maxit:int -> state Flowtbl.t -> elt -> elt -> adj NodeMap.t -> measure
     end
 
     val empty:       adj NodeMap.t
@@ -1897,10 +1900,17 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
     module Flow(Measure: Measurable with type t = edge and type edge = edge) = struct
         (* NB: Capacity is always non negative *)
-         type measure = Measure.t wrap
+        type measure = Measure.t wrap
+
+        type state = {
+            mutable flow: edge
+        }
+
+        let mkstate f = { flow=f }
+        let zero = Measure.zero
 
         (* measure Captbl.t - holds current filled capacity *)
-        module Captbl = Hashtbl.Make (struct
+        module Flowtbl = Hashtbl.Make (struct
             type t = (elt * elt)
             let equal (x, y) (x', y') = match Unique.compare x x' with
                 | 0 -> (Unique.compare y y') = 0
@@ -1916,12 +1926,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             fulkerson
 
            TODO: Capacity scaling or Dinics level graph heuristic ???
+                 GoldbergTarjans push-relabel ??
             *)
         let fordfulkerson ?(maxit=Int.max_int) cap source sink graph =
 
             let _ = edgeseq graph |> Seq.iter (fun (k, v) ->
-                let _ = Captbl.replace cap (k,v) (Measure.zero) in
-                        Captbl.replace cap (v,k) (Measure.zero)
+                let _ = Flowtbl.replace cap (k,v) (mkstate zero) in
+                        Flowtbl.replace cap (v,k) (mkstate zero)
             ) in
 
             (* back edges need to be available *)
@@ -1950,8 +1961,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             (flow', vis', path')
                         else
                             let mcap = Vertex.edge2 el edg in
-                            let cflw = Captbl.find cap (node, el) in
-                            let favl = Measure.sub mcap cflw in
+                            let cflw = Flowtbl.find cap (node, el) in
+                            let favl = Measure.sub mcap cflw.flow in
                             if Measure.compare favl Measure.zero = 1 then
                                 let (flow'', vis'', path'') = iter (Some (node, mcap)) el (`Val favl) vis' path' in
                                 (* is there an augmenting path *)
@@ -1982,12 +1993,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 let _ = Seq.iter (fun (f, t) ->
                     match f with
                     | Some (f',_) ->
-                        let fwd  = Captbl.find cap (f', t)  in
-                        let bwd  = Captbl.find cap (t, f')  in
-                        let fwd' = wapply (Measure.add fwd) x in
-                        let bwd' = wapply (Measure.sub bwd) x in
-                        let _    = Captbl.replace cap (f', t) fwd' in
-                        let _    = Captbl.replace cap (t, f') bwd' in
+                        let fwd  = Flowtbl.find cap (f', t)  in
+                        let bwd  = Flowtbl.find cap (t, f')  in
+                        let _    = fwd.flow <- wapply (Measure.add fwd.flow) x in
+                        let _    = bwd.flow <- wapply (Measure.sub bwd.flow) x in
                         ()
                     | _ -> ()
                 ) z in
@@ -2005,8 +2014,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let edmondskarp ?(maxit=Int.max_int) cap source sink graph =
 
             let _ = edgeseq graph |> Seq.iter (fun (k, v) ->
-                let _ = Captbl.replace cap (k,v) (Measure.zero) in
-                        Captbl.replace cap (v,k) (Measure.zero)
+                let _ = Flowtbl.replace cap (k,v) (mkstate zero) in
+                        Flowtbl.replace cap (v,k) (mkstate zero)
             ) in
 
             let que = Queue.create () in
@@ -2038,8 +2047,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             vis
                         else
                             let mcap = Vertex.edge2 nxt edg in
-                            let cflw = Captbl.find cap (cur, nxt) in
-                            let favl = Measure.sub mcap cflw in
+                            let cflw = Flowtbl.find cap (cur, nxt) in
+                            let favl = Measure.sub mcap cflw.flow in
                             if Measure.compare favl Measure.zero = 1 then
                                 if equal nxt sink then
                                     let _ = break := true in
@@ -2052,8 +2061,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     ) out vis in
                     if !break then
                         let mcap = Vertex.edge2 sink edg in
-                        let cflw = Captbl.find  cap (cur, sink) in
-                        let favl = Measure.sub  mcap cflw in
+                        let cflw = Flowtbl.find cap (cur, sink) in
+                        let favl = Measure.sub  mcap cflw.flow in
                         let btnk = fmin (`Val favl) flow in
                         let cpth = (Some (cur, favl)) in
                         let path'= (prev, cur) :: (cpth, sink) :: path in
@@ -2094,12 +2103,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             match f with
                             | Some (f',_) ->
                                 if equal sink' t then
-                                    let fwd  = Captbl.find cap (f', t)  in
-                                    let bwd  = Captbl.find cap (t, f')  in
-                                    let fwd' = wapply (Measure.add fwd) x in
-                                    let bwd' = wapply (Measure.sub bwd) x in
-                                    let _    = Captbl.replace cap (f', t) fwd' in
-                                    let _    = Captbl.replace cap (t, f') bwd' in
+                                    let fwd  = Flowtbl.find cap (f', t)  in
+                                    let bwd  = Flowtbl.find cap (t, f')  in
+                                    let _    = fwd.flow <- wapply (Measure.add fwd.flow) x in
+                                    let _    = bwd.flow <- wapply (Measure.sub bwd.flow) x in
                                     (f', sink' :: p)
                                 else
                                     (sink', p)

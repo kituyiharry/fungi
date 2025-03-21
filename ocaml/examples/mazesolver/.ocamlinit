@@ -397,30 +397,17 @@ let timeonly f =
 ;;
 
 let pp_captbl cap = 
-    SFlow.Captbl.iter (fun (pr, nx) ms ->   
+    SFlow.Flowtbl.iter (fun (pr, nx) {SFlow.flow=ms} ->   
         Format.printf "%s\t%s:\t %f\n" pr nx ms
     ) cap
 ;;
 
 
-let pp_pshrlb ({ SFlow.excess; SFlow.height }: SFlow.pushrlbl) = 
-    Format.printf  "{ %d %f }\n" height excess
-;;
-
-let pp_flwtbl (flw: SFlow.pushrlbl SFlow.Flwtbl.t) = 
-    SFlow.Flwtbl.iter (fun elt {SFlow.excess;SFlow.height} ->   
-        Format.printf "%s:\t { %d %f }\n" elt height excess
-    ) flw 
-;;
-
 #install_printer pp_captbl;;
-#install_printer pp_flwtbl;;
-#install_printer pp_pshrlb;;
 
 (* flow capacity table *)
 
-let cap: float SFlow.Captbl.t         = SFlow.Captbl.create 16;;
-let flw: SFlow.pushrlbl SFlow.Flwtbl.t = SFlow.Flwtbl.create 16;;
+let cap: SFlow.state SFlow.Flowtbl.t         = SFlow.Flowtbl.create 16;;
 
 (*#trace SFlow.Captbl.find;;*)
 (*#trace SFlow.Flwtbl.find;;*)
