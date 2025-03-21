@@ -1,7 +1,7 @@
 signature GraphElt = sig 
   type edge
   include OrderedType
-  val toString: t -> string
+  val toString: t -> string (* used for hashing *)
 end
 
 signature TGraph = sig

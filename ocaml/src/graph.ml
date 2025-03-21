@@ -353,11 +353,10 @@ module type Graph = sig
 
     module Flow(Measure: Measurable with type t = edge and type edge = edge): sig
         type measure = Measure.t wrap
-
         module Captbl: Hashtbl.S with type key = (elt * elt)
-        val fordfulkerson: ?maxit:int -> edge Captbl.t -> elt -> elt -> adj NodeMap.t -> measure
-        val edmondskarp: ?maxit:int -> edge Captbl.t -> elt -> elt -> adj NodeMap.t -> measure
-
+        (* holds mainly relabel values *)
+        val fordfulkerson:  ?maxit:int -> edge Captbl.t -> elt -> elt -> adj NodeMap.t -> measure
+        val edmondskarp:    ?maxit:int -> edge Captbl.t -> elt -> elt -> adj NodeMap.t -> measure
     end
 
     val empty:       adj NodeMap.t
@@ -1900,6 +1899,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         (* NB: Capacity is always non negative *)
          type measure = Measure.t wrap
 
+        (* measure Captbl.t - holds current filled capacity *)
         module Captbl = Hashtbl.Make (struct
             type t = (elt * elt)
             let equal (x, y) (x', y') = match Unique.compare x x' with
@@ -2011,7 +2011,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
             let que = Queue.create () in
 
-            (* back edges need to be available *)
+            (* back edges (residual) need to be available *)
             let graph' = NodeMap.fold (fun elt {out;inc;_} acc ->
                 AdjSet.fold (fun elt' acc' ->
                     if AdjSet.mem elt' inc then
@@ -2111,9 +2111,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             in terminal (`Val Measure.zero)
         ;;
 
-        let _goldbergtarjan ?(_maxit=Int.max_int) _cap _source _sink =
-            ()
-        ;;
     end
 
     module Serialize(Serde: SerDe with type edge := edge and type elt := elt) = struct
