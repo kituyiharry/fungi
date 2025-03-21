@@ -1898,6 +1898,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ;;
     end
 
+    (*
+        TODO:
+            GoldbergRao algorithm + LinkCutTree
+            Hopcroft Karp
+            Hungarian
+            Network simplex
+    *)
     module Flow(Measure: Measurable with type t = edge and type edge = edge) = struct
         (* NB: Capacity is always non negative *)
         type measure = Measure.t wrap
@@ -1926,7 +1933,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             fulkerson
 
            TODO: Capacity scaling or Dinics level graph heuristic ???
-                 GoldbergTarjans push-relabel ??
             *)
         let fordfulkerson ?(maxit=Int.max_int) cap source sink graph =
 
