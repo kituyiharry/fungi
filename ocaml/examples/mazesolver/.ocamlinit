@@ -415,3 +415,4 @@ let cap: SFlow.state SFlow.Flowtbl.t         = SFlow.Flowtbl.create 16;;
 (*#trace SGraph.Vertex.edge;;*)
 (*#trace SGraph.Vertex.edge2;;*)
 (*#trace SGraph.AdjSet.union;;*)
+module IntSet = Fungi.Treeset.TreeSet(Int);;

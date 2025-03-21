@@ -1898,13 +1898,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ;;
     end
 
-    (*
-        TODO:
-            GoldbergRao algorithm + LinkCutTree
-            Hopcroft Karp
-            Hungarian
-            Network simplex
-    *)
     module Flow(Measure: Measurable with type t = edge and type edge = edge) = struct
         (* NB: Capacity is always non negative *)
         type measure = Measure.t wrap
@@ -2278,10 +2271,12 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             Blossom algo
         Flow:
             Goldberg Tarjan
+            Godberg Rao
         Bipartite Matching
             Stable marriage and Stable roommate problem
             Hungarian Algorithm
-            Hopcroft craft
+            Hopcroft Kraft
+            LP Network simplex
         Kruskal and Prim
             Union find
         Planar:

@@ -30,7 +30,7 @@ let simple_max_elt _cx =
 
 let simple_inorder_traversal _cx = 
     Alcotest.(check (list int)) "Inorder traversal" 
-        [1;2;3;5;6;8;9;10] (IntTree.inorder [] @@ IntTree.of_list [10;5;8;6;3;2;9;1])
+        [1;2;3;5;6;8;9;10] (List.rev @@ IntTree.inorder [] @@ IntTree.of_list [10;5;8;6;3;2;9;1])
 ;;
 
 let subset_test _cx = 
@@ -57,12 +57,24 @@ let set_difference _cx =
     let s1 = IntTree.of_list [1;2;3;4;5] in 
     let s2 = IntTree.singleton 1 in
     let s3 = IntTree.singleton 9 in
-    let _  = Alcotest.(check (list int)) "overlapping"   [2;3;4;5]   (IntTree.to_list @@ IntTree.diff s1 s2) in
-    let _  = Alcotest.(check (list int)) "left empty"    [1;2;3;4;5] (IntTree.to_list @@ IntTree.diff s1 IntTree.empty) in
-    let _  = Alcotest.(check (list int)) "right empty"   []          (IntTree.to_list @@ IntTree.diff IntTree.empty s1) in
-    let _  = Alcotest.(check (list int)) "left disjoint" [9]         (IntTree.to_list @@ IntTree.diff s3 s1) in
-             Alcotest.(check (list int)) "right disjoint"[1;2;3;4;5] (IntTree.to_list @@ IntTree.diff s1 s3)
+    let _  = Alcotest.(check (list int)) "overlapping"   [2;3;4;5]   (List.rev @@ IntTree.to_list @@ IntTree.diff s1 s2) in
+    let _  = Alcotest.(check (list int)) "left empty"    [1;2;3;4;5] (List.rev @@ IntTree.to_list @@ IntTree.diff s1 IntTree.empty) in
+    let _  = Alcotest.(check (list int)) "right empty"   []          (List.rev @@ IntTree.to_list @@ IntTree.diff IntTree.empty s1) in
+    let _  = Alcotest.(check (list int)) "left disjoint" [9]         (List.rev @@ IntTree.to_list @@ IntTree.diff s3 s1) in
+             Alcotest.(check (list int)) "right disjoint"[1;2;3;4;5] (List.rev @@ IntTree.to_list @@ IntTree.diff s1 s3)
 ;;
+
+let set_union _cx = 
+    let s1 = IntTree.of_list [1;2;3;4;5] in 
+    let s2 = IntTree.singleton 1 in
+    let s3 = IntTree.singleton 9 in
+    let _  = Alcotest.(check (list int)) "overlapping" [1;2;3;4;5]   (List.rev @@ IntTree.to_list @@ IntTree.union s1 s2) in
+    let _  = Alcotest.(check (list int)) "left empty"  [1;2;3;4;5]   (List.rev @@ IntTree.to_list @@ IntTree.union s1 IntTree.empty) in
+    let _  = Alcotest.(check (list int)) "right empty" [1;2;3;4;5]   (List.rev @@ IntTree.to_list @@ IntTree.union IntTree.empty s1) in
+    let _  = Alcotest.(check (list int)) "left apply"  [1;2;3;4;5;9] (List.rev @@ IntTree.to_list @@ IntTree.union s3 s1) in
+    Alcotest.(check (list int))          "right apply" [1;2;3;4;5;9] (List.rev @@ IntTree.to_list @@ IntTree.union s1 s3)
+;;
+
 
 
 let preservation =
@@ -84,7 +96,7 @@ let sorted =
     (fun l -> 
         (* Preconditions edge
         QCheck.assume (l <> []);*)
-        let intset = IntTree.to_list @@ IntTree.of_list l in
+        let intset = List.rev @@ IntTree.to_list @@ IntTree.of_list l in
         ascending intset)
 ;;
 
@@ -112,6 +124,7 @@ let () =
             test_case "subset"       `Quick subset_test;
             test_case "intersection" `Quick set_intersection;
             test_case "difference"   `Quick set_difference;
+            test_case "union"        `Quick set_union;
         ];
         "set properties", suite
     ]

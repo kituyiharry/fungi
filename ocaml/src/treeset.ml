@@ -25,6 +25,7 @@ module type TSet = sig
     val invert:         t set-> t set
     val inorder:        t list -> t set -> t list
     val iter:           (t -> unit) -> t set -> unit
+    val traverse:       (t -> 'b -> 'b) -> 'b -> t set -> 'b
     val preorder:       t list -> t set -> t list
     val iter_preorder:  (t -> unit) -> t set -> unit
     val postorder:      t list -> t set -> t list
@@ -80,7 +81,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | Empty -> false
         | Node(left, v, right) ->
             let p = Ord.compare aval v in
-            p = 0 || (if p > 0 then mem aval right else mem aval left)
+            p = 0 || (if p > 0 then (mem[@tailcall]) aval right else (mem[@tailcall]) aval left)
     ;;
 
     (** [take_min 'a set]
@@ -159,36 +160,38 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     ;;
 
     (** [set_of_list 'a list] Build a Set from a list *)
-    let rec of_list = function
-        | [] -> Empty
-        | hd :: tail -> add hd (of_list tail)
+    let of_list = function
+        | []  -> Empty
+        | rst -> List.fold_left (Fun.flip add) Empty rst
     ;;
     let of_list = of_list
 
     (** [set_of_seq 'a Seq] Build a Set from a lazy sequence *)
-    let of_seq = Seq.fold_left (fun x a -> add a x) Empty;;
+    let of_seq = Seq.fold_left (Fun.flip add) Empty;;
 
     (** [cardinality 'a set] number of elements in the set (recursive) *)
     let rec cardinal = function
         | Empty -> 0
         | Node(x,_,y) -> cardinal x + 1 + cardinal y
     ;; (* Sum Left and Right subtrees *)
+    let cardinal = cardinal
 
     (** [invert 'a set] Invert the BST holding the set *)
     let rec invert = function
         | Node(x, a, y) -> Node(invert y, a, invert x)
         | e -> e
     ;;
+    let invert = invert
 
     (** [inorder 'a set] Inorder walk on the set *)
     let rec inorder stack = function
         | Empty -> stack
-        | Node (Empty, a, Empty) ->  stack @ [a]
-        | Node (x, a, y) -> inorder ((inorder stack x) @ [a]) y
+        | Node (Empty, a, Empty) ->  a :: stack
+        | Node (x, a, y) -> inorder (a :: (inorder stack x)) y
     ;; (* Inorder traversal - Left - Root - Right *)
 
     (** [to_list 'a list] Build a list from a set *)
-    let to_list = inorder []
+    let to_list set = inorder [] set
     ;;
 
     let rec iter g = function
@@ -203,8 +206,8 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     (** [preorder 'a set] Preorder walk on the set *)
     let rec preorder stack = function
         | Empty -> stack
-        | Node (Empty, a, Empty) ->  stack @ [a]
-        | Node (x, a, y) -> preorder (preorder (stack @ [a]) x) y
+        | Node (Empty, a, Empty) ->  a :: stack
+        | Node (x, a, y) -> preorder (preorder (a :: stack) x) y
     ;; (* Preorder traversal - Root - left - Right*)
 
     (** [preorder 'a set] Preorder walk on the set *)
@@ -220,8 +223,8 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     (** [postorder 'a set] Postorder walk on the set *)
     let rec postorder stack = function
         | Empty -> stack
-        | Node (Empty, a, Empty) ->  stack @ [a]
-        | Node (x, a, y) -> (postorder (postorder stack x) y) @ [a]
+        | Node (Empty, a, Empty) ->  a :: stack
+        | Node (x, a, y) -> a :: (postorder (postorder stack x) y)
     ;; (* Postorder traversal Left - Right - Root *)
 
     (** [postorder 'a set] Postorder walk on the set *)
@@ -305,7 +308,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     (** Subset other self -> other is subset of self *)
     let subset other = function
         | Empty -> is_empty other
-        | self -> for_all (fun x -> mem x self) other
+        | self -> for_all (Fun.flip mem self) other
     ;;
 
     (** Filter the elements of a set *)
@@ -330,7 +333,7 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | self  -> filter (fun x -> mem x self) other
     ;;
 
-    (** elt in set by function - NB: Relies on short circuit behaviour *)
+    (** elt in set by function *)
     let rec exists f = function
         | Empty -> false
         | Node (l, v, r) -> (f v) || (exists f l) || (exists f r)
