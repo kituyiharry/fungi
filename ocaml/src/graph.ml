@@ -216,15 +216,6 @@ module type PathImpl = sig
     val naivebfs:   adj NodeMap.t -> (path ctx -> bool) -> elt -> path
 end
 
-(** Algorithms for Spanning trees *)
-module type SpanImpl = sig
-    type elt
-    type adj
-
-    module NodeMap: Map.S    with type key := elt
-    module AdjSet:  TSet     with type t   := elt
-end
-
 (** Vertex carries node information  *)
 module type VertexImpl = sig
     type elt
@@ -319,12 +310,6 @@ module type Graph = sig
         and module NodeMap := NodeMap  (* Graph map manipulation *)
         and module AdjSet  := AdjSet   (* Adjacency set manipulation *)
 
-    module Span: SpanImpl with
-        type       elt     := elt      (* The node element *)
-        and type   adj     := adj      (* The adjacency information *)
-        and module NodeMap := NodeMap  (* Graph map manipulation *)
-        and module AdjSet  := AdjSet   (* Adjacency set manipulation *)
-
     module Path: PathImpl with
         type       elt     := elt            (* The node element *)
         and type   adj     := adj            (* The adjacency information *)
@@ -362,17 +347,28 @@ module type Graph = sig
         val edmondskarp:    ?maxit:int -> state Flowtbl.t -> elt -> elt -> adj NodeMap.t -> measure
     end
 
+    module Matching:  sig
+        val hall: adj NodeMap.t -> elt AdjSet.set -> bool
+    end
+
     val empty:       adj NodeMap.t
     val equal:       elt -> elt -> bool
     val add:         elt -> adj NodeMap.t -> adj NodeMap.t
     val ensure:      elt -> adj NodeMap.t -> adj NodeMap.t
+    val ensureall:   adj NodeMap.t -> elt Seq.t -> adj NodeMap.t
+    val ensureof:    elt -> elt -> adj NodeMap.t -> adj NodeMap.t
+    val emplace:     adj -> elt -> adj NodeMap.t -> adj NodeMap.t
+    val emplaceadj:  adj -> elt -> adj NodeMap.t -> adj NodeMap.t
     val add_edge:    elt -> elt -> adj NodeMap.t -> adj NodeMap.t
+    val add_edge2:   elt -> elt -> adj NodeMap.t -> adj NodeMap.t
     val add_all:     elt -> elt list -> adj NodeMap.t -> adj NodeMap.t
+    val add_all2:    elt -> elt list -> adj NodeMap.t -> adj NodeMap.t
     val allweighted: elt -> (elt * edge) list -> adj NodeMap.t -> adj NodeMap.t
     val allweighted2:elt -> (elt * edge) list -> adj NodeMap.t -> adj NodeMap.t
     val add_weight:  edge -> elt -> elt -> adj NodeMap.t -> adj NodeMap.t
     val add_weight2: edge -> elt -> elt -> adj NodeMap.t -> adj NodeMap.t
     val of_list:     (elt * elt list) list -> adj NodeMap.t -> adj NodeMap.t
+    val of_list2:    (elt * elt list) list -> adj NodeMap.t -> adj NodeMap.t
     val of_weights:  (elt * (elt * edge) list) list -> adj NodeMap.t -> adj NodeMap.t
     val of_weights2: (elt * (elt * edge) list) list -> adj NodeMap.t -> adj NodeMap.t
     val cardinal:    adj NodeMap.t -> int
@@ -396,8 +392,11 @@ module type Graph = sig
     val allpairs:    adj NodeMap.t -> (elt * elt) list
     val allweights:  adj NodeMap.t -> (elt * elt * edge) list
     val remove:      elt -> adj NodeMap.t -> adj NodeMap.t
+    val removeall:   adj NodeMap.t -> elt list -> adj NodeMap.t
     val remove_edge: adj NodeMap.t -> elt -> elt -> adj NodeMap.t
     val cull:        adj NodeMap.t -> adj NodeMap.t
+    val prune:       adj NodeMap.t -> adj NodeMap.t
+    val free:        adj NodeMap.t -> elt AdjSet.set
     val toposort:    adj NodeMap.t -> elt list
     (* traversal state *)
     type state := ((elt * adj) option * elt)
@@ -418,6 +417,7 @@ module type Graph = sig
     val degtable:    (elt, int * int) Hashtbl.t -> adj NodeMap.t -> unit
     val edgeset:     adj NodeMap.t -> (elt * elt) EdgeSet.set
     val edgeseq:     adj NodeMap.t -> (elt * elt) Seq.t
+    val edgewgtseq:  adj NodeMap.t -> (elt * elt * edge) Seq.t
     val has_edge:    elt -> elt -> adj NodeMap.t -> bool
     val is_acyclic : adj NodeMap.t -> bool
 end
@@ -513,7 +513,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (* Map from NodeType.t to (incoming outgoing label) *)
     type +'a t     = (Vertex.t) NodeMap.t
 
-    (** An empty graph **)
+    (** An empty graph *)
     let empty      = NodeMap.empty
 
     (** Add a new node with its label -> ( ... , nodedata), this will replace
@@ -531,14 +531,45 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ) nodeMap
     ;;
 
+    let ensureall nodeseq nodeMap =
+        Seq.fold_left (Fun.flip ensure) nodeseq nodeMap
+    ;;
+
+    (** only adds and updates if the value was not already present, otherwise
+        leaves as is but adds edge from nodeKey as a contingency *)
+    let ensureof nodeFrom nodeKey nodeMap =
+        NodeMap.update nodeKey (fun v -> match v with
+            | None    -> 
+                let v' = Vertex.empty nodeKey in
+                Some { v' with inc=(AdjSet.add nodeFrom v'.inc) }
+            | Some v' -> 
+                Some { v' with inc=(AdjSet.add nodeFrom v'.inc) } 
+        ) (add nodeFrom nodeMap)
+    ;;
+
+    (* directly place elements into the graph - does not check if all edges
+       are resolvable *)
+    let emplace {inc;out;edg;_} nodekey nodeMap = 
+        NodeMap.add nodekey {inc;out;edg;lab=nodekey} nodeMap
+    ;;
+
+    (* directly place elements into the graph - ensures edges exist and
+       adds them otherwise *)
+    let emplaceadj {inc;out;edg;_} nodekey nodeMap = 
+        nodeMap
+        |> (AdjSet.fold (fun el ac -> ensureof nodekey el ac) inc)
+        |> (AdjSet.fold (fun el ac -> ensureof el nodekey ac) out)
+        |> NodeMap.add nodekey {inc;out;edg;lab=nodekey} 
+    ;;
+
     (**
     Add a directed edge [(tail)] --> [(head)] such that the tails outgoing
     set points to the heads incoming set.
 
-    (*Find the tail of the directed edge*)
-      (*Update with outgoing*)
-        (*Find the head of the directed edge*)
-          (*Update with incoming*)
+    Find the tail of the directed edge
+      Update with outgoing
+        Find the head of the directed edge
+          Update with incoming
     *)
     let add_edge nodeFrom nodeTo nodeMap =
         (*(NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in*)
@@ -546,6 +577,18 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             Some { a with out=(AdjSet.add nodeTo frOutgoing) }) nodeMap)
         |> NodeMap.update nodeTo (fun x -> let* { inc=toIncoming; _ } as b = x in
             Some { b with inc=(AdjSet.add nodeFrom toIncoming) })
+    ;;
+
+    (*Bidirectional Find the tail of the directed edge*)
+     (*Update with outgoing and incoming*)
+        (*Find the head of the directed edge*)
+          (*Update with incoming and outgoing*)
+    let add_edge2 nodeFrom nodeTo nodeMap =
+        (*(NodeMap.update nodeFrom (fun x -> let* (fromIncoming, fromOutgoing, label, wgts) = x in*)
+        (NodeMap.update nodeFrom (fun x -> let* { out=frOutgoing;inc=frIncoming;_ } as a = x in
+            Some { a with out=(AdjSet.add nodeTo frOutgoing);   inc=(AdjSet.add nodeTo frIncoming) }) nodeMap)
+        |> NodeMap.update nodeTo (fun x -> let* { inc=toIncoming;out=toOutgoing;_ } as b = x in
+            Some { b with inc=(AdjSet.add nodeFrom toIncoming); out=(AdjSet.add nodeFrom toOutgoing) })
     ;;
 
     (*Find the tail of the directed edge*)
@@ -580,6 +623,11 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         | nodeTo :: rest -> add_edge nodeFrom nodeTo (add_all nodeFrom rest nodeMap)
     ;;
 
+    let rec add_all2 nodeFrom nodeToList nodeMap = match nodeToList with
+        | [] -> nodeMap
+        | nodeTo :: rest -> add_edge2 nodeFrom nodeTo (add_all2 nodeFrom rest nodeMap)
+    ;;
+
     let rec allweighted nodeFrom nodeToList nodeMap = match nodeToList with
         | [] -> nodeMap
         | (nodeTo, nodeVal) :: rest -> add_weight nodeVal nodeFrom nodeTo
@@ -600,6 +648,14 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         | [] -> nodeMap
         | (nodeFrom, nodeJoinList) :: rest ->
             add_all nodeFrom nodeJoinList (of_list rest nodeMap)
+    ;;
+
+    (** Creates a graph given a node and outgoing edge (bidir), incoming edges will be
+       resolved naturally. All nodes should already be available in the map  *)
+    let rec of_list2 adjList nodeMap = match adjList with
+        | [] -> nodeMap
+        | (nodeFrom, nodeJoinList) :: rest ->
+            add_all2 nodeFrom nodeJoinList (of_list2 rest nodeMap)
     ;;
 
     (** Creates a graph given a node and outgoing edge, incoming edges will be
@@ -784,6 +840,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ) (AdjSet.union incoming outgoing) nodeMap)
     ;;
 
+    (** Removes all nodes from the graph - weights aren't altered and may still be
+    available from an opposite end of the edge depending oon how the graph is
+    structured *)
+    let removeall delnodelist nodeMap =
+        List.fold_left (fun acc delnode -> remove delnode acc) delnodelist nodeMap
+    ;;
+
     (* edge removal, call twice flipped if undirected graph *)
     let remove_edge nodeMap nodeFrom nodeTo =
         (NodeMap.update nodeFrom (fun x -> let* {out=fromOutgoing;_} as a = x in
@@ -803,6 +866,27 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 Some { a with inc=(AdjSet.remove elt inc); out=(AdjSet.remove elt out); }
             ) g
         ) graph
+    ;;
+
+    (* "dangling" nodes in the graph with no incoming or outgoing edges *)
+    let free graph = 
+        graph
+        |> NodeMap.to_seq
+        |> Seq.filter_map (fun (elt, {out;inc;_}) -> 
+            if AdjSet.is_empty inc && AdjSet.is_empty out then 
+                Some elt 
+            else
+                None
+        )
+        |> Seq.fold_left (Fun.flip AdjSet.add) AdjSet.empty
+    ;;
+
+    (** Remove "free" vertices from a graph (no inc or out) *)
+    let prune graph =
+        graph
+        |> NodeMap.to_seq
+        |> Seq.filter (fun (_, {out;inc;_}) -> AdjSet.is_empty inc && AdjSet.is_empty out)
+        |> Seq.fold_left (fun g (elt, _) -> NodeMap.remove elt g) graph
     ;;
 
     type 'b ctx = {
@@ -1011,6 +1095,14 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         (NodeMap.to_seq nodeMap)
         |> Seq.map (fun (el, {out=ou;_}) ->
             AdjSet.to_seq ou |> Seq.map (fun nx -> (el, nx))
+        ) |> Seq.concat
+    ;;
+
+    (* lazier edge sequences *)
+    let edgewgtseq nodeMap =
+        (NodeMap.to_seq nodeMap)
+        |> Seq.map (fun (el, {out=ou;edg;_}) ->
+            AdjSet.to_seq ou |> Seq.map (fun nx -> (el, nx, Vertex.edge2 nx edg))
         ) |> Seq.concat
     ;;
 
@@ -1438,10 +1530,18 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (*************************************************************************
     *                           Spanning Trees                               *
     **************************************************************************)
-    module Span = struct
+    module Span(Measure: Measurable) = struct
         (**
             kruskal and prim
         *)
+        let _prim graph = 
+            graph
+        ;;
+
+        let _kruskal graph = 
+            graph
+        ;;
+
     end
 
     (*************************************************************************
@@ -1545,7 +1645,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                 match shorterpathto e ps with
                                 | Some v ->
                                     (* If alternative path is shorter than
-                                       previous we 'override it' *)
+                                       previous we 'override it' in the set and
+                                       decrease the value in the heap *)
                                     if wcompare (Measure.compare) alt v.value = -1 then
                                         (PathSet.add pe p, PathHeap.decrease pe pe a)
                                     else
@@ -1602,7 +1703,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                     else
                                         (p, a)
                                 | None   ->
-                                    (* First sighting *)
+                                    (* First sighting - insert instead of
+                                       decrease with dup  *)
                                     (PathSet.add pe p, PathHeap.insert pe a)
                             ) out (ps, rest)
                             in iter ps'' h' ((u.from, u.next, u.value) :: elp)
@@ -1798,13 +1900,16 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             (** allpairs shortest paths best suited for sparse weighted directed graphs
                 if temp is equal to any value in the graph it will overwrite it
                 so it needs to be chosen carefully - we don't check for negative
-                cycles here! *)
+                cycles here! 
+
+                If the graph had negative weights, it will be "reweighted" to
+                positive weights such that dijkstra can be applied!. This also*)
             let johnsons temp graph =
                 (* temporary external source node *)
                 let g', sz = NodeMap.fold (fun e _ (g, sz') ->
                     (add_weight (Measure.zero) temp e g, sz' + 1)
                 ) graph (add temp graph, 0) in
-                (* sz also includes the temp vertex *)
+                (* also includes the temp vertex *)
                 let ht = Hashtbl.create sz in
                 (* assume all nodes start at infinity for bellman ford relaxation except temp *)
                 let _  = NodeMap.iter (fun k {edg=w;_} ->
@@ -1926,12 +2031,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             fulkerson
 
            TODO: Capacity scaling or Dinics level graph heuristic ???
+           NB: This algo does not always terminate
             *)
         let fordfulkerson ?(maxit=Int.max_int) cap source sink graph =
 
             let _ = edgeseq graph |> Seq.iter (fun (k, v) ->
                 let _ = Flowtbl.replace cap (k,v) (mkstate zero) in
-                        Flowtbl.replace cap (v,k) (mkstate zero)
+                Flowtbl.replace cap (v,k) (mkstate zero)
             ) in
 
             (* back edges need to be available *)
@@ -1986,23 +2092,23 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 if !maxiter = maxit then
                     raise Not_found
                 else
-                (* reset flow control *)
-                let _ = break := false in
-                let (x, _y, z) = (iter None source `Inf AdjSet.empty Seq.empty) in
-                let _ = Seq.iter (fun (f, t) ->
-                    match f with
-                    | Some (f',_) ->
-                        let fwd  = Flowtbl.find cap (f', t)  in
-                        let bwd  = Flowtbl.find cap (t, f')  in
-                        let _    = fwd.flow <- wapply (Measure.add fwd.flow) x in
-                        let _    = bwd.flow <- wapply (Measure.sub bwd.flow) x in
-                        ()
-                    | _ -> ()
-                ) z in
-                if wcompare (Measure.compare) x (`Val Measure.zero) = 0 then
-                    maxf
-                else
-                    (terminal[@tailcall]) @@ wbind (Measure.add) maxf x
+                    (* reset flow control *)
+                    let _ = break := false in
+                    let (x, _y, z) = (iter None source `Inf AdjSet.empty Seq.empty) in
+                    let _ = Seq.iter (fun (f, t) ->
+                        match f with
+                        | Some (f',_) ->
+                            let fwd  = Flowtbl.find cap (f', t)  in
+                            let bwd  = Flowtbl.find cap (t, f')  in
+                            let _    = fwd.flow <- wapply (Measure.add fwd.flow) x in
+                            let _    = bwd.flow <- wapply (Measure.sub bwd.flow) x in
+                            ()
+                        | _ -> ()
+                    ) z in
+                    if wcompare (Measure.compare) x (`Val Measure.zero) = 0 then
+                        maxf
+                    else
+                        (terminal[@tailcall]) @@ wbind (Measure.add) maxf x
             in terminal (`Val Measure.zero)
         ;;
 
@@ -2014,7 +2120,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
             let _ = edgeseq graph |> Seq.iter (fun (k, v) ->
                 let _ = Flowtbl.replace cap (k,v) (mkstate zero) in
-                        Flowtbl.replace cap (v,k) (mkstate zero)
+                Flowtbl.replace cap (v,k) (mkstate zero)
             ) in
 
             let que = Queue.create () in
@@ -2098,7 +2204,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     if fcmp x (`Val Measure.zero) = 0 then
                         maxf
                     else
-                        let (_, _z') = List.fold_right (fun  (f, t) (sink', p) ->
+                        let (_, _z') = List.fold_left (fun (sink', p) (f, t) ->
                             match f with
                             | Some (f',_) ->
                                 if equal sink' t then
@@ -2111,10 +2217,38 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                     (sink', p)
                             | _ ->
                                 (sink', sink' :: p)
-                        ) z (sink, []) in
+                        ) (sink, []) (List.rev z) in
                         let maxf' = wbind (Measure.add) maxf x in
                         (terminal[@tailcall]) maxf'
             in terminal (`Val Measure.zero)
+        ;;
+
+    end
+
+    module Matching = struct 
+
+        (* halls theorem: 
+           checks if all edges can be matched in a bipartite graph. pass in the
+           graph and one half of the bipartite graph
+           only really useful for small sets :-) as it generates
+           many subsets 
+
+            you can use flow algorithms do find this match by adding dummy nodes
+            to the graph and adding "binary (0,1)" weights. weights that are 1
+            at the end of the flow will give the matching
+           *)
+        let hall graph tset  = 
+            let break = ref true in
+            let _ = Seq.take_while(fun tset' -> 
+                let (crd, nbr) = (AdjSet.fold (fun el (sm, ac) -> 
+                    sm + 1, AdjSet.union (neighbours el graph) ac
+                ) tset' (0, AdjSet.empty) )  
+                in 
+                if (crd <= AdjSet.cardinal nbr) then true else 
+                    let _ = break := false in
+                    false
+            ) (AdjSet.subset_seq tset) |> Seq.iter (ignore) in 
+            !break
         ;;
 
     end
@@ -2138,7 +2272,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             fun () -> Format.sprintf ("%s %s,")
                                 (Serde.string_of_elt el) (Serde.string_of_wgt (Vertex.edge2 el wgt))
                         )
-                    )
+                        )
                 else
                     Seq.cons (fun () ->
                         Format.sprintf ("\n%s,") (Serde.string_of_elt elt))
@@ -2146,7 +2280,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             fun () -> Format.sprintf ("%s,")
                                 (Serde.string_of_elt el)
                         )
-                    )
+                        )
             )
         ;;
 
@@ -2268,20 +2402,24 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (* TODO:
         Random:
             Rodl nibble and Erdos-renyi
-            Blossom algo
         Flow:
             Goldberg Tarjan
-            Godberg Rao
-        Bipartite Matching
-            Stable marriage and Stable roommate problem
-            Hungarian Algorithm
-            Hopcroft Kraft
+            Godberg Rao (with link cut tree)
+            Min Cost Flow || Min weight bipartite matching
+        Bipartite Matching (Unweighted + Weigted)
+            Blossom algo (non bipartitie)
+            Hungarian Algorithm (weighted)
+            Hopcroft Kraft (unweighted)
             LP Network simplex
+            Vertex cover and dual problems
         Kruskal and Prim
             Union find
         Planar:
             Boyer-Myrovold
             Euler formula: V - E + F = 2
+        Extra:
+            Ramsey and Moore graphs
+            Printers??
     *)
 
 end;;

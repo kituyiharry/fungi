@@ -33,6 +33,7 @@ let scc = SGraph.empty;;
 let ffl = SGraph.empty;;
 let ffk = SGraph.empty;;
 let ffb = SGraph.empty;;
+let bprt = SGraph.empty;;
 
 let s_a = "A";;
 let s_b = "B";;
@@ -47,6 +48,8 @@ let s_j = "J";;
 let s_k = "K";;
 let s_l = "L";;
 let s_s = "S";;
+let s_t = "T";;
+let s_r = "R";;
 
 let n_0 = "0";;
 let n_1 = "1";;
@@ -67,6 +70,11 @@ let nuns2  = [ n_1; n_2; n_3; n_4; n_5; n_6; n_7; n_8; ];;
 let n3     = [ n_1; n_2; n_3; n_4; ];;
 let sn     = [ s_a; n_0; n_1; n_2; n_3; s_d ];;
 let sn2    = [ s_a; n_0; n_1; n_2; n_3; n_4; n_5; n_6; n_7; n_8; s_d ];;
+let bipa   = [ s_b; s_e; s_j; s_l; s_t; s_a; s_r; n_1; n_2; n_3; n_4; n_5; n_6; n_7 ]
+
+(* bipartite 'left' set *)
+let lset = SGraph.AdjSet.of_list [ s_b; s_e; s_j; s_l; s_t; s_a; s_r; ] ;;
+let rset = SGraph.AdjSet.of_list [ n_1; n_2; n_3; n_4; n_5; n_6; n_7; ] ;;
 
 let s  = List.fold_right (SGraph.add) nodes  s;;
 let s' = List.fold_right (SGraph.add) nodes  s';;
@@ -84,6 +92,7 @@ let scc= List.fold_right (SGraph.add) nuns2  scc;;
 let ffl= List.fold_right (SGraph.add) nfulk   ffl;;
 let ffk= List.fold_right (SGraph.add) sn   ffk;;
 let ffb= List.fold_right (SGraph.add) sn2   ffb;;
+let bprt= List.fold_right (SGraph.add) bipa bprt;;
 
 let _ = Printexc.record_backtrace true;;
 
@@ -229,6 +238,16 @@ let ffulkb = [
     (s_d, []);
 ];;
 
+let bprtlist = [
+    (s_b, [n_1;n_4;]);
+    (s_e, [n_3;n_6;n_7;]);
+    (s_j, [n_2;n_5;n_4;]);
+    (s_l, [n_2;n_7;]);
+    (s_t, [n_5;n_6;n_7;]);
+    (s_a, [n_3;n_6;]);
+    (s_r, [n_6;n_7;]);
+];;
+
 let heuristics = Hashtbl.create (SGraph.cardinal s);;
 
 module Ser = struct 
@@ -320,6 +339,7 @@ let fl  = SGraph.of_weights  fl_adjlist fl;;
 let ffl = SGraph.of_weights ffulk      ffl;;
 let ffk = SGraph.of_weights ffulk2     ffk;;
 let ffb = SGraph.of_weights ffulkb     ffb;;
+let bprt= SGraph.of_list2   bprtlist  bprt;;
 
 (* balance the edges out for an eulerian path *)
 let q  = SGraph.add_weight 0. s_b s_k @@ SGraph.add_weight 0. s_k s_d @@ SGraph.add s_k q;;
@@ -362,7 +382,7 @@ let pp_aset (p: string SGraph.AdjSet.set) =
     SGraph.AdjSet.iter (fun elt ->
         Format.printf " (%s) " elt
     ) p;
-    Format.printf "} "
+    Format.printf "}\n "
 ;;
 
 #install_printer pp_pset;;
@@ -402,8 +422,16 @@ let pp_captbl cap =
     ) cap
 ;;
 
+let pp_edgs  edgs = 
+    let _ = Format.printf "\nE: { " in
+    let _ = SGraph.EdgeSet.iter (fun (f,t) -> 
+        Format.printf "%s <-> %s\n" f t
+    ) edgs in
+    Format.printf " }\n"
+;;
 
 #install_printer pp_captbl;;
+#install_printer pp_edgs;;
 
 (* flow capacity table *)
 
@@ -414,5 +442,8 @@ let cap: SFlow.state SFlow.Flowtbl.t         = SFlow.Flowtbl.create 16;;
 (*#trace Float.compare;;*)
 (*#trace SGraph.Vertex.edge;;*)
 (*#trace SGraph.Vertex.edge2;;*)
-(*#trace SGraph.AdjSet.union;;*)
-module IntSet = Fungi.Treeset.TreeSet(Int);;
+#trace SGraph.AdjSet.root;;
+#trace SGraph.EdgeSet.is_empty;;
+#trace SGraph.outlist;;
+#trace SGraph.AdjSet.singleton;;
+#trace SGraph.free;;

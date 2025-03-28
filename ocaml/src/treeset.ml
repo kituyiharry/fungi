@@ -21,6 +21,7 @@ module type TSet = sig
     val root:           t set -> t option
     val choose:         t set -> t
     val take_min_opt:   t set -> t option * t set
+    val take_min:       t set -> t * t set
     val take_max_opt:   t set -> t option * t set
     val invert:         t set-> t set
     val inorder:        t list -> t set -> t list
@@ -38,6 +39,7 @@ module type TSet = sig
     val filter:         (t -> bool) -> t set -> t set
     val for_all:        (t -> bool) -> t set -> bool
     val subset:         t set -> t set -> bool
+    val subset_seq:     t set -> t set Seq.t
     val diff:           t set -> t set -> t set
     val to_seq:         t set -> t Seq.t
     val singleton:      t -> t set
@@ -82,6 +84,16 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | Node(left, v, right) ->
             let p = Ord.compare aval v in
             p = 0 || (if p > 0 then (mem[@tailcall]) aval right else (mem[@tailcall]) aval left)
+    ;;
+
+    (** [take_min 'a set]
+      Returns a pair of some minimum element in the set and the remaining set
+   *)
+    let rec take_min = function
+        | Empty -> raise Not_found
+        | Node(Empty, v, r) -> (v, r)
+        | Node(l, v, r) -> let (el, rest) = take_min l in
+            (el, Node(rest, v, r))
     ;;
 
     (** [take_min 'a set]
@@ -309,6 +321,16 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
     let subset other = function
         | Empty -> is_empty other
         | self -> for_all (Fun.flip mem self) other
+    ;;
+
+    (** Added: generate a sequence of subsets *)
+    let rec subset_seq = function 
+        | Empty -> Seq.return Empty 
+        | rem   -> 
+            let (x, rest) = take_min rem in  
+            let rest' = subset_seq rest in
+            let rem  =  Seq.map (fun y ->  add x y) rest' in
+            Seq.append rest' rem
     ;;
 
     (** Filter the elements of a set *)
