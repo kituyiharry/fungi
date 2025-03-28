@@ -190,7 +190,7 @@ module type PathImpl = sig
     module EdgeSet:  TSet  with type t    := (elt * elt)
 
     type 'c pathelt = { from: elt; next: elt; via: elt; value: 'c; }
-    type path      := (edge pathelt) list
+    type path      := (edge option pathelt) list
 
     val mkpath: elt -> elt -> 'a -> 'a pathelt
 
@@ -505,6 +505,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let weights n g = let {edg;_} = NodeMap.find n g in edg
         let edge  f t g = Weights.find (weights f g) t
         let edge2   t o = Weights.find o t
+        let edgeo  f t g = Weights.find_opt (weights f g) t
         let update t o v= Weights.replace o t v
         let ensure t o v= if Weights.mem o t then () else Weights.add o t v
     end
@@ -1976,7 +1977,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     ({
                         s with stop=f s;
                         acc={from=prev; next=s.elt; via=prev;
-                            value=(Vertex.edge prev s.elt graph);} :: s.acc
+                            value=(Vertex.edgeo prev s.elt graph);} :: s.acc
                     })
                 | None ->
                     { s with stop = f s}
@@ -1993,7 +1994,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     {  s with stop=f s; acc = (
                         {
                             from=prev; next=s.elt; via=prev;
-                            value=(Vertex.edge prev s.elt graph);
+                            value=(Vertex.edgeo prev s.elt graph);
                         } :: s.acc
                     )
                     }
