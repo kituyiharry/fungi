@@ -2304,6 +2304,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
                 (* max heap - higher ranked first meaning more preffered *)
                 let cmp = RankHeap.maxify in 
+                let _   = RankHeap.churn_threshold := 16 in
 
                 let proprank = AdjSet.fold (fun el ac -> 
                     let ranks  = RankHeap.empty in
@@ -2324,7 +2325,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                     | []  -> 
                         matches
                     | ((prps, prnk) :: rest) -> 
-                        (* our next choice *)
+                        (* our next choice
+                           TODO: what if we run out of choices ?? *)
                         let ((acp, _), rem) = RankHeap.extract ~cmp:cmp prnk in 
 
                         if AdjSet.mem acp complete then
@@ -2352,11 +2354,11 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                         else
                             (* match them and move on *)
                             let  matches' = EdgeSet.add (acp, prps) matches in
+                            (* cross them off our lists *)
                             iter matches' rest (AdjSet.add acp complete)
                 in 
                 iter matching proprank AdjSet.empty 
             ;;
-
         end
     end
 
@@ -2514,6 +2516,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             Min Cost Flow || Min weight bipartite matching
         Matching (Unweighted + Weigted)
             Blossom algo (non bipartite)
+            Irving
             Hungarian Algorithm (weighted)
             Hopcroft Kraft (unweighted)
             LP Network simplex

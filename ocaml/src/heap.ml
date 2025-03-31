@@ -65,6 +65,7 @@ module type FibHeap = sig
     val degree:      elts -> int
     val cardinal:    t -> int
     val collapse:    t -> node list
+    val churn_threshold: int ref
     val instance:    node -> int -> elts
     val singleton:   node -> t
     val dedup:       node -> elts list -> (elts list * node list)
