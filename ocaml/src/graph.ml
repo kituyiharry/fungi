@@ -2302,7 +2302,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 (* matching from acceptors to proposers *)
                 let matching = EdgeSet.empty in
 
-                (* max heap - higher ranked first *)
+                (* max heap - higher ranked first meaning more preffered *)
                 let cmp = RankHeap.maxify in 
 
                 let proprank = AdjSet.fold (fun el ac -> 
