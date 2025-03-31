@@ -1,7 +1,6 @@
-```bash
-$ dune build --auto-promote
-$ dune utop # use #require "libset" to load in toplevel
-```
+## Fungi (Fun-ctional G-raph Implementation)
 
-Debugging note: Sometimes the set implementation is wrong! try replacing  usages of 
-`TreeSet` with `Set.Make` and see if that can fix the issue
+This is an adjacency set based graph implementation with algorithms written in
+a functional style. It supports various path, flow, matching and scc algorithms
+with more to be added in the future. Some data structures will also be added to
+support the graph (Heap (done), LC-tree, UnionFind...etc).
