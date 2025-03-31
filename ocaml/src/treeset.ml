@@ -50,6 +50,7 @@ module type TSet = sig
     val exists:         (t -> bool) -> t set -> bool
     val find_first_opt: (t -> bool) -> t set -> t option
     val find_first:     (t -> bool) -> t set -> t
+    val search:         (t -> int)  -> t set ->  t
 end
 
 let (let*) = Option.bind
@@ -374,6 +375,15 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | Empty -> raise Not_found
         | nodes -> let (el, rest) = choose_rest nodes in
             if f el then el else find_first f rest
+    ;;
+
+    (* TODO: use search in place of find_first if applicable *)
+    let rec search c = function
+        | Empty -> raise Not_found
+        | Node(left, v, right) ->
+            let p = c v in
+            if p = 0 then v else
+            if p > 0 then (search c right) else (search c left)
     ;;
 
 end

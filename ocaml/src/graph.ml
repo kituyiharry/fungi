@@ -230,6 +230,7 @@ module type VertexImpl = sig
     val weights: elt -> adj NodeMap.t -> weights
     val edge   : elt -> elt -> adj NodeMap.t -> edge
     val edge2  : elt -> weights -> edge
+    val edgeo  : elt -> elt -> adj NodeMap.t -> edge option
     val update : elt -> weights -> edge -> unit
     val ensure : elt -> weights -> edge -> unit
 end
@@ -349,6 +350,9 @@ module type Graph = sig
 
     module Matching:  sig
         val hall: adj NodeMap.t -> elt AdjSet.set -> bool
+        module Compute(_: Measurable with type t = edge and type edge = edge): sig
+            val galeshapely: adj NodeMap.t -> elt AdjSet.set -> elt AdjSet.set -> (elt * elt) EdgeSet.set
+        end
     end
 
     val empty:       adj NodeMap.t
@@ -372,6 +376,7 @@ module type Graph = sig
     val of_weights:  (elt * (elt * edge) list) list -> adj NodeMap.t -> adj NodeMap.t
     val of_weights2: (elt * (elt * edge) list) list -> adj NodeMap.t -> adj NodeMap.t
     val cardinal:    adj NodeMap.t -> int
+    val complete:    adj NodeMap.t -> adj NodeMap.t
     val vertexof:    elt -> adj NodeMap.t -> adj
     val incomingof:  elt -> adj NodeMap.t -> elt AdjSet.set
     val incweights:  elt -> adj NodeMap.t -> elt AdjSet.set * edge Weights.t
@@ -505,7 +510,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let weights n g = let {edg;_} = NodeMap.find n g in edg
         let edge  f t g = Weights.find (weights f g) t
         let edge2   t o = Weights.find o t
-        let edgeo  f t g = Weights.find_opt (weights f g) t
+        let edgeo  f t g= Weights.find_opt (weights f g) t
         let update t o v= Weights.replace o t v
         let ensure t o v= if Weights.mem o t then () else Weights.add o t v
     end
@@ -627,6 +632,18 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     let rec add_all2 nodeFrom nodeToList nodeMap = match nodeToList with
         | [] -> nodeMap
         | nodeTo :: rest -> add_edge2 nodeFrom nodeTo (add_all2 nodeFrom rest nodeMap)
+    ;;
+
+    (* creates a complete graph without erasing existing edges *)
+    let complete nodeMap =
+        NodeMap.fold (fun el {out;_} ac -> 
+            NodeMap.fold (fun el' _ ac' -> 
+                if AdjSet.mem el' out then
+                    ac'
+                else
+                    add_edge el el' ac'
+            ) nodeMap ac
+        ) nodeMap nodeMap
     ;;
 
     let rec allweighted nodeFrom nodeToList nodeMap = match nodeToList with
@@ -1136,14 +1153,14 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ), nodes, edges
     ;;
 
-    (** swap the incoming and outgoing edge direction - preserving edge weights *)
+    (** swap the incoming and outgoing edge direction - preserving edge weights
+        use transpose2 if you do not use edge weights! *)
     let transpose (nodeMap: adj NodeMap.t) =
         NodeMap.map (fun {inc; out; lab; edg=wgts} ->
             let wgts' = Weights.create (Weights.length wgts) in
             let _     = AdjSet.iter (fun x ->
-                match Weights.find_opt (Vertex.weights x nodeMap) lab with
-                | Some edge -> Weights.add wgts' x edge
-                | None -> ()
+                Weights.add wgts' x 
+                @@ Weights.find (Vertex.weights x nodeMap) lab 
             ) inc in {inc=out; out=inc; lab; edg=wgts'}
         ) nodeMap
     ;;
@@ -1569,11 +1586,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             module PathList: Ordinal with type t = measure pathelt and type order = measure = struct
                 type t          = measure pathelt
                 type order      = measure
-
                 let  bind t     = t.value
-                (* next node is enough to differentiate between 2 nodes *)
-                let  compare l r=
-                    match  Unique.compare l.next r.next with
+                let  compare l r= match  Unique.compare l.next r.next with
                     | 0 -> Unique.compare l.from r.from
                     | x ->  x
                 ;;
@@ -1791,7 +1805,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                    edges that relax as part of a negative cycle
                    *)
                 let negcycles =  NodeMap.fold (
-                    fun elt {inc; out;edg=wgts;_} acc ->
+                    fun elt {inc;out;edg=wgts;_} acc ->
                     let (_, sofar, _) =  Hashtbl.find belltable elt in
                     let (sofar'', acc') = AdjSet.fold (fun prv (sofar', acc') ->
                         let (_, value, wgts') = Hashtbl.find belltable prv in
@@ -1996,8 +2010,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             from=prev; next=s.elt; via=prev;
                             value=(Vertex.edgeo prev s.elt graph);
                         } :: s.acc
-                    )
-                    }
+                    )}
                 | None ->
                     { s with stop = f s; }
             )) (Fun.const Fun.id) graph start []
@@ -2035,10 +2048,20 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
            NB: This algo does not always terminate
             *)
         let fordfulkerson ?(maxit=Int.max_int) cap source sink graph =
-
+            (* if there are flow values already in the tbl we keep it - it can
+               reduce the total number of iterations since this algo depends on
+               Flow capacity *)
             let _ = edgeseq graph |> Seq.iter (fun (k, v) ->
-                let _ = Flowtbl.replace cap (k,v) (mkstate zero) in
-                Flowtbl.replace cap (v,k) (mkstate zero)
+                match Flowtbl.mem cap (k,v), Flowtbl.mem cap (v, k) with
+                | (true, true)  -> 
+                    ()
+                | (true, false) ->
+                    Flowtbl.replace cap (v,k) (mkstate zero)
+                | (false, true) ->
+                    Flowtbl.replace cap (k,v) (mkstate zero)
+                | _             ->
+                    let _ = Flowtbl.replace cap (k,v) (mkstate zero) in
+                    Flowtbl.replace cap (v,k) (mkstate zero)
             ) in
 
             (* back edges need to be available *)
@@ -2120,8 +2143,17 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let edmondskarp ?(maxit=Int.max_int) cap source sink graph =
 
             let _ = edgeseq graph |> Seq.iter (fun (k, v) ->
-                let _ = Flowtbl.replace cap (k,v) (mkstate zero) in
-                Flowtbl.replace cap (v,k) (mkstate zero)
+                (* preserve flow value if they exist already *)
+                match Flowtbl.mem cap (k,v), Flowtbl.mem cap (v, k) with
+                | (true, true)  -> 
+                    ()
+                | (true, false) ->
+                    Flowtbl.replace cap (v,k) (mkstate zero)
+                | (false, true) ->
+                    Flowtbl.replace cap (k,v) (mkstate zero)
+                | _             ->
+                    let _ = Flowtbl.replace cap (k,v) (mkstate zero) in
+                    Flowtbl.replace cap (v,k) (mkstate zero)
             ) in
 
             let que = Queue.create () in
@@ -2252,6 +2284,80 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             !break
         ;;
 
+        module Compute(Measure: Measurable with type t = edge and type edge = edge) = struct 
+
+            type rank = (elt * Measure.t)
+            module RankElt: Ordinal with type t = rank and type order = Measure.t = struct 
+                type t          = rank
+                type order      = Measure.t
+                let bind t      = snd t
+                let compare l r = Unique.compare (fst l) (fst r)
+                let order   l r = Measure.compare l r
+            end
+            module RankHeap = MakeFibHeap (RankElt)
+
+            (* Graph is modeled as a complete graph with edges representing 
+               the rankings - higher values mean better rankings *)
+            let galeshapely graph proposers acceptors = 
+                (* matching from acceptors to proposers *)
+                let matching = EdgeSet.empty in
+
+                (* max heap - higher ranked first *)
+                let cmp = RankHeap.maxify in 
+
+                let proprank = AdjSet.fold (fun el ac -> 
+                    let ranks  = RankHeap.empty in
+                    let wgts   = Vertex.weights el graph in
+                    let ranks' = AdjSet.fold (fun el' ac' -> 
+                        let rate = Vertex.edge2 el' wgts in
+                        RankHeap.insert ~cmp:cmp (el', rate) ac'
+                    ) acceptors ranks in 
+                    (el, ranks') :: ac
+                ) proposers  [] in
+
+                (* closure over proprank for 'recalling' proposers for
+                   rematching *)
+                let recall elt = List.find (fun (x,_) ->  equal elt x) proprank in
+
+                let rec iter matches props complete = 
+                    match props with
+                    | []  -> 
+                        matches
+                    | ((prps, prnk) :: rest) -> 
+                        (* our next choice *)
+                        let ((acp, _), rem) = RankHeap.extract ~cmp:cmp prnk in 
+
+                        if AdjSet.mem acp complete then
+
+                            (* Find the partner *)
+                            let (_, curp) = EdgeSet.find_first (
+                                fun (a, _) -> equal a acp
+                            ) matches in
+
+                            (* how do they rank us against their current partner *)
+                            let wgt = Vertex.weights acp graph in
+
+                            let rnk = Vertex.edge2 prps wgt in
+                            let cur = Vertex.edge2 curp wgt in
+
+                            (* are we better than the proposer *)
+                            if Measure.compare cur rnk = 1 then
+                                (* prefers us *)
+                                let newmtch = EdgeSet.add (acp, prps) (EdgeSet.remove (acp, curp) matches) in
+                                (* curp is now unmatched *)
+                                iter newmtch ((recall curp) :: rest) complete
+                            else
+                                (* check remaining unmatched *)
+                                iter matches ((prps, rem) :: rest) complete
+                        else
+                            (* match them and move on *)
+                            let  matches' = EdgeSet.add (acp, prps) matches in
+                            iter matches' rest (AdjSet.add acp complete)
+                in 
+                iter matching proprank AdjSet.empty 
+            ;;
+
+        end
     end
 
     module Serialize(Serde: SerDe with type edge := edge and type elt := elt) = struct
@@ -2272,16 +2378,14 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                         (AdjSet.to_seq out |> Seq.map (fun el ->
                             fun () -> Format.sprintf ("%s %s,")
                                 (Serde.string_of_elt el) (Serde.string_of_wgt (Vertex.edge2 el wgt))
-                        )
-                        )
+                        ))
                 else
                     Seq.cons (fun () ->
                         Format.sprintf ("\n%s,") (Serde.string_of_elt elt))
                         (AdjSet.to_seq out |> Seq.map (fun el ->
                             fun () -> Format.sprintf ("%s,")
                                 (Serde.string_of_elt el)
-                        )
-                        )
+                        ))
             )
         ;;
 
@@ -2403,12 +2507,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (* TODO:
         Random:
             Rodl nibble and Erdos-renyi
+            Blossom
         Flow:
             Goldberg Tarjan
             Godberg Rao (with link cut tree)
             Min Cost Flow || Min weight bipartite matching
-        Bipartite Matching (Unweighted + Weigted)
-            Blossom algo (non bipartitie)
+        Matching (Unweighted + Weigted)
+            Blossom algo (non bipartite)
             Hungarian Algorithm (weighted)
             Hopcroft Kraft (unweighted)
             LP Network simplex
