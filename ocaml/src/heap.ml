@@ -152,7 +152,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     ;;
 
     (* churn threshold *)
-    let churn_threshold = ref 2
+    let churn_threshold = ref 8
     ;;
 
     let instance pleaf idx = { data=pleaf; churn=0; index=idx; succ=[] }

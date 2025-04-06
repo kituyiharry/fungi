@@ -97,4 +97,8 @@ functor MakeGraph(structure Unique: GraphElt) :> TGraph where type elt = Unique.
 
     fun add nodekey nodeMap =
         NodeMap.insert (nodekey, (Vertex.empty nodekey), nodeMap)
+
+    fun add_edge _nodeFrom _nodeTo _nodeMap =
+        ()
+
 end
