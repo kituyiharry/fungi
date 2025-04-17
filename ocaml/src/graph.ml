@@ -922,17 +922,17 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
     (** a graph traversal context *)
     type 'b ctx = {
-        (** whether to stop a recurse or traversal *)
+        (* whether to stop a recurse or traversal *)
         stop: bool; 
-        (** the previous node vertex data *)
+        (* the previous node vertex data *)
         prev: (elt * adj) option; 
-        (** the current node *)
+        (* the current node *)
         elt:  elt; 
-        (** the visited nodes so far in the traversal *)
+        (* the visited nodes so far in the traversal *)
         vis:  elt AdjSet.set; 
-        (** the accumulator *)
+        (* the accumulator *)
         acc:  'b; 
-        (** the node vertex information *)
+        (* the node vertex information *)
         vtx:  adj; 
     }
 
@@ -1078,8 +1078,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         (* return matrix and keys showing which elt is which index *)
         (b, List.map (fst) adjs)
     ;;
-
-
 
     (** create a graph from 2d adjacency matrix with keys defining which elt maps to what index *)
     let of_matrix nodeMatrix keys =
@@ -2008,7 +2006,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             value=(Vertex.edgeo prev s.elt graph);} :: s.acc
                     })
                 | None ->
-                    { s with stop = f s}
+                    { s with stop = f s; }
             )) (Fun.const Fun.id) graph start []
         ;;
 
@@ -2361,7 +2359,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                 (* prefers us *)
                                 let newmtch = EdgeSet.add (acp, prps) (EdgeSet.remove (acp, curp) matches) in
                                 (* curp is now unmatched *)
-                                iter newmtch ((recall curp) :: rest) complete
+                                let np = recall curp in
+                                let sz = RankHeap.cardinal (snd np) in
+                                let _ = Format.printf "recall capacity: %d\n" sz in
+                                iter newmtch (np :: rest) complete
                             else
                                 (* check remaining unmatched *)
                                 iter matches ((prps, rem) :: rest) complete
@@ -2530,8 +2531,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             Min Cost Flow || Min weight bipartite matching
         Matching (Unweighted + Weigted)
             Blossom algo (non bipartite)
-            Irving
-            Hungarian Algorithm (weighted)
             Hopcroft Kraft (unweighted)
             LP Network simplex
             Vertex cover and dual problems

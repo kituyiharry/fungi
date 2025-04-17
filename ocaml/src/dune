@@ -1,5 +1,5 @@
 (library
   (name fungi)
   (public_name fungi)
-  (modules treeset graph heap axiom)
+  (modules treeset graph heap axiom unionfind)
   (libraries))

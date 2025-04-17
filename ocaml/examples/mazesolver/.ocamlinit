@@ -4,6 +4,7 @@
 open Fungi;;
 open Fungi.Graph;;
 open Fungi.Axiom;;
+open Fungi.Unionfind;;
 
 module SGraph = Graph.MakeGraph(struct 
     type t     = string
@@ -35,6 +36,7 @@ let ffk = SGraph.empty;;
 let ffb = SGraph.empty;;
 let bprt = SGraph.empty;;
 let shpl = SGraph.empty;;
+let hung = SGraph.empty;;
 
 let s_a = "A";;
 let s_b = "B";;
@@ -62,6 +64,11 @@ let n_6 = "6";;
 let n_7 = "7";;
 let n_8 = "8";;
 let n_9 = "9";;
+ 
+let wendy =   "Wendy";;
+let xenia =   "Xenia";;
+let yolanda = "Yoland";;
+let zelda =   "Zelda";;
 
 let nodes  = [ s_a; s_b; s_c; s_d; s_e; s_f; s_g; s_h; s_i; s_j; s_k; s_l; s_s ];;
 let nodes' = [ s_a; s_b; s_c; s_d; s_e; s_f; ];;
@@ -96,6 +103,10 @@ let ffk= List.fold_right (SGraph.add) sn   ffk;;
 let ffb= List.fold_right (SGraph.add) sn2   ffb;;
 let bprt= List.fold_right (SGraph.add) bipa bprt;;
 let shpl= List.fold_right (SGraph.add) bipa bprt;;
+let hung= SGraph.add wendy @@ SGraph.add zelda @@ SGraph.add yolanda @@ SGraph.add xenia hung;;
+
+let hl = SGraph.AdjSet.add xenia @@ SGraph.AdjSet.singleton zelda;;
+let hr = SGraph.AdjSet.add wendy @@ SGraph.AdjSet.singleton yolanda;;
 
 let _ = Printexc.record_backtrace true;;
 
@@ -268,6 +279,13 @@ let shpllist = [
     (n_7, [(s_b, 1.); (s_e, 2.); (s_j, 3.); (s_l, 4.); (s_t, 5.); (s_a, 6.); (s_r, 7.)]);
 ];;
 
+let hunglst = [
+    (wendy,    [(xenia, 3.);(yolanda, 2.); (zelda, 1.)]);
+    (xenia,    [(wendy, 3.);(zelda, 2.); (yolanda, 1.)]);
+    (yolanda,  [(wendy, 3.);(zelda, 2.); (xenia, 1.)]);
+    (zelda,    [(xenia, 3.);(yolanda, 2.); (wendy, 1.)]);
+];;
+
 let heuristics = Hashtbl.create (SGraph.cardinal s);;
 
 module Ser = struct 
@@ -361,6 +379,7 @@ let ffk = SGraph.of_weights ffulk2     ffk;;
 let ffb = SGraph.of_weights ffulkb     ffb;;
 let bprt= SGraph.of_list2   bprtlist  bprt;;
 let shpl= SGraph.of_weights shpllist  shpl;;
+let hung= SGraph.of_weights hunglst   hung;;
 
 (* balance the edges out for an eulerian path *)
 let q  = SGraph.add_weight 0. s_b s_k @@ SGraph.add_weight 0. s_k s_d @@ SGraph.add s_k q;;
@@ -459,13 +478,19 @@ let pp_edgs  edgs =
 (* flow capacity table *)
 let cap: SFlow.state SFlow.Flowtbl.t         = SFlow.Flowtbl.create 16;;
 
+module Disj = MakeDisjointSet(struct
+    type t = string
+    let equal = String.equal
+    let hash  = String.hash
+end);;
+
 (*#trace SFlow.Captbl.find;;*)
 (*#trace SFlow.Flwtbl.find;;*)
 (*#trace Float.compare;;*)
 (*#trace SGraph.Vertex.edge;;*)
 (*#trace SGraph.Vertex.edge2;;*)
-#trace SGraph.AdjSet.root;;
-#trace SGraph.EdgeSet.is_empty;;
-#trace SGraph.outlist;;
-#trace SGraph.AdjSet.singleton;;
-#trace SGraph.free;;
+(*#trace SGraph.AdjSet.root;;*)
+(*#trace SGraph.EdgeSet.is_empty;;*)
+(*#trace SGraph.outlist;;*)
+(*#trace SGraph.AdjSet.singleton;;*)
+(*#trace SGraph.free;;*)
