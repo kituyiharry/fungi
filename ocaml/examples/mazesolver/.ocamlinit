@@ -386,6 +386,7 @@ let q  = SGraph.add_weight 0. s_b s_k @@ SGraph.add_weight 0. s_k s_d @@ SGraph.
 
 module SPath = SGraph.Path.Compute(Graph.Biject(Float));;
 module SFlow = SGraph.Flow(Graph.Biject(Float));;
+module SSPan = SGraph.Span(Graph.Biject(Float));;
 
 module SMatch= SGraph.Matching.Compute(Graph.Biject(Float));;
 

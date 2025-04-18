@@ -7,6 +7,7 @@
  ******************************************************************************)
 open Treeset;;
 open Heap;;
+open Unionfind;;
 open Axiom;;
 
 (**
@@ -355,6 +356,11 @@ module type Graph = sig
         end
     end
 
+    module Span: functor(Measure: Measurable with type edge = edge) -> sig
+        module EdgeDisj: UnionFind 
+        val kruskal: ?connect:(Measure.edge -> elt -> elt -> adj NodeMap.t -> adj NodeMap.t) -> adj NodeMap.t -> adj NodeMap.t 
+    end
+
     val empty:       adj NodeMap.t
     val equal:       elt -> elt -> bool
     val add:         elt -> adj NodeMap.t -> adj NodeMap.t
@@ -423,6 +429,7 @@ module type Graph = sig
     val edgeset:     adj NodeMap.t -> (elt * elt) EdgeSet.set
     val edgeseq:     adj NodeMap.t -> (elt * elt) Seq.t
     val edgewgtseq:  adj NodeMap.t -> (elt * elt * edge) Seq.t
+    val edgesetsz:   adj NodeMap.t -> int * int * (elt * elt) EdgeSet.set
     val has_edge:    elt -> elt -> adj NodeMap.t -> bool
     val is_acyclic : adj NodeMap.t -> bool
 end
@@ -1141,7 +1148,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ) |> Seq.concat
     ;;
 
-    (** like edgeset but returns the size to avoid recomputing if needed returns
+    (** like edgeset but returns the size to avoid recomputing if needed. returns
        the node count, edge count and edge set in that order *)
     let edgesetsz nodeMap =
         NodeMap.fold (fun el {out=ou;_} (g, e, a) ->
@@ -1560,16 +1567,35 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (*************************************************************************
     *                           Spanning Trees                               *
     **************************************************************************)
-    module Span(Measure: Measurable) = struct
-        (**
-            kruskal and prim
-        *)
+    module Span(Measure: Measurable with type edge = edge) = struct
+
+        module EdgeDisj = MakeDisjointSet (struct 
+            type t    = elt
+            let equal = equal
+            let hash  = Hashtbl.hash
+        end)
+
         let _prim graph = 
             graph
         ;;
 
-        let _kruskal graph = 
-            graph
+        (** kruskals minimum spanning tree using disjoint set: connect describes
+            how you add edges into the new graph *)
+        let kruskal ?(connect=add_weight) graph = 
+            let nodeseq = (Seq.map (fst) @@ NodeMap.to_seq graph) in
+            let wgts = EdgeDisj.create (cardinal graph) nodeseq in
+            edgewgtseq graph
+            |> List.of_seq
+            |> List.fast_sort (fun (_,_,x) (_,_,y) -> 
+                wcompare (Measure.compare) (Measure.measure x) (Measure.measure y)
+            )
+            |> List.fold_left (fun acc (cur, nxt, edj) ->  
+                if EdgeDisj.find cur wgts = EdgeDisj.find nxt wgts then
+                    acc
+                else
+                    let _ = EdgeDisj.union wgts cur nxt in 
+                    connect edj cur nxt (ensure cur @@ ensure nxt acc)
+            ) empty
         ;;
 
     end

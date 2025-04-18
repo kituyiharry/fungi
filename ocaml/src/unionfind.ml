@@ -62,16 +62,6 @@ module MakeDisjointSet(Ord: Hashtbl.HashedType): UnionFind with type elt = Ord.t
         in iter bijidx []
     ;;
 
-    let findidx bijidx dj = 
-        let rec iter bijidx =
-            let bijval = dj.arr.(bijidx) in
-            if bijval = bijidx then
-                bijidx
-            else
-                iter bijval 
-        in iter bijidx
-    ;;
-
     let union disj elt elt' = 
         (* merge elements into the bigger set - loops are considered as their
            own group - at the beginning all elements are their own groups *)
