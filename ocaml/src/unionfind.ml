@@ -49,6 +49,7 @@ module MakeDisjointSet(Ord: Hashtbl.HashedType): UnionFind with type elt = Ord.t
         acc
     ;;
 
+    (* find the root index of an element *)
     let find bijelt dj = 
         let bijidx = BijectTbl.find dj.map bijelt in
         let rec iter bijidx cmprss =
@@ -62,6 +63,7 @@ module MakeDisjointSet(Ord: Hashtbl.HashedType): UnionFind with type elt = Ord.t
         in iter bijidx []
     ;;
 
+    (* unify elements *)
     let union disj elt elt' = 
         (* merge elements into the bigger set - loops are considered as their
            own group - at the beginning all elements are their own groups *)
@@ -71,6 +73,7 @@ module MakeDisjointSet(Ord: Hashtbl.HashedType): UnionFind with type elt = Ord.t
         let grpsze   = disj.sze.(eltroot)  in
         let grpsze'  = disj.sze.(eltroot') in
 
+        (* check if already in the same group *)
         if not (eltroot = eltroot') then
             if grpsze' > grpsze then
                 let _ = disj.sze.(eltroot') <- grpsze' + disj.sze.(eltroot)  in

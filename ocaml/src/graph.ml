@@ -357,7 +357,9 @@ module type Graph = sig
     end
 
     module Span: functor(Measure: Measurable with type edge = edge) -> sig
-        module EdgeDisj: UnionFind 
+        module EdgeDisj: UnionFind with type elt = elt 
+        val cost:    adj NodeMap.t -> Measure.t
+        val prim:    elt -> adj NodeMap.t -> adj NodeMap.t
         val kruskal: ?connect:(Measure.edge -> elt -> elt -> adj NodeMap.t -> adj NodeMap.t) -> adj NodeMap.t -> adj NodeMap.t 
     end
 
@@ -539,7 +541,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     ;;
 
     (** only adds and updates if the value was not already present, otherwise
-        leaves as is *)
+        leaves as is to avoid overwriting *)
     let ensure nodeKey nodeMap =
         NodeMap.update nodeKey (fun v -> match v with
             | None -> Some (Vertex.empty nodeKey)
@@ -1569,25 +1571,67 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     **************************************************************************)
     module Span(Measure: Measurable with type edge = edge) = struct
 
+        let ecompare e e' = wcompare (Measure.compare) (Measure.measure e) (Measure.measure e')
+
         module EdgeDisj = MakeDisjointSet (struct 
             type t    = elt
             let equal = equal
             let hash  = Hashtbl.hash
         end)
 
-        let _prim graph = 
-            graph
+        module EdgeHeap = MakeFibHeap (struct 
+            type t = (elt * elt * edge)
+            type order  = edge
+
+            let bind (_, _, e) = e
+            let compare (x, y, _) (x', y', _) =  
+                let xc = Unique.compare x x' in
+                let yc = Unique.compare y y' in
+                match  xc with
+                | 0 ->  yc
+                | x ->  x
+            ;;
+            let order =  ecompare
+        end)
+
+        let cost mst = 
+            edgewgtseq mst 
+            |> Seq.fold_left (fun acc (_, _, ed) -> 
+                wapply (Measure.add acc) (Measure.measure ed)
+            ) (Measure.zero)
+        ;;
+
+        (* NB: for directed graphs - the starting point can affect the outcome 
+           prim only works for only for undirected graphs!! *)
+        let prim start graph = 
+            let vis = AdjSet.empty in
+            let rec iter node vis pheap mst = 
+                let out, wgts = outweights node graph in
+                let pheap'    = AdjSet.fold (fun el ac -> 
+                    EdgeHeap.insert (node, el, (Vertex.edge2 el wgts)) ac
+                ) (AdjSet.diff out vis) pheap in
+                match EdgeHeap.extract_opt pheap' with
+                | Some ((c, n, e), pheap'') ->
+                    if AdjSet.mem n vis then
+                        iter n (AdjSet.add node vis) pheap'' mst
+                    else
+                        let mst' = add_weight e c n (ensure c @@ ensure n mst) in 
+                        iter n (AdjSet.add node @@ AdjSet.add n vis) pheap'' mst'
+                | _ -> 
+                    mst
+            in iter start vis EdgeHeap.empty empty
         ;;
 
         (** kruskals minimum spanning tree using disjoint set: connect describes
-            how you add edges into the new graph *)
+            how you add edges into the new graph. assumes the graph has no
+            disconnected nodes *)
         let kruskal ?(connect=add_weight) graph = 
             let nodeseq = (Seq.map (fst) @@ NodeMap.to_seq graph) in
             let wgts = EdgeDisj.create (cardinal graph) nodeseq in
             edgewgtseq graph
             |> List.of_seq
             |> List.fast_sort (fun (_,_,x) (_,_,y) -> 
-                wcompare (Measure.compare) (Measure.measure x) (Measure.measure y)
+                ecompare x y
             )
             |> List.fold_left (fun acc (cur, nxt, edj) ->  
                 if EdgeDisj.find cur wgts = EdgeDisj.find nxt wgts then

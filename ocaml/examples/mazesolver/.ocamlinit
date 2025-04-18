@@ -37,6 +37,7 @@ let ffb = SGraph.empty;;
 let bprt = SGraph.empty;;
 let shpl = SGraph.empty;;
 let hung = SGraph.empty;;
+let prmg = SGraph.empty;;
 
 let s_a = "A";;
 let s_b = "B";;
@@ -79,7 +80,10 @@ let n3     = [ n_1; n_2; n_3; n_4; ];;
 let sn     = [ s_a; n_0; n_1; n_2; n_3; s_d ];;
 let sn2    = [ s_a; n_0; n_1; n_2; n_3; n_4; n_5; n_6; n_7; n_8; s_d ];;
 
-let bipa   = [ s_b; s_e; s_j; s_l; s_t; s_a; s_r; n_1; n_2; n_3; n_4; n_5; n_6; n_7 ]
+let bipa   = [ s_b; s_e; s_j; s_l; s_t; s_a; s_r; n_1; n_2; n_3; n_4; n_5; n_6;
+    n_7 ];;
+
+let prm    = [ n_0; n_1; n_2; n_3; n_4; n_5; n_6; ];;
 
 (* bipartite 'left' set *)
 let lset = SGraph.AdjSet.of_list [ s_b; s_e; s_j; s_l; s_t; s_a; s_r; ] ;;
@@ -103,6 +107,7 @@ let ffk= List.fold_right (SGraph.add) sn   ffk;;
 let ffb= List.fold_right (SGraph.add) sn2   ffb;;
 let bprt= List.fold_right (SGraph.add) bipa bprt;;
 let shpl= List.fold_right (SGraph.add) bipa bprt;;
+let prmg= List.fold_right (SGraph.add) prm prmg;;
 let hung= SGraph.add wendy @@ SGraph.add zelda @@ SGraph.add yolanda @@ SGraph.add xenia hung;;
 
 let hl = SGraph.AdjSet.add xenia @@ SGraph.AdjSet.singleton zelda;;
@@ -279,6 +284,15 @@ let shpllist = [
     (n_7, [(s_b, 1.); (s_e, 2.); (s_j, 3.); (s_l, 4.); (s_t, 5.); (s_a, 6.); (s_r, 7.)]);
 ];;
 
+let prmlst = [
+    (n_2, [(n_0, 0.); (n_5, 6.)]  );
+    (n_0, [(n_5, 7.); (n_3, 5.); (n_1, 9.)]);
+    (n_5, [(n_3, 2.); (n_6, 1.);  ]);
+    (n_3, [(n_6, 3.); (n_1, -2.); ]);
+    (n_1, [(n_6, 4.); (n_4, 3.);  ]);
+    (n_6, [(n_4, 6.);  ]);
+]
+
 let hunglst = [
     (wendy,    [(xenia, 3.);(yolanda, 2.); (zelda, 1.)]);
     (xenia,    [(wendy, 3.);(zelda, 2.); (yolanda, 1.)]);
@@ -380,6 +394,7 @@ let ffb = SGraph.of_weights ffulkb     ffb;;
 let bprt= SGraph.of_list2   bprtlist  bprt;;
 let shpl= SGraph.of_weights shpllist  shpl;;
 let hung= SGraph.of_weights hunglst   hung;;
+let prmg= SGraph.of_weights2 prmlst   prmg;;
 
 (* balance the edges out for an eulerian path *)
 let q  = SGraph.add_weight 0. s_b s_k @@ SGraph.add_weight 0. s_k s_d @@ SGraph.add s_k q;;
