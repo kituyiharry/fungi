@@ -1,7 +1,7 @@
 (lang dune 3.12)
 
 (name fungi)
-(version 220eff7)
+(version 0.1.1-dirty)
 
 ; Generate opam file from this dune-project file
 (generate_opam_files true)
