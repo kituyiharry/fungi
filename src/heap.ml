@@ -129,7 +129,9 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     let empty = []
     ;;
 
-    let is_empty = List.is_empty
+    let is_empty = function
+        | []     -> true 
+        | _ :: _ -> false
     ;;
 
     (* internal joining tbl which stores int (degree) -> elts *)
@@ -448,7 +450,9 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
                 | None ->
                     let _ = Hashtbl.add tbl deg eltree in
                     acc
-            ) [] rejoin in if List.is_empty leftover then () else cascade leftover
+            ) [] rejoin in match leftover with
+                | [] -> () 
+                | _ :: _ -> cascade leftover
         in
         let _   = cascade trees in
         let fin = List.of_seq @@ Hashtbl.to_seq_values tbl in
@@ -590,9 +594,9 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     (* local only increase, duplicates not updated 
     *)
     let increase ?(cmp=minify) old bgger tree = 
-        if List.is_empty tree then
-            raise Empty
-        else
+        match tree with
+        | [] -> raise Empty
+        | _ :: _ ->
             let rec atparent parent tree leftover found = match tree with
                 | [] ->
                     tree, leftover, found
@@ -632,9 +636,9 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
         the whole list 
     *)
     let decrease ?(cmp=minify) old smller tree = 
-        if List.is_empty tree then
-            raise Empty
-        else
+        match tree with
+        | [] -> raise Empty
+        | _ :: _ ->
             let rec atparent parent tree leftover found = match tree with
                 | [] ->
                     (tree, leftover, found)
