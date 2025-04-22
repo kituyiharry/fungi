@@ -13,7 +13,7 @@
 ; Package definition
 (package
  (name fungi)
- (version 0.1.3)
+ (version 0.1.4)
  (synopsis "A pure functional graph library")
  (description "A graph library based on functional adjacency list with some common graph
 algorithms implemented and a fibonacci heap.")
