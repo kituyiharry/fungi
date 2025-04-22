@@ -6,14 +6,11 @@ description: """
 A graph library based on functional adjacency list with some common graph
 algorithms implemented and a fibonacci heap."""
 maintainer: ["Harry K <kituyiharry@github.com>"]
-authors: "Harry K <harryk@harryk.dev>"
-homepage: "https://harryk.dev/articles/article1"
-bug-reports: "https://github.com/kituyiharry/fungi/issues"
 license: "MIT"
 tags: ["topics" "graph" "functional" "networks"]
 depends: [
-  "ocaml" {>= "4.14.0"}
-  "dune" {>= "3.12" & >= "3.12"}
+  "dune" {>= "3.12"}
+  "ocaml" {>= "5.0.0"}
   "alcotest" {with-test}
   "qcheck-core" {with-test}
   "qcheck-alcotest" {with-test}

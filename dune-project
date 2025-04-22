@@ -35,8 +35,8 @@ algorithms implemented and a fibonacci heap.")
  ; Dependencies
  (depends
   ; Required dependencies
-  (ocaml (>= 4.14.0))
-  (dune  (>= 3.12))
+  (ocaml (>= 5.0.0))
+  ;(dune  (>= 3.12))
   
   ; Optional dependencies with versions
   ; base

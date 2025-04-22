@@ -26,7 +26,11 @@ end
 module MakeDisjointSet(Ord: Hashtbl.HashedType): UnionFind with type elt = Ord.t = struct 
 
     module BijectTbl = Hashtbl.Make (Ord)
-    module ResolvTbl = Hashtbl.Make (Int)
+    module ResolvTbl = Hashtbl.Make (struct 
+        type t    = int 
+        let equal = Int.equal
+        let hash  = Hashtbl.hash
+    end)
 
     type t = { 
         map: int BijectTbl.t;

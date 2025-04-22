@@ -1210,10 +1210,33 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ) nodeMap []
     ;;
 
+    (* rev compat *)
+    let _find_index p =
+      let rec aux i = function
+        [] -> None
+        | a::l -> if p a then Some i else aux (i+1) l in
+      aux 0
+    ;;
+
+    let _init_matrix sx sy f =
+      let res = Array.make sx [||] in
+      (* We must not evaluate [f x 0] when [sy <= 0]: *)
+      if sy > 0 then begin
+        for x = 0 to pred sx do
+          let row = Array.make sy (f x 0) in
+          for y = 1 to pred sy do
+            Array.unsafe_set row y (f x y)
+          done;
+          Array.unsafe_set res x row
+        done;
+      end;
+      res
+    ;;
+
     (** convert a graph to a 2d array and a key list defining the elt for each array index *)
     let adjmatrix nodeMap =
         let sz   = NodeMap.cardinal nodeMap in
-        let keys = NodeMap.to_list  nodeMap in
+        let keys = NodeMap.bindings nodeMap in
         (* map outgoing edges to indices, return each elt and its index along
            with the indexes of outgoing edges
 
@@ -1233,16 +1256,16 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 ((2, "3"), []),
             ]
 
-           *)
+        *)
         let adjs = List.mapi (fun i (k, {out=o;_}) ->
             ((i, k), AdjSet.fold (fun elt acc ->
                 (* return the index of the outgoing edge *)
                 Option.get (
-                    List.find_index (fun (b, _) -> equal b elt) keys
+                    _find_index (fun (b, _) -> equal b elt) keys
                 ) :: acc
             ) o [])
         ) keys in
-        let b = Array.init_matrix sz sz (fun row col ->
+        let b = _init_matrix sz sz (fun row col ->
             (* bool value of whether j is in the outgoing index *)
             Bool.to_int @@ List.mem col (snd @@ List.nth adjs row)
         ) in
@@ -1253,18 +1276,18 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (** convert a graph to 2d weights (edge values) and a key list defining the elt for each array index *)
     let wgtmatrix transform defval nodeMap =
         let sz   = NodeMap.cardinal nodeMap in
-        let keys = NodeMap.to_list  nodeMap in
+        let keys = NodeMap.bindings nodeMap in
         (* map each key to its index and list of outgoing indices *)
         let (adjs) = List.mapi (fun i (k, {out=o;edg=wgt;_}) ->
             (* any outgoing node has to be in the keys list *)
             ((i, k), AdjSet.fold (fun elt acc ->
                 (* return the index of the outgoing edge *)
                 (Option.get (
-                    (List.find_index (fun (b, _) -> equal b elt) keys)
+                    (_find_index (fun (b, _) -> equal b elt) keys)
                 ), Vertex.edge2 elt wgt) :: acc
             ) o [])
         ) keys in
-        let b = Array.init_matrix sz sz (fun i j ->
+        let b = _init_matrix sz sz (fun i j ->
             (* bool value of whether j is in the outgoing index *)
             let v = List.find_opt (fun (idx, _) -> idx = j) @@ (snd @@ List.nth adjs i)
             in match v with
@@ -1297,7 +1320,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let sz, adjs = NodeMap.fold (fun key {inc;out;_} (idx, acc) ->
             (idx + 1), (((idx, key), (AdjSet.cardinal inc + AdjSet.cardinal out)) :: acc)
         ) nodeMap (0, []) in
-        let b = Array.init_matrix sz sz (fun i j ->
+        let b = _init_matrix sz sz (fun i j ->
             if i == j then
                 snd @@ List.nth adjs i
             else
@@ -1358,7 +1381,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let _ = NodeMap.iter (fun n _ -> let _ = nodes.(!idx) <- n in incr idx) nodeMap in
         let _ = idx := 0 in
         let _ = EdgeSet.iter (fun e   -> let _ = edges.(!idx) <- e in incr idx) edgeset in
-        Array.init_matrix r c (fun r' c' ->
+        _init_matrix r c (fun r' c' ->
             if belongs nodes.(r') edges.(c') then
                 1
             else
@@ -2145,7 +2168,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
                 let sz = List.length map in
                 (* reconstruction matrix should point to i by default or null *)
-                let next = Array.init_matrix sz sz (fun i j ->
+                let next = _init_matrix sz sz (fun i j ->
                     if wcompare (Measure.compare) dist.(i).(j) `Inf != 0 then
                         `Val i
                     else
@@ -2650,7 +2673,11 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         (* (string_of_elt elt) -> StylTbl *)
         module AttrbTbl: Hashtbl.S with type key = string = Hashtbl.Make (String)
         (* (cluster_index) -> AttrbTbl *)
-        module ClstrTbl: Hashtbl.S with type key = int    = Hashtbl.Make (Int)
+        module ClstrTbl: Hashtbl.S with type key = int    = Hashtbl.Make (struct
+            type t    = int
+            let equal = Int.equal
+            let hash  = Hashtbl.hash
+        end)
 
         (** export to csv *)
         let to_csv graph =
