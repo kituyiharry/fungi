@@ -4,7 +4,7 @@
 (version 0.1.3)
 
 ; Generate opam file from this dune-project file
-(generate_opam_files true)
+(generate_opam_files false)
 
 ; Set the minimum OCaml version required
 ;(using mdx 0.4)  ; If you plan to have documentation tests

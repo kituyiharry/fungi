@@ -10,6 +10,7 @@ support the graph (Heap (done), LC-tree, UnionFind...etc).
 to use the ocaml implementation
 
 ```ocaml
+    open Fungi;;
     (* create a graph with string nodes and float edges *)
     module SGraph = Graph.MakeGraph(struct 
         type t     = string
@@ -57,7 +58,7 @@ to use the ocaml implementation
 
     (* create a sequence of strings for the dot fil *)
     let z = SGSer.to_dot ~dir:true "toposort" gt nt et s'';;
-    (* dump it to wherever *)
-    z |> Seq.concat |> Seq.iter (fun stringdata -> (* print the string to
-    wherever *))
+    (* print the  graph dot sequence *)
+    z |> Seq.concat |> Seq.iter (fun s -> Format.printf "%s" (s ())) ;;
+
 ```
