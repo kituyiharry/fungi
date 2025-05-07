@@ -395,6 +395,9 @@ module type Graph = sig
         existing entries *)
     val add:         elt -> adj NodeMap.t -> adj NodeMap.t
 
+    (** Add all nodes without edges *)
+    val all:         elt Seq.t -> adj NodeMap.t -> adj NodeMap.t 
+
     (** only adds and updates if the value was not already present, otherwise
         leaves as is to avoid overwriting *)
     val ensure:      elt -> adj NodeMap.t -> adj NodeMap.t
@@ -719,6 +722,11 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         existing entries *)
     let add nodekey nodeMap =
         NodeMap.add nodekey (Vertex.empty nodekey) nodeMap
+    ;;
+
+    (** Add all nodes without creating edges *)
+    let all nodeseq nodeMap = 
+        Seq.fold_left (fun g a -> NodeMap.add a (Vertex.empty a) g) nodeMap nodeseq 
     ;;
 
     (** only adds and updates if the value was not already present, otherwise

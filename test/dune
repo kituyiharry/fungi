@@ -4,6 +4,11 @@
  (modules treeprops))
 
 (test
+ (name graphops)
+ (libraries fungi alcotest qcheck-core qcheck-alcotest)
+ (modules graphops))
+
+(test
  (name treebench)
  (modes byte exe)
  (libraries fungi core_bench core_unix.command_unix core)
