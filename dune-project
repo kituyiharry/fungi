@@ -14,9 +14,9 @@
 (package
  (name fungi)
  (version 0.1.4)
- (synopsis "A pure functional graph library")
+ (synopsis "A persistent functional graph library")
  (description "A graph library based on functional adjacency list with some common graph
-algorithms implemented and a fibonacci heap.")
+algorithms")
  
  ; License must match your LICENSE file
  (license MIT)

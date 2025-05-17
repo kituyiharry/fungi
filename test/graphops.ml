@@ -60,15 +60,22 @@ let graph_edge_manipulation _cx =
 
     let nodeseq = (List.to_seq ["A"; "B"; "C"]) in
 
-    (*  *)
-    let ug = UnitStrGraph.add_edge  "A" "B" (UnitStrGraph.all  nodeseq UnitStrGraph.empty) in
-    let wg = FloatStrGraph.add_edge "A" "B" (FloatStrGraph.all nodeseq FloatStrGraph.empty) in
+    (* graph is not persistent  *)
+    let ug = UnitStrGraph.add_edge "A" "B" (UnitStrGraph.all  nodeseq UnitStrGraph.empty) in
+    let ug'= UnitStrGraph.remove_edge ug "A" "C" in
 
-    let _ = Alcotest.(check bool)  "edge created"        true  (UnitStrGraph.has_edge  "A" "B" ug) in 
-    let _ = Alcotest.(check bool)  "edge doesn't exists" false (UnitStrGraph.has_edge  "A" "C" ug) in 
-    let _ = Alcotest.(check bool)  "edge created"        true  (FloatStrGraph.has_edge "A" "B" wg) in 
+    let wg = FloatStrGraph.add_edge "A" "B" (FloatStrGraph.all nodeseq FloatStrGraph.empty) in
+    let wg'= FloatStrGraph.remove_edge wg "A" "C" in
+
+    let _ = Alcotest.(check bool)  "edge created"        true  (UnitStrGraph.has_edge  "A" "B" ug)  in 
+    let _ = Alcotest.(check bool)  "edge doesn't exists" false (UnitStrGraph.has_edge  "A" "C" ug)  in 
+    let _ = Alcotest.(check bool)  "edge removal"        false (UnitStrGraph.has_edge  "A" "C" ug') in 
+    let _ = Alcotest.(check bool)  "edge created"        true  (FloatStrGraph.has_edge "A" "B" wg)  in 
+    let _ = Alcotest.(check bool)  "edge removal"        false (FloatStrGraph.has_edge "A" "C" wg') in 
             Alcotest.(check bool)  "edge doesn't exists" false (FloatStrGraph.has_edge "A" "C" wg) 
 ;;
+
+
 
 
 let () = 

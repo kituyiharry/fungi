@@ -53,8 +53,8 @@ to use the ocaml implementation
     (* per node style attributes *)
     let nt   = SGSer.AttrbTbl.create 1;;
     (* add some attributes *)
-    SGSer.StyleTbl.add gt "rankdir" "LR";;
-    SGSer.StyleTbl.add st "color" "green";;
+    SGSer.styletbl.add gt "rankdir" "lr";;
+    SGSer.styletbl.add st "color" "green";;
 
     (* create a sequence of strings for the dot fil *)
     let z = SGSer.to_dot ~dir:true "toposort" gt nt et s'';;

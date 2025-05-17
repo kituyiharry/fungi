@@ -1,5 +1,6 @@
 (executable
  (name main)
+ (preprocess (pps ppx_deriving.show ppx_deriving.ord))
  (public_name paritygame)
  (modules main)
  (libraries paritygame fungi unix)

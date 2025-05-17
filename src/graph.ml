@@ -1229,7 +1229,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     let _init_matrix sx sy f =
       let res = Array.make sx [||] in
       (* We must not evaluate [f x 0] when [sy <= 0]: *)
-      if sy > 0 then begin
         for x = 0 to pred sx do
           let row = Array.make sy (f x 0) in
           for y = 1 to pred sy do
@@ -1237,7 +1236,6 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
           done;
           Array.unsafe_set res x row
         done;
-      end;
       res
     ;;
 
