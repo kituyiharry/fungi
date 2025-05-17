@@ -70,6 +70,8 @@ module ParityGame = struct
     (* integer priority value of a node *)
     let valueof (Label((Priority (d, _)), _)) = d
 
+    let randof (Label((Priority (_, _)), r)) = r
+
     (* compare two paths of a strategy *)
     let cmpplays (lf, _lt) (rf, _rt) = Int.compare (labelof lf) (labelof rf)
 
@@ -105,6 +107,18 @@ module ParityGame = struct
      like add_node but doesn't return the node *)
     let add player priority game =
         Graph.add (Label ((Priority (priority, player)), (strictmonotonic entropy))) game
+    ;;
+
+    let connect game fromnode rand =
+        let other = 
+            Graph.NodeMap.to_seq game 
+            |> Seq.find (fun (n, _) -> 
+                Int.equal (randof n) rand
+            )
+            |> Option.get
+            |> fst
+        in 
+        Graph.add_edge fromnode other game
     ;;
 
     (* Structural equality i.e Odd = Odd or Even = Even *)

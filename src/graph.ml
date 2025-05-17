@@ -262,9 +262,9 @@ module type SerDe = sig
 
     val string_of_elt: elt  -> string
     val string_of_wgt: edge -> string
-
-    val elt_of_string: string -> elt
-    val wgt_of_string: string -> edge
+    (* TODO: future ??  *)
+    (*val elt_of_string: string -> elt*)
+    (*val wgt_of_string: string -> edge*)
 end
 
 (** the graph node (GraphElt.t) and edge types *)
@@ -2796,7 +2796,14 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 ) (Seq.return (Seq.return (fun () -> "}\n"))))
         ;;
 
-        (** export a graph with subgraph clusters into dot format *)
+        (** export a graph with subgraph clusters into dot format  
+            name = name of the graph 
+            onname = how each cluster will be named 
+            gattrs = global attributes 
+            clattrs = cluster attributes 
+            nattrs =  node attributes 
+            eattrs = edge attributes 
+        *)
         let to_dot_cluster ?(dir=false) name onname gattrs clattrs nattrs eattrs graphs =
             let header = if dir then "digraph" else "graph" in
             let tmpclstr = StyleTbl.create 0 in

@@ -41,8 +41,6 @@ to use the ocaml implementation
     module Ser = struct 
         let string_of_elt = Fun.id
         let string_of_wgt = (Float.to_string)
-        let elt_of_string = Fun.id
-        let wgt_of_string = Float.of_string
     end;;
     module SGSer = SGraph.Serialize (Ser);;
 
