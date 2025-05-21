@@ -165,8 +165,8 @@ let () =
         ) in
 
         let clstrs = Scc.SccMap.empty in 
-        let clstrs = Scc.SccMap.add 0 ([], ParityGame.carve p w1) clstrs in
-        let clstrs = Scc.SccMap.add 1 ([], ParityGame.carve p w0) clstrs in
+        let clstrs = Scc.SccMap.add 0 ([1], ParityGame.carve p w1) clstrs in
+        let clstrs = Scc.SccMap.add 1 ([0], ParityGame.carve p w0) clstrs in
 
         let _ = Format.print_newline () in
         let _ = Format.print_newline () in
@@ -174,6 +174,6 @@ let () =
         (*()*)
         let ss = ParitySerializer.to_dot_cluster ?dir:(Some true) file
             (fun id _ -> if id = 0 then "Even" else "Odd")
-            gattrs clattrs nattrs eattrs clstrs in
+            gattrs clattrs nattrs eattrs p clstrs in
         ss |> Seq.concat |> Seq.iter (fun s -> Format.printf "%s" (s ()))
 

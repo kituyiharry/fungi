@@ -276,7 +276,7 @@ end
 (** Graph Signature *)
 module type Graph = sig
 
-    type 'a t
+    type t
     type elt    (* Main graph node *)
     type edge   (* Type of edge *)
 
@@ -354,7 +354,8 @@ module type Graph = sig
 
         val to_csv: adj NodeMap.t -> ((unit -> string) Seq.t) Seq.t
         val to_dot: ?dir:bool -> ?sub:bool -> string -> attrs -> attrmap -> attrmap -> adj NodeMap.t -> (unit -> string) Seq.t Seq.t
-        val to_dot_cluster: ?dir:bool -> string -> (int -> int list -> string) -> attrs -> clstmap  -> attrmap -> attrmap -> (int list * adj NodeMap.t) Scc.SccMap.t -> (unit -> string) Seq.t Seq.t
+        val to_dot_cluster: ?dir:bool -> string -> (int -> int list -> string)
+            -> attrs -> clstmap  -> attrmap -> attrmap -> adj NodeMap.t -> (int list * adj NodeMap.t) Scc.SccMap.t -> (unit -> string) Seq.t Seq.t
 
     end
 
@@ -713,7 +714,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     end
 
     (** Adjacency list graph definition **)
-    type +'a t     = (Vertex.t) NodeMap.t
+    type t     = (Vertex.t) NodeMap.t
 
     (** An empty graph *)
     let empty      = NodeMap.empty
@@ -2720,9 +2721,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                         fun () -> Format.sprintf ("\t%s=\"%s\";\n") k v))
             )  (Seq.append (NodeMap.to_seq graph
                     |> Seq.map (fun (elt, {out;edg=wgt;_}) ->
-                        (* no neighbours - check only for attributes *)
                         let eltkey = (Serde.string_of_elt elt) in
                         let weighted = Weights.length wgt > 0 in
+                        (* no neighbours - check only for attributes *)
                         if AdjSet.is_empty out then
                             match AttrbTbl.find_opt nattrs eltkey with
                             (* Some node attributes *)
@@ -2744,6 +2745,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             |> Seq.map (fun x ->
                                 let xs     = (Serde.string_of_elt x) in
                                 let ek, ev = (eltkey ^ "-" ^ xs, xs) in
+                                (* no edge ?? *)
                                 let dne = let vis = !visedg in
                                     if EdgeSet.mem (x, elt) vis then
                                         true
@@ -2804,9 +2806,12 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             nattrs =  node attributes 
             eattrs = edge attributes 
         *)
-        let to_dot_cluster ?(dir=false) name onname gattrs clattrs nattrs eattrs graphs =
+        let to_dot_cluster ?(dir=false) name onname gattrs clattrs nattrs eattrs orig graphs =
+
             let header = if dir then "digraph" else "graph" in
             let tmpclstr = StyleTbl.create 0 in
+            let edglnk = if dir then "->" else "--" in
+
             Seq.cons (
                 Seq.cons (fun () -> Format.sprintf ("%s %s {\n") header name)
                     (* global attributes *)
@@ -2816,13 +2821,64 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             )  (Seq.append (Scc.SccMap.to_seq graphs
                     |> Seq.map (fun (idx, (ngbrs, cluster)) ->
                         let name = (onname idx ngbrs) in
+                        let nbrseq = List.to_seq ngbrs 
+                            |> Seq.map (fun x -> snd @@ Scc.SccMap.find x graphs)
+                            |> Seq.map (fun g -> 
+                                (* resolve intercluster edges *)
+                                NodeMap.fold (fun x _ a  ->
+                                    let toelt = Serde.string_of_elt x in
+                                    incomingof x orig 
+                                    |> AdjSet.filter (fun el -> NodeMap.mem el cluster)
+                                    |> AdjSet.to_seq
+                                    |> Seq.map (fun x ->
+                                        let wgt = Vertex.weights x orig in
+                                        let weighted = Weights.length wgt > 0  in
+                                        let xs     = (Serde.string_of_elt x) in
+                                        let ek, ev = (xs ^ "-" ^ toelt, xs)  in
+                                        let label  =
+                                            if not weighted then "" else
+                                                Format.sprintf "label=\"%s\"" (Serde.string_of_wgt @@ Vertex.edge2 x wgt)
+                                        in
+                                        match AttrbTbl.find_opt eattrs ek with
+                                        | Some iattr ->
+                                            fun () -> let attrs =
+                                                if StyleTbl.length iattr = 0 then
+                                                    (if weighted then
+                                                        "\t[ " ^ label ^ " ]"
+                                                        else
+                                                            label
+                                                    )
+                                                else
+                                                    (* all attributes *)
+                                                    (Seq.fold_left (^) "\t[ "
+                                                        (
+                                                            (StyleTbl.to_seq iattr |>
+                                                                Seq.map (fun (k,v) ->
+                                                                    Format.sprintf "%s=\"%s\", " k v
+                                                                )
+                                                            ) |> (Fun.flip Seq.append (Seq.return (Format.sprintf "%s ]" label)))
+                                                        )
+                                                    )
+                                            (* was eltkey ?? *)
+                                            in Format.sprintf "\t%s %s %s %s;\n" toelt edglnk ev attrs
+                                        | None ->
+                                            fun () -> Format.sprintf "\t%s %s %s\t[ %s ];\n" toelt edglnk ev label
+                                    ) |> Seq.append a
+                                ) g Seq.empty
+                            )
+                            |> Seq.concat
+                        in 
+
                         match ClstrTbl.find_opt clattrs idx with
                         | Some clattr ->
                             (to_dot ~dir:dir ~sub:true name clattr nattrs eattrs cluster)
                             |> Seq.concat
+                            |> Seq.append nbrseq
                         | _ ->
                             (to_dot ~dir:dir ~sub:true name tmpclstr nattrs eattrs cluster)
                             |> Seq.concat
+                            |> Seq.append nbrseq
+
                     )
                 ) (Seq.return (Seq.return (fun () -> "}\n"))))
         ;;

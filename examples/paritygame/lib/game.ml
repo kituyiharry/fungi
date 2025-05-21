@@ -59,7 +59,7 @@ module ParityGame = struct
 
     module Nodes  = Graph.NodeMap
 
-    type   t      = node Graph.t
+    type   t      = Graph.t
 
     (* Empty Game is just an empty Graph *)
     let empty     = Graph.empty
