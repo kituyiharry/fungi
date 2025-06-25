@@ -9,6 +9,11 @@
  (modules graphops))
 
 (test
+ (name graph_matrix)
+ (libraries fungi alcotest qcheck-core qcheck-alcotest)
+ (modules graph_matrix))
+
+(test
  (name treebench)
  (modes byte exe)
  (libraries fungi core_bench core_unix.command_unix core)

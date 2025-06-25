@@ -195,7 +195,7 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
     let rec cardinal = function 
         | [] -> 0
         | hd :: tail ->
-            (cardinal hd.succ) + 1 + (cardinal tail)
+            (cardinal tail) + (cardinal hd.succ)
     ;;
 
     (* linear time find *)
