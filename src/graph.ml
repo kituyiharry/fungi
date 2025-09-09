@@ -1820,7 +1820,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ;;
 
         (** Prims minimum spanning tree algo
-           only works for only for undirected graphs!! *)
+           only works for undirected graphs!! *)
         let prim start graph =
             let vis = AdjSet.empty in
             let rec iter node vis pheap mst =

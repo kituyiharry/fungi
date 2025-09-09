@@ -18,9 +18,9 @@ module type UnionFind = sig
         mutable count: int
     }
 
-    val create:   int -> elt Seq.t -> t
-    val find:     elt -> t -> int
-    val union:    t -> elt -> elt -> unit
+    val create: int -> elt Seq.t -> t
+    val find:   elt -> t -> int
+    val union:  t -> elt -> elt -> unit
 end
 
 module MakeDisjointSet(Ord: Hashtbl.HashedType): UnionFind with type elt = Ord.t = struct 
