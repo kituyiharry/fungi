@@ -44,7 +44,7 @@ module MakeDisjointSet(Ord: Hashtbl.HashedType): UnionFind with type elt = Ord.t
         let acc = {
             map = BijectTbl.create size;
             arr = Array.init size (Fun.id);
-            sze = Array.init size (Fun.const 1);
+            sze = Array.make size (1);
             count=size 
         } in
         let _ = Seq.iteri (fun idx elt ->
