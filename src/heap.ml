@@ -2,7 +2,6 @@
 *                                                                             *
 *                             Fungi Heap                                      *
 *                      Functional Fibonacci Heap                              *
-*                         harryk@harryk.dev                                   *
 *                                                                             *
 *******************************************************************************)
 

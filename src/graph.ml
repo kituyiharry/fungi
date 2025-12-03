@@ -2,7 +2,6 @@
  *                                                                            *
  *                                Fungi Graph                                 *
  *                        Functional Graph algorithms                         *
- *                             harryk@harryk.dev                              *
  *                                                                            *
  ******************************************************************************)
 open Treeset;;
@@ -348,7 +347,7 @@ module type Graph = sig
         module AttrbTbl: Hashtbl.S with type key = string
         module ClstrTbl: Hashtbl.S with type key = int
 
-        type attrs   := string StyleTbl.t
+        type attrs   := (string StyleTbl.t)
         type attrmap := (string StyleTbl.t) AttrbTbl.t
         type clstmap := (string StyleTbl.t) ClstrTbl.t
 
@@ -535,7 +534,7 @@ module type Graph = sig
     (** Remove self edges from a graph *)
     val cull:        adj NodeMap.t -> adj NodeMap.t
 
-    (** Remove "free" vertices from a graph (no inc or out) *)
+    (** Remove "free" or dangling vertices from a graph (no inc or out) *)
     val prune:       adj NodeMap.t -> adj NodeMap.t
 
     (** find "dangling" nodes in the graph with no incoming or outgoing edges *)
@@ -573,7 +572,8 @@ module type Graph = sig
         use transpose2 if you do not use edge weights! *)
     val transpose:   adj NodeMap.t -> adj NodeMap.t
 
-    (** swap the incoming and outgoing edge direction - WITHOUT preserving edge weights *)
+    (** swap the incoming and outgoing edge direction - WITHOUT preserving edge
+        weights saving some computation time *)
     val transpose2:  adj NodeMap.t -> adj NodeMap.t
 
     (** collect graph into a simple [(key,  adj list), ...] *)
@@ -1820,7 +1820,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         ;;
 
         (** Prims minimum spanning tree algo
-           only works for only for undirected graphs!! *)
+           only works for undirected graphs!! *)
         let prim start graph =
             let vis = AdjSet.empty in
             let rec iter node vis pheap mst =
@@ -1842,7 +1842,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
         (** kruskals minimum spanning tree using disjoint set: connect describes
             how you add edges into the new graph. assumes the graph has no
-            disconnected nodes *)
+            disconnected nodes (i.e dangling solo vertices) *)
         let kruskal ?(connect=add_weight) graph =
             let nodeseq = (Seq.map (fst) @@ NodeMap.to_seq graph) in
             let wgts = EdgeDisj.create (cardinal graph) nodeseq in
