@@ -2734,7 +2734,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                         (* handle neighbours and attributes *)
                         else
                             AdjSet.to_seq out
-                            (* handle edge attributes, edge key follows 'f-t' *)
+                            (* handle edge attributes, edge key follows 'f-t',
+                               so add keys in the form (string_of_elt f^-^string_of_elt t) *)
                             |> Seq.map (fun x ->
                                 let xs     = (Serde.string_of_elt x) in
                                 let ek, ev = (eltkey ^ "-" ^ xs, xs) in
