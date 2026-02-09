@@ -79,7 +79,7 @@ let set_union _cx =
 
 let preservation =
   QCheck.Test.make ~count:1000 ~name:"unique_element_membership"
-    QCheck.(list small_nat)
+    QCheck.(list nat_small)
     (fun l -> 
         let intset = IntTree.of_list l in
         List.for_all (fun x -> IntTree.mem x intset) l )
@@ -92,7 +92,7 @@ let rec ascending = function
 
 let sorted =
   QCheck.Test.make ~count:1000 ~name:"inorder_traversal_sorted"
-    QCheck.(list small_nat)
+    QCheck.(list nat_small)
     (fun l -> 
         (* Preconditions edge
         QCheck.assume (l <> []);*)
