@@ -46,19 +46,30 @@ to use the ocaml implementation
     end;;
     module SGSer = SGraph.Serialize (Ser);;
 
-    (* global attributes *)
+    (* global attributes (applied to the whole graph) *)
     let gt   = SGSer.StyleTbl.create 1;;
-    (* per edge style attributes *)
+    (* per edge style attributes, keyed by "<from>-<to>" *)
     let et   = SGSer.AttrbTbl.create 1;;
-    (* per node style attributes *)
+    (* per node style attributes, keyed by the node id *)
     let nt   = SGSer.AttrbTbl.create 1;;
-    (* add some attributes *)
+    (* add a global attribute ... *)
     SGSer.StyleTbl.add gt "rankdir" "LR";;
-    SGSer.StyleTbl.add st "color" "green";;
+    (* ... and a per-node one: colour node "A" green *)
+    let na = SGSer.StyleTbl.create 1;;
+    SGSer.StyleTbl.add na "color" "green";;
+    SGSer.AttrbTbl.add nt "A" na;;
 
-    (* create a sequence of strings for the dot fil *)
+    (* render straight to a dot string - ids/labels/values are quoted+escaped *)
+    let dot = SGSer.to_dot_string ~dir:true "toposort" gt nt et s'';;
+    print_string dot;;
+
+    (* or write directly to a file/channel *)
+    let oc = open_out "graph.dot" in
+    SGSer.to_dot_channel ~dir:true "toposort" gt nt et s'' oc;
+    close_out oc;;
+
+    (* the lazy sequence form is still available and is safely re-forceable *)
     let z = SGSer.to_dot ~dir:true "toposort" gt nt et s'';;
-    (* print the  graph dot sequence *)
-    z |> Seq.concat |> Seq.iter (fun s -> Format.printf "%s" (s ())) ;;
+    z |> Seq.concat |> Seq.iter (fun s -> print_string (s ())) ;;
 
 ```

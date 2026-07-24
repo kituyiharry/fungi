@@ -14,8 +14,8 @@ open Axiom;;
 
 
     The graph is held as an adjacency list representation with an optional
-    Hashtbl to hold edge weights. Self edges are supported by their presence in
-    both incoming and outgoing sets
+    persistent map to hold edge weights. Self edges are supported by their
+    presence in both incoming and outgoing sets
 
     {v
     Map
@@ -250,8 +250,8 @@ module type VertexImpl = sig
     val edge   : elt -> elt -> adj NodeMap.t -> edge
     val edge2  : elt -> weights -> edge
     val edgeo  : elt -> elt -> adj NodeMap.t -> edge option
-    val update : elt -> weights -> edge -> unit
-    val ensure : elt -> weights -> edge -> unit
+    val update : elt -> weights -> edge -> weights
+    val ensure : elt -> weights -> edge -> weights
 end
 
 (** Routines for dumping out graphs *)
@@ -283,8 +283,10 @@ module type Graph = sig
     module AdjSet:  TSet      with type t   := elt
 
     (** Weights hold a mapping of a Vertex node to outgoing edges in the
-        adjacency list with the weight values of type edge *)
-    module Weights: Hashtbl.S with type key := elt
+        adjacency list with the weight values of type edge. It is a persistent
+        map so edge weights share the same immutable/functional semantics as the
+        rest of the graph *)
+    module Weights: Map.S with type key := elt
 
     (** Vertex adjacency type  *)
     type adj = {
@@ -314,7 +316,7 @@ module type Graph = sig
     module Vertex: VertexImpl with
         type       elt     := elt             (* The node element *)
         and type   adj     := adj             (* The adjacency information *)
-        and type   weights := edge Weights.t  (* Hashtbl holding edge weights *)
+        and type   weights := edge Weights.t  (* Persistent map holding edge weights *)
         and type   edge    := edge            (* The edge type *)
         and module NodeMap := NodeMap         (* Module for manipulating the map *)
 
@@ -334,7 +336,7 @@ module type Graph = sig
         type       elt     := elt            (* The node element *)
         and type   adj     := adj            (* The adjacency information *)
         and type   edge    := edge           (* The edge type *)
-        and type   weights := edge Weights.t (* Hashtbl for holding weights *)
+        and type   weights := edge Weights.t (* Persistent map for holding weights *)
         and type   'b ctx  := 'b ctx         (* traversal context *)
         and module NodeMap := NodeMap        (* Graph map manipulation *)
         and module AdjSet  := AdjSet         (* Adjacency set manipulation *)
@@ -353,6 +355,13 @@ module type Graph = sig
 
         val to_csv: adj NodeMap.t -> ((unit -> string) Seq.t) Seq.t
         val to_dot: ?dir:bool -> ?sub:bool -> string -> attrs -> attrmap -> attrmap -> adj NodeMap.t -> (unit -> string) Seq.t Seq.t
+        (* to_dot_string: render to a single graphviz dot string. Node ids,
+           labels and attribute values are quoted/escaped so arbitrary
+           element/weight strings are safe. Undirected graphs collapse
+           reciprocal edges to a single edge statement. *)
+        val to_dot_string: ?dir:bool -> ?sub:bool -> string -> attrs -> attrmap -> attrmap -> adj NodeMap.t -> string
+        (* to_dot_channel: like to_dot_string but writes to an out_channel *)
+        val to_dot_channel: ?dir:bool -> ?sub:bool -> string -> attrs -> attrmap -> attrmap -> adj NodeMap.t -> out_channel -> unit
         val to_dot_cluster: ?dir:bool -> string -> (int -> int list -> string) -> attrs -> clstmap  -> attrmap -> attrmap -> (int list * adj NodeMap.t) Scc.SccMap.t -> (unit -> string) Seq.t Seq.t
 
     end
@@ -667,12 +676,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (** Weights hold edge values should they exist. elt is the `to` direction of
         the weight, on undirected graphs it may be duplicated on both nodes
         vertex values as a to in one and a from in another *)
-    module WeightNode = struct
-        type t      = elt
-        let  equal  = equal
-        let  hash   = Hashtbl.hash
-    end
-    module Weights = Hashtbl.Make (WeightNode)
+    module Weights = Map.Make (Unique)
 
     (** Module for manipulating the Set structure holding the Adjacency list *)
     module AdjSet  = TreeSet(Unique)
@@ -700,13 +704,13 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     module Vertex  = struct
         type t          = adj
         let compare     = fun {lab=lnode;_} {lab=rnode;_} -> Unique.compare lnode rnode
-        let empty   lbl = {inc=AdjSet.empty; out=AdjSet.empty; lab=lbl; edg=(Weights.create 1)}
+        let empty   lbl = {inc=AdjSet.empty; out=AdjSet.empty; lab=lbl; edg=Weights.empty}
         let weights n g = let {edg;_} = NodeMap.find n g in edg
-        let edge  f t g = Weights.find (weights f g) t
-        let edge2   t o = Weights.find o t
-        let edgeo  f t g= Weights.find_opt (weights f g) t
-        let update t o v= Weights.replace o t v
-        let ensure t o v= if Weights.mem o t then () else Weights.add o t v
+        let edge  f t g = Weights.find t (weights f g)
+        let edge2   t o = Weights.find t o
+        let edgeo  f t g= Weights.find_opt t (weights f g)
+        let update t o v= Weights.add t v o
+        let ensure t o v= if Weights.mem t o then o else Weights.add t v o
     end
 
     (** Adjacency list graph definition **)
@@ -731,8 +735,8 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     ;;
 
     (** same as ensure but verifies a sequence of elements *)
-    let ensureall nodeseq nodeMap =
-        Seq.fold_left (Fun.flip ensure) nodeseq nodeMap
+    let ensureall nodeMap nodeseq =
+        Seq.fold_left (Fun.flip ensure) nodeMap nodeseq
     ;;
 
     (** only adds and updates if the value was not already present, otherwise
@@ -800,8 +804,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         Add nodeFrom nodeTo with weight values on from end  *)
     let add_weight weightValue nodeFrom nodeTo nodeMap =
         (NodeMap.update nodeFrom (fun x -> let* { out=frOutgoing; edg=wgts; _ } as a = x in
-            let _  = Weights.add wgts nodeTo weightValue in
-            Some { a with out=(AdjSet.add nodeTo frOutgoing) }) nodeMap)
+            Some { a with out=(AdjSet.add nodeTo frOutgoing); edg=(Weights.add nodeTo weightValue wgts) }) nodeMap)
         |> NodeMap.update nodeTo (fun x -> let* { inc=toIncoming; _ } as b = x in
             Some { b with inc=(AdjSet.add nodeFrom toIncoming) })
     ;;
@@ -813,11 +816,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         Add bidirectional nodeFrom nodeTo with weight values on both ends  *)
     let add_weight2 weightValue nodeFrom nodeTo nodeMap =
         (NodeMap.update nodeFrom (fun x -> let* { inc=frIncoming; out=frOutgoing; edg=wgts; _ } as a = x in
-            let _  = Weights.add wgts nodeTo weightValue in
-            Some { a with inc=(AdjSet.add nodeTo frIncoming); out=(AdjSet.add nodeTo frOutgoing) }) nodeMap)
+            Some { a with inc=(AdjSet.add nodeTo frIncoming); out=(AdjSet.add nodeTo frOutgoing); edg=(Weights.add nodeTo weightValue wgts) }) nodeMap)
         |> NodeMap.update nodeTo (fun x -> let* { inc=toIncoming; out=toOutgoing; edg=wgts; _ } as b = x in
-            let _  = Weights.add wgts nodeFrom weightValue in
-            Some { b with inc=(AdjSet.add nodeFrom toIncoming); out=(AdjSet.add nodeFrom toOutgoing); })
+            Some { b with inc=(AdjSet.add nodeFrom toIncoming); out=(AdjSet.add nodeFrom toOutgoing); edg=(Weights.add nodeFrom weightValue wgts) })
     ;;
 
     (** create edges from nodeFrom to all nodeTo in nodeToList *)
@@ -1047,7 +1048,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (** all edges and respective weights *)
     let allweights nodeMap =
         NodeMap.fold (fun k {out;edg;_} ac ->
-            AdjSet.fold (fun el ac' -> (k, el, Weights.find edg el) :: ac') out ac)  nodeMap []
+            AdjSet.fold (fun el ac' -> (k, el, Weights.find el edg) :: ac') out ac)  nodeMap []
     ;;
 
     (** Removes a node from the graph - weights aren't altered and may still be
@@ -1392,12 +1393,10 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     (** swap the incoming and outgoing edge direction - preserving edge weights
         use transpose2 if you do not use edge weights! *)
     let transpose (nodeMap: adj NodeMap.t) =
-        NodeMap.map (fun {inc; out; lab; edg=wgts} ->
-            let wgts' = Weights.create (Weights.length wgts) in
-            let _     = AdjSet.iter (fun x ->
-                Weights.add wgts' x
-                @@ Weights.find (Vertex.weights x nodeMap) lab
-            ) inc in {inc=out; out=inc; lab; edg=wgts'}
+        NodeMap.map (fun {inc; out; lab; _} ->
+            let wgts' = AdjSet.fold (fun x acc ->
+                Weights.add x (Weights.find lab (Vertex.weights x nodeMap)) acc
+            ) inc Weights.empty in {inc=out; out=inc; lab; edg=wgts'}
         ) nodeMap
     ;;
 
@@ -1409,21 +1408,23 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
     ;;
 
     (** toposort (happens-before) - assumes the graph is acyclic (DAG) otherwise the
-        result is wrong. *)
+        result is wrong.
+
+        Recursive post-order DFS: a node is prepended to the accumulator only
+        once all of its out-neighbours have finished, so predecessors precede
+        successors (tail-before-head) in the returned list. This deliberately
+        does not use the shared [dfs] whose backtrack callback fires in
+        discovery order rather than finish order. *)
     let toposort graph =
-        snd @@ NodeMap.fold (fun x _y (v, a) ->
-            if AdjSet.mem x v then
-                (v, a)
+        let rec visit node (vis, acc) =
+            if AdjSet.mem node vis then
+                (vis, acc)
             else
-                dfs (fun _ s -> { s with stop=false }) (fun _ s ->
-                    if AdjSet.mem s.elt (fst s.acc) then
-                        s
-                    else
-                        { s with
-                            acc = AdjSet.add s.elt (fst s.acc), s.elt :: (snd s.acc)
-                        }
-                ) graph x (v, a)
-        ) graph (AdjSet.empty, [])
+                let {out;_} = NodeMap.find node graph in
+                let (vis', acc') = AdjSet.fold visit out (AdjSet.add node vis, acc) in
+                (vis', node :: acc')
+        in
+        snd @@ NodeMap.fold (fun node _ st -> visit node st) graph (AdjSet.empty, [])
     ;;
 
     (** whether edge from f to t exists in nodeMap *)
@@ -1976,29 +1977,30 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
 
             (** shortest path with heuristics called on a node to align dijkstra outputs *)
             let astar heuristic start target graph =
-                (* we take the path to ourselves as 0 *)
-                let startp = (mkpath start start (`Val Measure.zero)) in
-                (*
-                Set all start to out edges to infinity except the pseudo edge to
-                self to denote the start point of dijkstra
+                (* we take the path to ourselves as 0. Entries are keyed on
+                   (next, from) by PathList.compare, so - exactly like dijkstra -
+                   we fix [from = start] via [viapath] and pre-seed every node at
+                   infinity. That keeps a node's heap identity stable no matter
+                   which predecessor relaxes it, so [decrease] can always find it
+                   (using [mkpath], where [from] is the predecessor, made the key
+                   shift between relaxations and raised "value not in heap").
 
-                omitted as can be implied when we use insert instead of decrease operation
-
-                init |> NodeMap.fold (fun k _v acc ->
-                    (PathHeap.insert (mkpath start k `Inf) acc)
-                ) graph
-
-                ideally the heuristic reduces the number of duplicates so we can
-                use a second (log n) insert
-                *)
-                let init =  (PathHeap.singleton startp) in
+                   NB: [value] stores g + heuristic for heap ordering; with an
+                   admissible heuristic that is 0 at the goal the reported goal
+                   cost is the true distance. *)
+                let startp = (viapath start start start (`Val Measure.zero)) in
+                let init =
+                    NodeMap.fold (fun k _v acc ->
+                        (PathHeap.insert (viapath start start k `Inf) acc)
+                    ) graph (PathHeap.singleton startp)
+                in
                 let rec iter ps heap elp =
                     if PathHeap.is_empty heap then
                         elp
                     else
                         let (u, rest) = PathHeap.extract heap in
                         if equal u.next target  then
-                            ((u.from, u.next, u.value) :: elp)
+                            ((u.via, u.next, u.value) :: elp)
                         else
                             let (out,   w) = outweights u.next graph in
                             let (ps'', h') = AdjSet.fold (fun e (p, a) ->
@@ -2009,7 +2011,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                 let alt' = wbind (Measure.add) alt (heuristic e) in
                                 (* demarkate edge with distance from start
                                    accounting for the heuristic cost *)
-                                let pe  = mkpath u.next e alt' in
+                                let pe  = viapath start u.next e alt' in
                                 match shorterpathto e ps with
                                 | Some v ->
                                     (* If alternative path is shorter than
@@ -2019,9 +2021,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                     else
                                         (p, a)
                                 | None   ->
-                                    (* First sighting - insert instead of
-                                       decrease with dup  *)
-                                    (PathSet.add pe p, PathHeap.insert pe a)
+                                    (* First sighting: the node is pre-seeded at
+                                       infinity, so decrease it in place *)
+                                    (PathSet.add pe p, PathHeap.decrease pe pe a)
                             ) out (ps, rest)
                             in iter ps'' h' ((u.from, u.next, u.value) :: elp)
                 in dijkresolve target [] @@ iter (PathSet.singleton startp) init []
@@ -2239,15 +2241,14 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                 (* reweight the graph *)
                 let g'' = NodeMap.map (
                     fun {inc; out; lab=u; edg=wgt} ->
-                    (* we need to copy the weights as they are globally mutable *)
-                    let wgt' = Weights.copy wgt in
                     let (_, d_u, _) = Hashtbl.find ht u in
-                    let _ = AdjSet.iter (fun v ->
+                    (* reweight each outgoing edge, building a fresh persistent map *)
+                    let wgt' = AdjSet.fold (fun v acc ->
                         let (_,d_v,_) = Hashtbl.find ht v in
                         let w_uv  = wbind (Measure.add) d_u (`Val (Vertex.edge2 v wgt)) in
                         let w_uv' = wbind (Measure.sub) w_uv d_v in
-                        wapply (Vertex.update v wgt') w_uv'
-                    ) out in {inc; out; lab=u; edg=wgt'}
+                        wapply (fun w -> Vertex.update v acc w) w_uv'
+                    ) out wgt in {inc; out; lab=u; edg=wgt'}
                 ) g' in
                 (* A way to restore weights from f -> t *)
                 let restore f t edgev =
@@ -2643,17 +2644,18 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                             let rnk = Vertex.edge2 prps wgt in
                             let cur = Vertex.edge2 curp wgt in
 
-                            (* are we better than the proposer *)
-                            if Measure.compare cur rnk = 1 then
-                                (* prefers us *)
+                            (* higher weight = more preferred: the acceptor swaps
+                               only if it ranks the new proposer above its current
+                               partner *)
+                            if Measure.compare rnk cur = 1 then
+                                (* prefers the new proposer over the current one *)
                                 let newmtch = EdgeSet.add (acp, prps) (EdgeSet.remove (acp, curp) matches) in
-                                (* curp is now unmatched *)
+                                (* curp is now unmatched and must propose again *)
                                 let np = recall curp in
-                                let sz = RankHeap.cardinal (snd np) in
-                                let _ = Format.printf "recall capacity: %d\n" sz in
                                 iter newmtch (np :: rest) complete
                             else
-                                (* check remaining unmatched *)
+                                (* keeps the current partner, prps tries the next
+                                   acceptor on its list *)
                                 iter matches ((prps, rem) :: rest) complete
                         else
                             (* match them and move on *)
@@ -2683,7 +2685,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
         let to_csv graph =
             NodeMap.to_seq graph
             |> Seq.map (fun (elt, {out;edg=wgt;_}) ->
-                if Weights.length wgt > 0 then
+                if Weights.cardinal wgt > 0 then
                     Seq.cons (fun () ->
                         Format.sprintf ("\n%s,") (Serde.string_of_elt elt))
                         (AdjSet.to_seq out |> Seq.map (fun el ->
@@ -2700,95 +2702,120 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             )
         ;;
 
-        (** export to dot *)
-        let to_dot ?(dir=false) ?(sub=false) name gattrs nattrs eattrs graph =
-            let header = if dir then "digraph" else "graph" in
+        (* Append [s] to [buf] as a quoted, escaped dot identifier / value so
+           arbitrary element and weight strings (spaces, quotes, dashes, keywords)
+           produce valid dot. *)
+        let escape_into buf s =
+            Buffer.add_char buf '"';
+            String.iter (fun c -> match c with
+                | '"' | '\\' -> Buffer.add_char buf '\\'; Buffer.add_char buf c
+                | '\n'       -> Buffer.add_string buf "\\n"
+                | c          -> Buffer.add_char buf c
+            ) s;
+            Buffer.add_char buf '"'
+        ;;
+
+        (* Render an attribute list [ k1="v1", k2="v2" ] into [buf]. Style keys are
+           emitted in sorted order for deterministic output; [extra] holds forced
+           pairs (e.g. a computed label). Nothing is written when there is nothing
+           to render (avoids empty [] brackets). *)
+        let attr_list_into buf styles extra =
+            let pairs =
+                StyleTbl.fold (fun k v acc -> (k, v) :: acc) styles extra
+                |> List.sort (fun (a, _) (b, _) -> String.compare a b)
+            in
+            match pairs with
+            | [] -> ()
+            | _  ->
+                Buffer.add_string buf " [";
+                List.iteri (fun i (k, v) ->
+                    if i > 0 then Buffer.add_string buf ", ";
+                    Buffer.add_string buf k;
+                    Buffer.add_char   buf '=';
+                    escape_into buf v
+                ) pairs;
+                Buffer.add_char buf ']'
+        ;;
+
+        let empty_style = StyleTbl.create 0
+
+        (** export to a single graphviz dot string *)
+        let to_dot_string ?(dir=false) ?(sub=false) name gattrs nattrs eattrs graph =
+            let header = if sub then "subgraph" else if dir then "digraph" else "graph" in
             let edglnk = if dir then "->" else "--" in
-            (* can be reused in a subgraph *)
-            let header = if sub then "subgraph" else header in
-            let visedg = ref EdgeSet.empty in
-            Seq.cons (
-                Seq.cons (fun () -> Format.sprintf ("%s %s {\n") header name)
-                    (* global attributes *)
-                    (StyleTbl.to_seq gattrs |> Seq.map (fun (k, v) ->
-                        fun () -> Format.sprintf ("\t%s=\"%s\";\n") k v))
-            )  (Seq.append (NodeMap.to_seq graph
-                    |> Seq.map (fun (elt, {out;edg=wgt;_}) ->
-                        (* no neighbours - check only for attributes *)
-                        let eltkey = (Serde.string_of_elt elt) in
-                        let weighted = Weights.length wgt > 0 in
-                        if AdjSet.is_empty out then
-                            match AttrbTbl.find_opt nattrs eltkey with
-                            (* Some node attributes *)
-                            | Some attrs ->
-                                Seq.cons (fun () ->
-                                    Format.sprintf "\t%s\t[" eltkey
-                                ) (StyleTbl.to_seq attrs
-                                        |> Seq.map (fun (k,v) ->
-                                            fun () -> Format.sprintf "%s=%s, " k v
-                                        ) |> (Fun.flip Seq.append (Seq.return (fun () -> "];\n")))
-                                    )
-                            (* no node attributes or neighbours *)
-                            | _ ->
-                                Seq.cons (fun () -> Format.sprintf "\t%s;\n" (Serde.string_of_elt elt)) Seq.empty
-                        (* handle neighbours and attributes *)
-                        else
-                            AdjSet.to_seq out
-                            (* handle edge attributes, edge key follows 'f-t',
-                               so add keys in the form (string_of_elt f^-^string_of_elt t) *)
-                            |> Seq.map (fun x ->
-                                let xs     = (Serde.string_of_elt x) in
-                                let ek, ev = (eltkey ^ "-" ^ xs, xs) in
-                                let dne = let vis = !visedg in
-                                    if EdgeSet.mem (x, elt) vis then
-                                        true
-                                    else
-                                        let _  = visedg := (EdgeSet.add (elt, x) vis) in
-                                        false
-                                in if dne then (fun () -> "") else
-                                    let label  =
-                                        if not weighted then "" else
-                                            Format.sprintf "label=\"%s\"" (Serde.string_of_wgt @@ Vertex.edge2 x wgt)
-                                    in
-                                    match AttrbTbl.find_opt eattrs ek with
-                                    | Some iattr ->
-                                        fun () -> let attrs =
-                                            if StyleTbl.length iattr = 0 then
-                                                (if weighted then
-                                                    "\t[ " ^ label ^ " ]"
-                                                    else
-                                                        label
-                                                )
-                                            else
-                                                (* all attributes *)
-                                                (Seq.fold_left (^) "\t[ "
-                                                    (
-                                                        (StyleTbl.to_seq iattr |>
-                                                            Seq.map (fun (k,v) ->
-                                                                Format.sprintf "%s=\"%s\", " k v
-                                                            )
-                                                        ) |> (Fun.flip Seq.append (Seq.return (Format.sprintf "%s ]" label)))
-                                                    )
-                                                )
-                                        in Format.sprintf "\t%s %s %s %s;\n" eltkey edglnk ev attrs
-                                    | None ->
-                                        fun () ->
-                                        Format.sprintf "\t%s %s %s\t[ %s ];\n" eltkey edglnk ev label
-                            ) |> (Seq.append (Seq.return (fun () ->
-                                match AttrbTbl.find_opt nattrs eltkey with
-                                (* Some node attributes *)
-                                | Some attrs -> Seq.fold_left (^) (Format.sprintf "\t%s\t[ " eltkey)
-                                    (StyleTbl.to_seq attrs
-                                        |> Seq.map (fun (k,v) ->
-                                            Format.sprintf "%s=%s, " k v
-                                        ) |> (Fun.flip Seq.append (Seq.return " ];\n"))
-                                    )
-                                (* no node attributes or neighbours *)
-                                | _ ->
-                                    Format.sprintf "\t%s;\n" (Serde.string_of_elt elt)
-                            )))
-                    )
-                ) (Seq.return (Seq.return (fun () -> "}\n"))))
+            let buf    = Buffer.create 256 in
+            Buffer.add_string buf header;
+            Buffer.add_char   buf ' ';
+            escape_into       buf name;
+            Buffer.add_string buf " {\n";
+            (* global attributes, sorted for stable output *)
+            StyleTbl.fold (fun k v acc -> (k, v) :: acc) gattrs []
+            |> List.sort (fun (a, _) (b, _) -> String.compare a b)
+            |> List.iter (fun (k, v) ->
+                Buffer.add_char   buf '\t';
+                Buffer.add_string buf k;
+                Buffer.add_char   buf '=';
+                escape_into       buf v;
+                Buffer.add_string buf ";\n");
+            (* reciprocal edges are only collapsed for undirected graphs *)
+            let visited = ref EdgeSet.empty in
+            NodeMap.iter (fun elt {out; inc; edg=wgt; _} ->
+                let eltkey   = Serde.string_of_elt elt in
+                let weighted = Weights.cardinal wgt > 0 in
+                (* node declaration: always emitted when the node carries
+                   attributes, otherwise only for truly isolated nodes (a node
+                   touched by any edge is implied by its edge statements) *)
+                (match AttrbTbl.find_opt nattrs eltkey with
+                 | Some attrs ->
+                    Buffer.add_char   buf '\t';
+                    escape_into       buf eltkey;
+                    attr_list_into    buf attrs [];
+                    Buffer.add_string buf ";\n"
+                 | None ->
+                    if AdjSet.is_empty out && AdjSet.is_empty inc then begin
+                        Buffer.add_char   buf '\t';
+                        escape_into       buf eltkey;
+                        Buffer.add_string buf ";\n"
+                    end);
+                (* edges *)
+                AdjSet.iter (fun x ->
+                    let dedup = (not dir) && EdgeSet.mem (x, elt) !visited in
+                    if not dedup then begin
+                        if not dir then visited := EdgeSet.add (elt, x) !visited;
+                        let xs    = Serde.string_of_elt x in
+                        let extra =
+                            if weighted then
+                                [ ("label", Serde.string_of_wgt (Vertex.edge2 x wgt)) ]
+                            else [] in
+                        let eattr =
+                            match AttrbTbl.find_opt eattrs (eltkey ^ "-" ^ xs) with
+                            | Some a -> a
+                            | None   -> empty_style in
+                        Buffer.add_char   buf '\t';
+                        escape_into       buf eltkey;
+                        Buffer.add_char   buf ' ';
+                        Buffer.add_string buf edglnk;
+                        Buffer.add_char   buf ' ';
+                        escape_into       buf xs;
+                        attr_list_into    buf eattr extra;
+                        Buffer.add_string buf ";\n"
+                    end
+                ) out
+            ) graph;
+            Buffer.add_string buf "}\n";
+            Buffer.contents buf
+        ;;
+
+        (** export to dot as a (lazy, re-forceable) sequence of thunks - kept for
+            backwards compatibility; each force rebuilds the string afresh *)
+        let to_dot ?(dir=false) ?(sub=false) name gattrs nattrs eattrs graph =
+            Seq.return (Seq.return (fun () ->
+                to_dot_string ~dir ~sub name gattrs nattrs eattrs graph))
+        ;;
+
+        (** write dot straight to a channel *)
+        let to_dot_channel ?(dir=false) ?(sub=false) name gattrs nattrs eattrs graph oc =
+            output_string oc (to_dot_string ~dir ~sub name gattrs nattrs eattrs graph)
         ;;
 
         (** export a graph with subgraph clusters into dot format *)

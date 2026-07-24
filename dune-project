@@ -1,7 +1,7 @@
 (lang dune 3.12)
 
 (name fungi)
-(version 0.1.4)
+(version 0.2.0)
 
 ; Generate opam file from this dune-project file
 (generate_opam_files false)
@@ -13,7 +13,7 @@
 ; Package definition
 (package
  (name fungi)
- (version 0.1.4)
+ (version 0.2.0)
  (synopsis "A pure functional graph library")
  (description "A graph library based on functional adjacency list with some common graph
 algorithms implemented and a fibonacci heap.")

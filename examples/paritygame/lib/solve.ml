@@ -26,7 +26,7 @@ let rec zielonka = fun game ->
         let i            = ParityGame.omega node in
         let u            = ParityGame.cluster node game in
         let tau          = ParityGame.strategy i u game ParityGame.StrSet.empty in
-        let (a, tau')    = ParityGame.attr (i) u game in
+        let (a, tau')    = ParityGame.attr i u game in
         let g_a          = ParityGame.carve game a in
         let { ParityGame.regions=(w_0, w_1); strategy=(s_0, s_1); } = zielonka g_a in
         let (_wi, w_1_i) = (

@@ -77,6 +77,81 @@ let set_union _cx =
 
 
 
+let fold_sum _cx =
+    Alcotest.(check int) "fold accumulates every element"
+        15 (IntTree.fold (+) (IntTree.of_list [1;2;3;4;5]) 0)
+;;
+
+let filter_test _cx =
+    let evens = IntTree.filter (fun x -> x mod 2 = 0) (IntTree.of_list [1;2;3;4;5;6]) in
+    Alcotest.(check (list int)) "only even elements retained"
+        [2;4;6] (List.rev @@ IntTree.to_list evens)
+;;
+
+let exists_test _cx =
+    let s = IntTree.of_list [1;2;3;4;5] in
+    let _ = Alcotest.(check bool) "matching element exists"      true  (IntTree.exists (fun x -> x = 3) s) in
+            Alcotest.(check bool) "no matching element"          false (IntTree.exists (fun x -> x = 99) s)
+;;
+
+let for_all_test _cx =
+    let s = IntTree.of_list [2;4;6;8] in
+    let _ = Alcotest.(check bool) "all satisfy predicate"  true  (IntTree.for_all (fun x -> x mod 2 = 0) s) in
+            Alcotest.(check bool) "not all satisfy"        false (IntTree.for_all (fun x -> x > 4) s)
+;;
+
+let search_test _cx =
+    let s = IntTree.of_list [10;5;8;6;3;2;9;1] in
+    let _ = Alcotest.(check int) "search finds present element"
+        7 (IntTree.search (fun v -> Int.compare 7 v) (IntTree.add 7 s)) in
+    Alcotest.check_raises "search raises on absent element" Not_found
+        (fun () -> ignore (IntTree.search (fun v -> Int.compare 42 v) s))
+;;
+
+let find_first_test _cx =
+    let s = IntTree.of_list [1;2;3;4;5] in
+    Alcotest.(check int) "first element above 3" 4 (IntTree.find_first (fun x -> x > 3) s)
+;;
+
+let take_min_max _cx =
+    let s = IntTree.of_list [10;5;8;6;3;2;9;1] in
+    let (mn, rest) = IntTree.take_min s in
+    let _ = Alcotest.(check int)  "take_min returns the smallest" 1 mn in
+    let _ = Alcotest.(check bool) "min no longer present"  false (IntTree.mem 1 rest) in
+    let (mx, _)    = IntTree.take_max_opt s in
+    Alcotest.(check (option int)) "take_max_opt returns the largest" (Some 10) mx
+;;
+
+let invert_roundtrip _cx =
+    let s = IntTree.of_list [10;5;8;6;3;2;9;1] in
+    Alcotest.(check (list int)) "double inversion is identity"
+        (List.rev @@ IntTree.to_list s)
+        (List.rev @@ IntTree.to_list (IntTree.invert (IntTree.invert s)))
+;;
+
+let seq_permutation _cx =
+    let s = IntTree.of_list [10;5;8;6;3;2;9;1] in
+    Alcotest.(check (list int)) "to_seq yields all elements"
+        [1;2;3;5;6;8;9;10] (List.sort compare (List.of_seq (IntTree.to_seq s)))
+;;
+
+let of_seq_roundtrip _cx =
+    let s = IntTree.of_seq (List.to_seq [3;1;2;5;4]) in
+    Alcotest.(check (list int)) "of_seq builds the same set"
+        [1;2;3;4;5] (List.rev @@ IntTree.to_list s)
+;;
+
+let remove_absent _cx =
+    let s = IntTree.of_list [1;2;3] in
+    Alcotest.(check (list int)) "removing an absent element is a no-op"
+        [1;2;3] (List.rev @@ IntTree.to_list (IntTree.remove 99 s))
+;;
+
+let duplicate_insert _cx =
+    Alcotest.(check int) "duplicates collapse to one element"
+        3 (IntTree.cardinal (IntTree.of_list [1;2;3;2;1;3;1]))
+;;
+
 let preservation =
   QCheck.Test.make ~count:1000 ~name:"unique_element_membership"
     QCheck.(list nat_small)
@@ -120,11 +195,27 @@ let () =
         "traversal", [
             test_case "traversal"    `Quick simple_inorder_traversal
         ];
-        "set operations", [ 
+        "set operations", [
             test_case "subset"       `Quick subset_test;
             test_case "intersection" `Quick set_intersection;
             test_case "difference"   `Quick set_difference;
             test_case "union"        `Quick set_union;
+        ];
+        "queries", [
+            test_case "fold"           `Quick fold_sum;
+            test_case "filter"         `Quick filter_test;
+            test_case "exists"         `Quick exists_test;
+            test_case "for_all"        `Quick for_all_test;
+            test_case "search"         `Quick search_test;
+            test_case "find_first"     `Quick find_first_test;
+        ];
+        "manipulation", [
+            test_case "take_min_max"   `Quick take_min_max;
+            test_case "invert"         `Quick invert_roundtrip;
+            test_case "to_seq"         `Quick seq_permutation;
+            test_case "of_seq"         `Quick of_seq_roundtrip;
+            test_case "remove_absent"  `Quick remove_absent;
+            test_case "duplicates"     `Quick duplicate_insert;
         ];
         "set properties", suite
     ]

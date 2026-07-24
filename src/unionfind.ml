@@ -5,9 +5,8 @@ module type UnionFind = sig
     type elt
 
     module BijectTbl: Hashtbl.S with type key = elt
-    module ResolvTbl: Hashtbl.S with type key = int
 
-    type t = { 
+    type t = {
         (* mapping from each element to an index *)
         map: int BijectTbl.t;
         (* each group index *)
@@ -26,13 +25,8 @@ end
 module MakeDisjointSet(Ord: Hashtbl.HashedType): UnionFind with type elt = Ord.t = struct 
 
     module BijectTbl = Hashtbl.Make (Ord)
-    module ResolvTbl = Hashtbl.Make (struct 
-        type t    = int 
-        let equal = Int.equal
-        let hash  = Hashtbl.hash
-    end)
 
-    type t = { 
+    type t = {
         map: int BijectTbl.t;
         arr: int array;
         sze: int array;
@@ -40,16 +34,21 @@ module MakeDisjointSet(Ord: Hashtbl.HashedType): UnionFind with type elt = Ord.t
     }
     type elt = Ord.t
 
-    let create size eltseq  = 
+    let create size eltseq  =
         let acc = {
             map = BijectTbl.create size;
             arr = Array.init size (Fun.id);
             sze = Array.make size (1);
-            count=size 
+            count=size
         } in
+        (* Guard against a sequence longer than [size]: the backing arrays are
+           sized to [size], so an out-of-range index would otherwise trigger an
+           opaque [Invalid_argument] on the first [find]/[union]. *)
         let _ = Seq.iteri (fun idx elt ->
+            if idx >= size then
+                invalid_arg "MakeDisjointSet.create: element sequence is longer than size";
             BijectTbl.add acc.map elt idx
-        ) eltseq in 
+        ) eltseq in
         acc
     ;;
 

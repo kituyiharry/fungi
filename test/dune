@@ -4,6 +4,31 @@
  (modules treeprops))
 
 (test
+ (name unionfind_tests)
+ (libraries fungi alcotest)
+ (modules unionfind_tests))
+
+(test
+ (name heap_tests)
+ (libraries fungi alcotest)
+ (modules heap_tests))
+
+(test
+ (name graph_tests)
+ (libraries fungi alcotest)
+ (modules graph_tests))
+
+(test
+ (name algorithms_tests)
+ (libraries fungi alcotest)
+ (modules algorithms_tests))
+
+(test
+ (name serialize_tests)
+ (libraries fungi alcotest)
+ (modules serialize_tests))
+
+(test
  (name treebench)
  (modes byte exe)
  (libraries fungi core_bench core_unix.command_unix core)

@@ -133,9 +133,6 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
         | _ :: _ -> false
     ;;
 
-    (* internal joining tbl which stores int (degree) -> elts *)
-    let tbl = Hashtbl.create 0
-    ;;
 
     let equal  l r = (Entry.compare l r) =  0
     ;;
@@ -436,8 +433,12 @@ module MakeFibHeap(Entry: Ordinal): FibHeap with type node = Entry.t and type or
        this creates the binomial tree situation 
     *)
     let consolidate ?(cmp=minify) trees  =
+        (* Per-call joining table mapping degree -> elts. Kept local (rather than
+           a functor-global) so concurrent consolidations on different heaps of
+           the same type don't clobber a shared table. *)
+        let tbl = Hashtbl.create 8 in
         (* push all nodes by degree *)
-        let rec cascade rejoin =  
+        let rec cascade rejoin =
             let leftover = List.fold_left (fun acc eltree ->
                 let deg = degree eltree in
                 match Hashtbl.find_opt tbl deg with
