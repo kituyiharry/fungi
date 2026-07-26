@@ -1,4 +1,4 @@
 (library
- (modules game pickle utils solve)
+ (modules game pickle utils solve dot)
  (libraries fungi unix)
  (name paritygame))

@@ -1926,6 +1926,12 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             ;;
 
             (** Single source shortest path implementation of dijkstra *)
+            (* WARN: when [target] is unreachable this still returns it, because
+               it is pre-seeded and extracted at `Inf; the returned pair for the
+               target then carries an `Inf cost and a bogus (start) predecessor.
+               TODO(revisit): signal unreachability directly (e.g. return None /
+               an option, or stop reconstructing when the target cost is `Inf)
+               instead of leaving callers to test the goal's cost is finite. *)
             let dijkstra start target graph =
                 (* we take the path to ourselves as 0 *)
                 let startp = (viapath start start start (`Val Measure.zero)) in
@@ -1985,9 +1991,15 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                    (using [mkpath], where [from] is the predecessor, made the key
                    shift between relaxations and raised "value not in heap").
 
-                   NB: [value] stores g + heuristic for heap ordering; with an
-                   admissible heuristic that is 0 at the goal the reported goal
-                   cost is the true distance. *)
+                   WARN: [value] conflates the path cost g and the ordering key
+                   f = g + heuristic in a single field, and the relaxation then
+                   reuses it as if it were g (`alt = u.value + d`), double
+                   counting the heuristic. With a NON-trivial heuristic this
+                   yields wrong predecessors and non-optimal / broken paths (it
+                   only behaves for a zero heuristic, where A* degenerates to
+                   dijkstra). TODO(revisit): track g and f separately (e.g. add a
+                   cost field to pathelt, order the heap by f, report/relax on g)
+                   so A* returns optimal paths for real heuristics. *)
                 let startp = (viapath start start start (`Val Measure.zero)) in
                 let init =
                     NodeMap.fold (fun k _v acc ->
@@ -2007,6 +2019,9 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
                                 (* get distance from u to e *)
                                 let d   = Measure.measure (Vertex.edge2 e w) in
                                 (* add to distance from start to u *)
+                                (* WARN: u.value already includes h(u) here, so
+                                   this double counts the heuristic - see the A*
+                                   TODO above. *)
                                 let alt  = wbind (Measure.add) u.value d in
                                 let alt' = wbind (Measure.add) alt (heuristic e) in
                                 (* demarkate edge with distance from start

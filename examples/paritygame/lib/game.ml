@@ -122,147 +122,37 @@ module ParityGame = struct
         | Even -> Odd
     ;;
 
-    let into_strat attractor game node =
-        List.map (fun pair -> (node, pair))
-        @@ AdjSet.elements
-        @@ AdjSet.filter (fun y -> AdjSet.mem y attractor) (Graph.outgoingof node game)
-    ;;
-
-    let into_strat_lazy attractor game node =
-        Seq.map (fun pair -> (node, pair))
-        @@ AdjSet.to_seq
-        @@ AdjSet.filter (fun y -> AdjSet.mem y attractor) (Graph.outgoingof node game)
-    ;;
-
     (** [playerof identity player]
     Destructure the player from a label and its unique component *)
     let playerof (Label ((Priority (_, curplayer), _))) = curplayer
 
-    (* Checks whether the a play can be added as a strategy for owner into the
-     strategy set *)
-    let validstrategy owner (protagonist, foreigner) stratset  =
-        (*if StrSet.mem (protagonist, foreigner) stratset then stratset else*)
-        if sameplayer (playerof protagonist) foreigner then StrSet.add (protagonist, foreigner) stratset
-        else let parity = compare protagonist foreigner in
-            if sameplayer owner protagonist then
-                if parity > 0 then StrSet.add (protagonist, foreigner) stratset else stratset
-            else
-                if parity > 0 then stratset else StrSet.add (protagonist, foreigner) stratset
-    ;;
+    (** [attr player startset game]  Standard i-attractor of [startset]: the set
+        of nodes from which [player] can force the token into [startset]. Computed
+        as a least fixpoint - a [player]-owned node joins when it has some
+        successor already inside; an opponent node joins when all of its
+        (non-empty) successors are inside. Returns the attractor SET only.
 
-    (**
-    * In the attractor
-    * - start from max same player node
-    * - keep a visited set (max is the first in this node)
-    * - keep a cycle set for a node (max is also in this node)
-    * - from incoming of max player node
-    * - same player as attractor pointing back can be added
-    * - different player must take priority value into account
-    * - priority of different must be less than max to be added
-    * - different player pointing back with smaller cardinality can be added
-    * - cardinal priority with respect to the priority
-    *)
-    let strategy player attractor game stratstate = 
-        StrSet.fold (validstrategy player) stratstate
-        @@ StrSet.of_list
-        @@ List.flatten
-        @@ List.map (into_strat attractor game)
-        @@ AdjSet.elements attractor (* from attractor *)
-    ;;
-
-    let lazy_strategy attractor game =
-        Seq.concat
-        @@ Seq.map (into_strat_lazy attractor game)
-        @@ AdjSet.to_seq attractor (* from attractor *)
-    ;;
-
-    (** consume a sequence of plays yielding a strategy for the player *)
-    let resolve player (stratstate: (node * node) StrSet.set) (seq: play Seq.t) =
-        Seq.fold_left (fun acc a -> validstrategy player a acc) stratstate seq
-    ;;
-
-    (** [hassafeoutgoing AdjSet.t PGame.t identity]
-    Get the checked node outgoing set
-    Checks if that set has leavers that aren't controlled by current player *)
-    let hassafeoutgoing attractorset game currentnode =
-        AdjSet.subset (Graph.outgoingof currentnode game) attractorset
-    ;;
-
-    (** [attractive AdjSet.t player PGame.t identity]
-    attractive if same player or outgoing nodes are attractive
-    i.e attractive in relation to the basenode
-   *)
-    let attractive attractorset forplayer game agivennode =
-        (* Controlled by the player and can reach the predecessor node *)
-        (sameplayer forplayer agivennode)
-            ||
-        (* all outgoing members lead into the accumulator which is also an attractor *)
-        (hassafeoutgoing attractorset game agivennode)
-    ;;
-
-    (** [attract AdjSet.t AdjSet.t player PGame.t identity (AdjSet.t * AdjSet.t)]
-    Check for attractiveness:
-     If its already visited in the accumulated attractor then no need to check it
-     If its in the incomingset and same player then its reachable so add
-     If its outgoing nodes are also attractive then its reachable so add it
-     It is OK to add it in the accumulator now so that later checks don't miss it!
-     - Returns a pair of newly found attractive nodes and a union of that set
-     with the previously accumulated attractor
-    *)
-    let attract attractorset incomingset player game =
-        let oktoadd = AdjSet.diff incomingset attractorset
-            |> AdjSet.filter (attractive attractorset player game)
-        in  (oktoadd, (AdjSet.union oktoadd attractorset))
-    ;;
-
-    (** [attractor player PGame.t AdjSet.t AdjSet.t AdjSet.t]
-    Get the attractor nodes of a player from a node
-    attractorset is the current state of the attractor
-    nodeset are the unvisited nodes*)
-    let rec attractor player game attractorset nodeset strats =
-        match (AdjSet.take_max_opt nodeset) with
-        | (Some(node), rest) ->
-            (*
-                Concatenate the attractive non-visited incoming neighbours
-                while ensuring they aren't treachorous
-            *)
-            let (newels, accum) = attract attractorset (Graph.incomingof node game) player game in
-            let (newattr, morenodes) = (AdjSet.add node accum, AdjSet.union newels rest) in
-            let newstrat =  (strategy player newattr game strats) in
-                attractor player game newattr morenodes (StrSet.union newstrat strats)
-        | _ ->
-            (attractorset, strats)
-    ;;
-
-    (** [lazy_attractor player PGame.t AdjSet.t AdjSet.t AdjSet.t]
-    same as attractor but lazy on getting strategies *)
-    let rec lazy_attractor player game attractorset nodeset strats =
-        match (AdjSet.take_max_opt nodeset) with
-        | (Some(node), rest) ->
-            (*
-                Concatenate the attractive non-visited incoming neighbours
-                while ensuring they aren't treachorous
-            *)
-            let (newels, accum) = attract attractorset (Graph.incomingof node game) player game in
-            let (newattr, morenodes) = (AdjSet.add node accum, AdjSet.union newels rest) in
-            let newstrat =  (lazy_strategy newattr game) in
-                lazy_attractor player game newattr morenodes (Seq.append newstrat strats)
-        | _ ->
-            (attractorset, strats)
-    ;;
-
-    (** [buildattractor ?set:(AdjSet.t) identity player PGame.t AdjSet.t]
-        A node is part of its own attractor
-    *)
+        A correct positional attractor STRATEGY needs the move that carries each
+        node one step toward the target, which a set-level fixpoint cannot see, so
+        strategies are synthesised separately (see [Solve.winning_strategy]). The
+        old [validstrategy]/[strategy] heuristic tried to recover it post-hoc and
+        produced unsound strategies (it could drop a player's own forced move); it
+        has been removed. *)
     let attr player startset game =
-        attractor player game startset startset StrSet.empty
-    ;;
-
-    (** [buildattractor ?set:(AdjSet.t) identity player PGame.t AdjSet.t]
-        A node is part of its own attractor
-    *)
-    let lazy_attr player startset game =
-        lazy_attractor player game startset startset (StrSet.to_seq StrSet.empty)
+        let rec fix current =
+            let added = Nodes.fold (fun v _ acc ->
+                if AdjSet.mem v current then acc
+                else
+                    let outs = Graph.outgoingof v game in
+                    if playerof v = player then
+                        if AdjSet.exists (fun w -> AdjSet.mem w current) outs
+                        then AdjSet.add v acc else acc
+                    else
+                        if (not (AdjSet.is_empty outs)) && AdjSet.subset outs current
+                        then AdjSet.add v acc else acc
+            ) game AdjSet.empty in
+            if AdjSet.is_empty added then current else fix (AdjSet.union current added)
+        in fix startset
     ;;
 
     (** [carve PGame.t AdjSet.t PGame.t] Removes a set of nodes from a game *)

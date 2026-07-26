@@ -1,4 +1,4 @@
 (library
- (modules utils)
+ (modules maze)
  (libraries fungi)
  (name mazesolver))

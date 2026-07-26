@@ -124,14 +124,21 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
         | Some m -> (Some m, S.remove m s)
         | None   -> (None, s)
 
-    (* a set is unordered, so mirroring is a no-op; retained only because the
-       interface exposes it (round-trip identity is all that was relied upon) *)
+    (* TODO(revisit): these are vestigial now that TreeSet is backed by the
+       Stdlib Set. A set exposes no root/left/right, so pre/in/post-order all
+       collapse to sorted iteration and [invert] (structural mirror) is a no-op.
+       They have 0 uses in src/examples (only [inorder] is used, by one test).
+       Consider removing invert/root/search/traverse/preorder/postorder/
+       iter_preorder/iter_postorder from the TSet interface. *)
+
+    (* WARN: no-op - a set is unordered so there is no structure to mirror;
+       retained only for interface compatibility (round-trip identity). *)
     let invert s       = s
 
     (* in-order accumulation prepends each element onto [acc] (descending) *)
     let inorder acc s  = S.fold (fun x a -> x :: a) s acc
-    (* We have altered the tree structure and so these traversals don't make
-       sense and are only here for historical purposes *)
+    (* WARN: with no exposed tree structure pre/post-order cannot differ from
+       in-order; these are identical placeholders, not real tree traversals. *)
     let preorder       = inorder
     let postorder      = inorder
     let iter_preorder  = S.iter
