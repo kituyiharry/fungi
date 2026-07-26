@@ -130,12 +130,14 @@ module TreeSet(Ord: Set.OrderedType): TSet with type t := Ord.t = struct
 
     (* in-order accumulation prepends each element onto [acc] (descending) *)
     let inorder acc s  = S.fold (fun x a -> x :: a) s acc
+    (* We have altered the tree structure and so these traversals don't make
+       sense and are only here for historical purposes *)
     let preorder       = inorder
     let postorder      = inorder
     let iter_preorder  = S.iter
     let iter_postorder = S.iter
 
-    let traverse f acc s = S.fold (fun x a -> f x a) s acc
+    let traverse f acc s = S.fold (f) s acc
 
     (* Find the least element satisfying an arbitrary predicate. NB: unlike
        Stdlib's [Set.find_first] (which requires a monotone predicate) this

@@ -7,13 +7,13 @@ A graph library based on functional adjacency list with some common graph
 algorithms implemented and a fibonacci heap."""
 maintainer: ["Harry K <kituyiharry@github.com>"]
 authors: "Harry K <harryk@harryk.dev>"
-homepage: "https://harryk.dev/articles/article1"
+homepage: "https://harryk.dev/articles/fungi"
 bug-reports: "https://github.com/kituyiharry/fungi/issues"
 dev-repo: "git+https://github.com/kituyiharry/fungi/"
 license: "MIT"
 tags: ["graph" "functional" "networks"]
 depends: [
-  "dune" {>= "3.12"}
+  "dune"  {>= "3.12"}
   "ocaml" {>= "5.0.0"}
   "alcotest" {with-test}
   "qcheck-core" {with-test}

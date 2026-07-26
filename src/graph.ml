@@ -1149,15 +1149,15 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             if Queue.is_empty nxt then
                 (vis, acc)
             else
-                let (prev, label) = Queue.take nxt in
-                let vtx = vertexof label graph in
+                let (prev, curr) = Queue.take nxt in
+                let vtx = vertexof curr graph in
                 let {out;_} = vtx in
-                let {stop;vis=vis';acc=acc';_} = f que (mkctx (prev) label vis acc false vtx) in
+                let {stop;vis=vis';acc=acc';_} = f que (mkctx (prev) curr vis acc false vtx) in
                 let (vis'', acc'') = if stop then (vis', acc') else
                     let diff= AdjSet.diff out vis' in
-                    let _   = AdjSet.iter (fun x -> Queue.add ((Some (label, vtx)), x) nxt) (diff) in
+                    let _   = AdjSet.iter (fun x -> Queue.add ((Some (curr, vtx)), x) nxt) (diff) in
                     iter (AdjSet.union diff vis') nxt acc'
-                in (vis'', (b que (mkctx prev label vis'' acc'' stop vtx)).acc)
+                in (vis'', (b que (mkctx prev curr vis'' acc'' stop vtx)).acc)
         in let (_, acc) = iter visited que init in acc
     ;;
 
@@ -1172,22 +1172,22 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             if Stack.is_empty nxt then
                 (vis, acc)
             else
-                let (prev, label) = Stack.pop nxt in
-                if AdjSet.mem label vis then
+                let (prev, curr) = Stack.pop nxt in
+                if AdjSet.mem curr vis then
                     iter (vis) nxt acc
                 else
-                    let vtx = vertexof label graph in
+                    let vtx = vertexof curr graph in
                     let {out;_} = vtx in
                     (* callback can functionally rewrite these values *)
-                    let {stop;acc=acc';vis=vis';_} = f nxt (mkctx (prev) label vis acc false vtx) in
+                    let {stop;acc=acc';vis=vis';_} = f nxt (mkctx (prev) curr vis acc false vtx) in
                     let (vis'', acc'') = (
                         if stop then
                             (vis', acc')
                         else
-                            let _   = AdjSet.iter (fun x -> Stack.push ((Some (label, vtx)), x) nxt) (out) in
-                            iter (AdjSet.add label vis') nxt acc'
+                            let _   = AdjSet.iter (fun x -> Stack.push ((Some (curr, vtx)), x) nxt) (out) in
+                            iter (AdjSet.add curr vis') nxt acc'
                     ) in
-                    let { acc=acc'''; vis=vis'''; _ } = (b nxt (mkctx (prev) label vis'' acc'' stop vtx)) in
+                    let { acc=acc'''; vis=vis'''; _ } = (b nxt (mkctx (prev) curr vis'' acc'' stop vtx)) in
                     (vis''', acc''')
         in let (_, acc) = iter visited stck init in acc
     ;;
