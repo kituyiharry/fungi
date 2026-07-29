@@ -82,10 +82,13 @@ let benchmark () =
     let (y, ty) = timed (fun () -> Solve.lazy_zielonka g) in
     let (s, ts) = timed (fun () -> Solve.scc_zielonka g) in
     let (zw0, zw1) = z.PG.regions and (sw0, sw1) = s.PG.regions in
+    (*let _ = print_endline (Dot.to_dot ~name:"z" ~solution:z g) in*)
     let (ss0, ss1) = s.PG.strategy in
     let (yw0, yw1) = y.PG.regions and (ys0, ys1) = y.PG.strategy in
+    (*let _ = print_endline (Dot.to_dot ~name:"y" ~solution:y g) in*)
     Printf.printf "  zielonka     : Even=%-4d Odd=%-4d  %.4f s%s\n"
         (card zw0) (card zw1) tz (tag (card zw0));
+    (*let _ = print_endline (Dot.to_dot ~name:"y" ~solution:s g) in*)
     Printf.printf "  lazy_zielonka: Even=%-4d Odd=%-4d  %.4f s%s\n"
         (card yw0) (card yw1) ty (tag (card yw0));
     (* strategy is derived from the regions (see winning_strategy), so both sides

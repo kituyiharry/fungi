@@ -42,7 +42,7 @@ module type Ordinal = sig
 end
 
 (* immediately binds a value as its own order *)
-module Surject(Inner: Set.OrderedType): Ordinal with type t = Inner.t and type order = Inner.t = struct 
+module Adapt(Inner: Set.OrderedType): Ordinal with type t = Inner.t and type order = Inner.t = struct 
     type t          = Inner.t
     type order      = Inner.t
     let  bind    e  = e

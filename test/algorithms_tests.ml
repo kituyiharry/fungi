@@ -7,10 +7,10 @@ module G = Graph.MakeGraph (struct
     let compare = String.compare
 end)
 
-module P  = G.Path.Compute   (Graph.Biject (Float))
-module Fl = G.Flow           (Graph.Biject (Float))
-module M  = G.Matching.Compute (Graph.Biject (Float))
-module Sp = G.Span           (Graph.Biject (Float))
+module P  = G.Path.Compute   (Graph.Adapt (Float))
+module Fl = G.Flow           (Graph.Adapt (Float))
+module M  = G.Matching.Compute (Graph.Adapt (Float))
+module Sp = G.Span           (Graph.Adapt (Float))
 
 let cost_of = function
     | `Val f  -> f

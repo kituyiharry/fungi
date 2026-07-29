@@ -25,7 +25,7 @@ module Cell = struct
 end
 
 module G = Graph.MakeGraph (Cell)
-module P = G.Path.Compute (Graph.Biject (Int))
+module P = G.Path.Compute (Graph.Adapt (Int))
 
 type t = {
     rows  : string array;  (* the raw grid *)

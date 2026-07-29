@@ -34,7 +34,7 @@ to use the ocaml implementation
 
     (* Use dijkstra to find the shortest path - we need the AST of our edge type
     to compute paths (i.e Float.sub, Float.min ... etc) *)
-    module SPath = SGraph.Path.Compute(Graph.Biject(Float));;
+    module SPath = SGraph.Path.Compute(Graph.Adapt(Float));;
     let path = SPath.dijkstra "A" "B" s'';;
 
     (* export graph to dot - build a serializer *)

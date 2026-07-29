@@ -1,7 +1,7 @@
 open Fungi
 open Alcotest
 
-module H = Heap.MakeFibHeap (Heap.Surject (Int))
+module H = Heap.MakeFibHeap (Heap.Adapt (Int))
 
 (* default comparator is minify, so the heap behaves as a min-heap *)
 

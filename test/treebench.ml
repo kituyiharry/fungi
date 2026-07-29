@@ -5,7 +5,7 @@ open Core_bench
 
 let main () =
 
-    let module IntFibHeap =  Heap.MakeFibHeap(Heap.Surject(Int)) in
+    let module IntFibHeap =  Heap.MakeFibHeap(Heap.Adapt(Int)) in
     let randInts = List.init 1500 (fun _idx -> Random.int 500) in
     let theap    = List.fold_right (IntFibHeap.insert) randInts IntFibHeap.empty in
 

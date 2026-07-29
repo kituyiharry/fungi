@@ -96,7 +96,7 @@ open Axiom;;
 
     {v
     Map
-        elt =>  inc       out       adj(Hashtbl)
+        elt =>  inc       out       adj(Map)
     {
         "A" => ("B")     ("C","B")  <["C" -> 10., "B" -> 20.]>
         "B" => ("C","B") ("A","B")  <["A" -> 20., "B" -> 30., "C" -> 40.]>
@@ -180,12 +180,12 @@ end
       (* ... add nodes and edges ... *)
 
       (* Use compute to build a Path module - use biject to simplify the code *)
-      module SPath = SGraph.Path.Compute(Biject(Float));;
+      module SPath = SGraph.Path.Compute(Adapt(Float));;
 
       (* perform the computation *)
       let _ = SPath.dijkstra (* arguments... *)
     ]}*)
-module Biject(T: Space): Measurable with type edge = T.t and type t = T.t = struct
+module Adapt(T: Space): Measurable with type edge = T.t and type t = T.t = struct
 
     include T
 
@@ -888,7 +888,7 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             allweighted nodeFrom nodeJoinList (of_weights rest nodeMap)
     ;;
 
-    (** Creates a graph given a node and outgoing edge, incoming edges will be
+    (** Creates an undirected graph given a node and outgoing edge, incoming edges will be
        resolved naturally. All nodes should already be available in the map  *)
     let rec of_weights2 adjList nodeMap = match adjList with
         | [] -> nodeMap
