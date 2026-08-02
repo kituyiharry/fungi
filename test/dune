@@ -34,3 +34,10 @@
  (libraries fungi core_bench core_unix.command_unix core)
  (preprocess no_preprocessing)
  (modules treebench))
+
+(test
+ (name graphbench)
+ (modes byte exe)
+ (libraries fungi core_bench core_unix.command_unix core)
+ (preprocess no_preprocessing)
+ (modules graphbench))

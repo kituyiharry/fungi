@@ -53,7 +53,7 @@ algorithms implemented and a fibonacci heap.")
  
  ; Tags help people find your package
  (tags
-  (topics "graph" "functional" "networks")))
+  (topics "graph" "persistent" "functional" "networks")))
 
 ; Package formatting preferences
 (formatting
