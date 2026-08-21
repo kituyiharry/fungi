@@ -152,6 +152,94 @@ module type ClusterImpl = sig
     val bronkerbosch2: adj NodeMap.t -> elt AdjSet.set list
 end
 
+(** Implementation signature for planarity and biconnectivity.
+
+    This gathers the Hopcroft-Tarjan family of results, all of which fall out of
+    a single depth-first search decorated with {b lowpoints}:
+
+    - {b articulation points} (cut vertices) and {b bridges} - Hopcroft-Tarjan
+      1973, an [O(V + E)] DFS.
+    - {b biconnected components} - popped off an edge stack during that same DFS.
+    - {b planarity testing} - Hopcroft-Tarjan 1974 (path addition) / Boyer-Myrvold
+      2004 (edge addition), an [O(V)] test yielding either a combinatorial
+      embedding or a Kuratowski obstruction.
+
+    All of these treat the graph as {b undirected}: the relevant neighbour set of
+    a node is [inc] {b union} [out]. The DFS must skip the edge back to its
+    immediate tree parent (unlike {!SccImpl} which stacks vertices, here we stack
+    edges).
+
+    NOTE: none of this is implemented yet - the functions below are stubs. See
+    the [dfsinfo]/[lowpoints] contract for the shared substrate a real
+    implementation would build first. *)
+module type PlanarImpl = sig
+    type elt
+    type adj
+
+    module NodeMap: Map.S with type key := elt
+    module AdjSet:  TSet  with type t   := elt
+    module EdgeSet: TSet  with type t   := (elt * elt)
+
+    (** Per-vertex bookkeeping produced by the Hopcroft-Tarjan traversal.
+        - [disc]:   discovery time (preorder index) of the vertex
+        - [low]:    lowpoint - the smallest [disc] reachable from this vertex's
+                    subtree using tree edges downward plus {b at most one} back edge
+        - [parent]: DFS-tree parent, [None] at the DFS root
+
+        The three biconnectivity certificates are read straight off this:
+        - non-root [v] is a cut vertex iff some child [c] has [low c >= disc v]
+        - the root  is a cut vertex iff it has two or more DFS-tree children
+        - tree edge [(v, c)] is a bridge iff [low c > disc v] (strict) *)
+    type dfsinfo = {
+        disc:   int;
+        low:    int;
+        parent: elt option;
+    }
+
+    (** A biconnected component, represented as its set of (undirected) edges -
+        these are the edges popped off the DFS edge-stack when a subtree fails to
+        reach above its entry point. *)
+    type bicomp = (elt * elt) EdgeSet.set
+
+    (** A combinatorial embedding: for each vertex, the cyclic order of its
+        incident neighbours around it (a rotation system). This is the positive
+        certificate of planarity and the input to face tracing / drawing. *)
+    type embedding = (elt list) NodeMap.t
+
+    (** A Kuratowski obstruction: the edge set of a subdivision of K5 or K3,3,
+        the negative certificate proving the graph is {b not} planar. *)
+    type kuratowski = (elt * elt) EdgeSet.set
+
+    (** Outcome of a planarity test - an embedding if planar, otherwise a
+        Kuratowski witness. *)
+    type planarity =
+        | Planar    of embedding
+        | Nonplanar of kuratowski
+
+    (* -- Hopcroft-Tarjan biconnectivity (single lowpoint DFS, O(V + E)) -- *)
+
+    (** The raw lowpoint decoration - the shared substrate every routine below is
+        derived from. A real implementation computes this once. *)
+    val lowpoints: adj NodeMap.t -> dfsinfo NodeMap.t
+
+    (** Cut vertices: nodes whose removal increases the number of components. *)
+    val articulations: adj NodeMap.t -> elt AdjSet.set
+
+    (** Bridges: edges whose removal increases the number of components. *)
+    val bridges: adj NodeMap.t -> (elt * elt) EdgeSet.set
+
+    (** Maximal biconnected subgraphs, each returned as its edge set. *)
+    val biconnected_components: adj NodeMap.t -> bicomp list
+
+    (* -- Planarity (Hopcroft-Tarjan path addition / Boyer-Myrvold, O(V)) -- *)
+
+    (** Planarity test returning an embedding or a Kuratowski obstruction. *)
+    val planarity: adj NodeMap.t -> planarity
+
+    (** Boolean convenience wrapper over {!planarity}. *)
+    val is_planar: adj NodeMap.t -> bool
+end
+
 
 (** Signature abstracting edge values from implementation. Measurable could be int
     or float or any ast implementing space. concepts such as infinity are
@@ -331,6 +419,13 @@ module type Graph = sig
         and type   adj     := adj      (* The adjacency information *)
         and module NodeMap := NodeMap  (* Graph map manipulation *)
         and module AdjSet  := AdjSet   (* Adjacency set manipulation *)
+
+    module Planar: PlanarImpl with
+        type       elt     := elt      (* The node element *)
+        and type   adj     := adj      (* The adjacency information *)
+        and module NodeMap := NodeMap  (* Graph map manipulation *)
+        and module AdjSet  := AdjSet   (* Adjacency set manipulation *)
+        and module EdgeSet := EdgeSet  (* Edge set manipulation *)
 
     module Path: PathImpl with
         type       elt     := elt            (* The node element *)
@@ -1779,6 +1874,614 @@ module MakeGraph(Unique: GraphElt): Graph with type elt := Unique.t and type edg
             (* collect all nodes as candidates *)
             let keys = NodeMap.fold (fun el _ acc -> AdjSet.add el acc) graph AdjSet.empty in
             bk (AdjSet.empty) (keys) (AdjSet.empty) []
+        ;;
+
+    end
+
+    (*************************************************************************
+    *                     Planarity & Biconnectivity                         *
+    **************************************************************************)
+    (** Hopcroft-Tarjan family: articulation points, bridges, biconnected
+        components and planarity testing. All operate on the undirected view of
+        the graph (neighbours = [inc] union [out]).
+
+        STATUS: scaffolding only. Every function below is a stub raising
+        [Failure] until the lowpoint DFS and the planarity embedder are written.
+        The intended shapes live in {!PlanarImpl}. *)
+    module Planar = struct
+
+        type dfsinfo = {
+            disc:   int;
+            low:    int;
+            parent: elt option;
+        }
+
+        type bicomp     = (elt * elt) EdgeSet.set
+        type embedding  = (elt list)  NodeMap.t
+        type kuratowski = (elt * elt) EdgeSet.set
+
+        type planarity =
+            | Planar    of embedding
+            | Nonplanar of kuratowski
+        ;;
+
+        (* -- shared helpers ------------------------------------------------ *)
+
+        (* canonical orientation of an undirected edge so each has a single
+           representative in EdgeSet (endpoints ordered by Unique.compare). *)
+        let norm (a, b) = if Unique.compare a b <= 0 then (a, b) else (b, a)
+        ;;
+
+        (* equality on directed edge pairs (same orientation). *)
+        let edgeq (a, b) (c, d) = equal a c && equal b d
+        ;;
+
+        (* undirected simple neighbours of [u]: inc union out, self-loop dropped.
+           The graph collapses parallel/antiparallel edges into a set, so this is
+           the simple undirected view every routine below works over. *)
+        let nbrs u graph = AdjSet.to_list (xorneighbors u graph)
+        ;;
+
+        (* lowpoints: one DFS over the UNDIRECTED view producing per-node
+           {disc; low; parent}. This is the shared substrate; articulations,
+           bridges and biconnected_components are all projections of it.
+
+           pseudocode (Hopcroft-Tarjan, 1973):
+
+             time    <- 0
+             info    <- empty map            (* elt -> dfsinfo               *)
+
+             DFS(u, parent):
+                 disc[u] <- low[u] <- time
+                 time    <- time + 1
+                 info[u] <- { disc=disc[u]; low=disc[u]; parent }
+                 skipped_parent_once <- false
+                 for each w in neighbours(u):        (* inc UNION out        *)
+                     if w = parent and not skipped_parent_once:
+                         skipped_parent_once <- true  (* ignore ONE u<->parent link;
+                                                         a second w=parent is a
+                                                         genuine parallel edge    *)
+                         continue
+                     if w not in info:                (* tree edge            *)
+                         DFS(w, Some u)
+                         low[u] <- min(low[u], low[w])
+                     else:                            (* back edge            *)
+                         low[u] <- min(low[u], disc[w])
+
+             for each r in vertices(graph):           (* every component      *)
+                 if r not in info: DFS(r, None)
+             return info
+
+           Notes:
+             - iterate the graph deterministically (NodeMap is ordered) so disc
+               numbers, and hence the certificates, are reproducible.
+             - a real OCaml version threads (time, info) functionally rather than
+               mutating, or uses an explicit stack to stay stack-safe on deep
+               graphs (the existing dfs helper backtracks in discovery order, so
+               it cannot compute low directly - roll a dedicated post-order DFS
+               as toposort does). *)
+        let lowpoints graph =
+            let time = ref 0 in
+            let info = ref NodeMap.empty in
+            let rec dfs u parent =
+                let du = !time in
+                incr time;
+                info := NodeMap.add u { disc = du; low = du; parent } !info;
+                let low = ref du in
+                List.iter (fun w ->
+                    match NodeMap.find_opt w !info with
+                    | None ->
+                        (* tree edge *)
+                        dfs w (Some u);
+                        let lw = (NodeMap.find w !info).low in
+                        if lw < !low then low := lw
+                    | Some iw ->
+                        (* back edge - but never through the single parent link *)
+                        if (match parent with Some p -> not (equal w p) | None -> true)
+                           && iw.disc < !low
+                        then low := iw.disc
+                ) (nbrs u graph);
+                let cur = NodeMap.find u !info in
+                info := NodeMap.add u { cur with low = !low } !info
+            in
+            NodeMap.iter (fun r _ ->
+                if not (NodeMap.mem r !info) then dfs r None
+            ) graph;
+            !info
+        ;;
+
+        (* articulations: cut vertices, folded straight out of lowpoints.
+
+           pseudocode:
+
+             info <- lowpoints(graph)
+             cuts <- empty set
+
+             (* root rule: a DFS root is a cut vertex iff it has >= 2 children
+                in the DFS tree. count children per root while scanning parents. *)
+             childcount <- empty map           (* root elt -> int             *)
+             for each (v, i) in info:
+                 match i.parent with
+                 | Some p when info[p].parent = None ->
+                     childcount[p] <- childcount[p] + 1
+                 | _ -> ()
+
+             (* non-root rule: v is a cut vertex iff some child c of v has
+                low[c] >= disc[v]. *)
+             for each (c, ic) in info:
+                 match ic.parent with
+                 | Some v when info[v].parent <> None && ic.low >= info[v].disc ->
+                     cuts <- cuts + { v }
+                 | _ -> ()
+
+             for each (r, _) in info where r is a root:
+                 if childcount[r] >= 2: cuts <- cuts + { r }
+
+             return cuts *)
+        let articulations graph =
+            let info     = lowpoints graph in
+            let cuts     = ref AdjSet.empty in
+            let children = ref NodeMap.empty in         (* root -> #DFS children *)
+            NodeMap.iter (fun _ ic ->
+                match ic.parent with
+                | None   -> ()
+                | Some v ->
+                    let iv = NodeMap.find v info in
+                    (match iv.parent with
+                     | None   ->
+                         (* v is a DFS root; this child bumps its child count *)
+                         children := NodeMap.update v
+                             (function Some n -> Some (n + 1) | None -> Some 1)
+                             !children
+                     | Some _ ->
+                         (* non-root rule *)
+                         if ic.low >= iv.disc then cuts := AdjSet.add v !cuts)
+            ) info;
+            (* root rule: a DFS root is a cut vertex iff it has >= 2 children *)
+            NodeMap.iter (fun r n ->
+                if n >= 2 then cuts := AdjSet.add r !cuts
+            ) !children;
+            !cuts
+        ;;
+
+        (* bridges: edges whose removal disconnects the graph. Strict version of
+           the articulation rule - a TREE edge only, never a back edge.
+
+           pseudocode:
+
+             info    <- lowpoints(graph)
+             brdgs   <- empty edge set
+             for each (c, ic) in info:
+                 match ic.parent with
+                 | Some v when ic.low > info[v].disc ->     (* STRICT >         *)
+                     brdgs <- brdgs + normalize (v, c)
+                 | _ -> ()
+             return brdgs
+
+           where normalize orders the endpoints (e.g. min,max by Unique.compare)
+           so an undirected bridge has one canonical representative in EdgeSet.
+           NB: with parallel edges no edge is a bridge - the "skip parent only
+           once" rule in lowpoints makes low[c] <= disc[v] via the second copy,
+           so this falls out for free. *)
+        let bridges graph =
+            let info = lowpoints graph in
+            NodeMap.fold (fun c ic acc ->
+                match ic.parent with
+                | Some v when ic.low > (NodeMap.find v info).disc ->   (* STRICT *)
+                    EdgeSet.add (norm (v, c)) acc
+                | _ -> acc
+            ) info EdgeSet.empty
+        ;;
+
+        (* biconnected_components: maximal 2-connected edge sets. Needs the edge
+           stack woven INTO the DFS (it cannot be reconstructed from lowpoints
+           alone), so this shares the traversal of lowpoints rather than calling
+           it.
+
+           pseudocode (edge-stack variant of Hopcroft-Tarjan):
+
+             time  <- 0
+             stack <- []                       (* edges, most recent on top    *)
+             comps <- []                       (* list of edge sets            *)
+
+             DFS(u, parent):
+                 disc[u] <- low[u] <- time ; time <- time + 1
+                 skipped_parent_once <- false
+                 for each w in neighbours(u):
+                     if w = parent and not skipped_parent_once:
+                         skipped_parent_once <- true ; continue
+                     if w not visited:
+                         push (u, w) on stack        (* tree edge             *)
+                         DFS(w, Some u)
+                         low[u] <- min(low[u], low[w])
+                         if low[w] >= disc[u]:        (* u closes a component  *)
+                             comp <- {}
+                             repeat
+                                 e <- pop stack
+                                 comp <- comp + normalize e
+                             until e = (u, w)
+                             comps <- comp :: comps
+                     else if disc[w] < disc[u]:       (* back edge, once       *)
+                         push (u, w) on stack
+                         low[u] <- min(low[u], disc[w])
+
+             for each r in vertices(graph):
+                 if r not visited: DFS(r, None)
+             return comps
+
+           Guards: the [disc[w] < disc[u]] test stops a back edge being pushed
+           twice (once from each endpoint); isolated vertices produce no edges
+           and so no component. *)
+        let biconnected_components graph =
+            let time  = ref 0 in
+            let disc  = ref NodeMap.empty in    (* elt -> discovery time / visited *)
+            let stack = ref [] in               (* edges, most recent on top       *)
+            let comps = ref [] in
+            (* dfs returns the lowpoint of [u] *)
+            let rec dfs u parent =
+                let du = !time in
+                incr time;
+                disc := NodeMap.add u du !disc;
+                let low = ref du in
+                List.iter (fun w ->
+                    match NodeMap.find_opt w !disc with
+                    | None ->
+                        stack := (u, w) :: !stack;          (* tree edge *)
+                        let lw = dfs w (Some u) in
+                        if lw < !low then low := lw;
+                        if lw >= du then begin
+                            (* u closes a biconnected component: pop to (u, w) *)
+                            let comp = ref EdgeSet.empty in
+                            let rec pop () =
+                                match !stack with
+                                | e :: rest ->
+                                    stack := rest;
+                                    comp  := EdgeSet.add (norm e) !comp;
+                                    if not (edgeq e (u, w)) then pop ()
+                                | [] -> ()
+                            in
+                            pop ();
+                            comps := !comp :: !comps
+                        end
+                    | Some dw ->
+                        (* back edge, pushed once from the descendant side and
+                           never through the single parent link *)
+                        if (match parent with Some p -> not (equal w p) | None -> true)
+                           && dw < du
+                        then begin
+                            stack := (u, w) :: !stack;
+                            if dw < !low then low := dw
+                        end
+                ) (nbrs u graph);
+                !low
+            in
+            NodeMap.iter (fun r _ ->
+                if not (NodeMap.mem r !disc) then ignore (dfs r None)
+            ) graph;
+            !comps
+        ;;
+
+        (* -- planarity: Demoucron-Malgrange-Pertuiset path addition --------
+           A graph is planar iff each of its biconnected components is, so the
+           test runs per component - each is 2-connected, which is DMP's
+           precondition. DMP seeds a planar embedding with a single cycle (which
+           has exactly two faces) and then repeatedly embeds a path of an
+           un-embedded "fragment" into a face that admits it, splitting that face
+           in two. A fragment whose attachments lie on NO current face proves the
+           graph non-planar (Boyer-Myrvold is the linear-time alternative; DMP is
+           O(V^2) but far smaller to implement and yields the same decision plus
+           a combinatorial embedding). Faces are kept as cyclic vertex lists;
+           the rotation-system embedding is recovered from them afterwards. *)
+
+        (* undirected adjacency (elt -> AdjSet) restricted to an edge list *)
+        let adj_of_edges edges =
+            List.fold_left (fun m (a, b) ->
+                let ins x y m =
+                    NodeMap.update x (function
+                        | Some s -> Some (AdjSet.add y s)
+                        | None   -> Some (AdjSet.singleton y)) m
+                in ins a b (ins b a m)
+            ) NodeMap.empty edges
+        ;;
+
+        (* breadth-first path from [start] to the first node satisfying [is_goal],
+           expanding a node via [succ]; returns [start; ..; goal] or [] if none. *)
+        let bfs_path succ start is_goal =
+            let visited = ref (AdjSet.singleton start) in
+            let parent  = ref NodeMap.empty in
+            let q = Queue.create () in
+            Queue.push start q;
+            let goal = ref None in
+            while Option.is_none !goal && not (Queue.is_empty q) do
+                let x = Queue.pop q in
+                if is_goal x then goal := Some x
+                else
+                    List.iter (fun y ->
+                        if not (AdjSet.mem y !visited) then begin
+                            visited := AdjSet.add y !visited;
+                            parent  := NodeMap.add y x !parent;
+                            Queue.push y q
+                        end) (succ x)
+            done;
+            match !goal with
+            | None   -> []
+            | Some g ->
+                let rec build acc n =
+                    let acc = n :: acc in
+                    match NodeMap.find_opt n !parent with
+                    | Some p -> build acc p
+                    | None   -> acc
+                in build [] g
+        ;;
+
+        (* position of the first element equal to [x] in [lst] (or -1) *)
+        let index_of x lst =
+            let rec go i = function
+                | []      -> -1
+                | y :: ys -> if equal x y then i else go (i + 1) ys
+            in go 0 lst
+        ;;
+
+        let mem_v x lst = List.exists (equal x) lst
+        ;;
+
+        (* the two arcs of cyclic face [f] between [a] and [b], each inclusive:
+           arc_ab runs a..b forward, arc_ba runs b..a forward (wrapping). *)
+        let arcs f a b =
+            let ia = index_of a f in
+            let ra = List.filteri (fun i _ -> i >= ia) f
+                     @ List.filteri (fun i _ -> i <  ia) f in   (* rotate to a *)
+            let jb = index_of b ra in
+            let arc_ab = List.filteri (fun i _ -> i <= jb) ra in         (* a..b *)
+            let arc_ba = List.filteri (fun i _ -> i >= jb) ra @ [a] in   (* b..a *)
+            (arc_ab, arc_ba)
+        ;;
+
+        (* normalized edges of a cyclic vertex list (closing edge included) *)
+        let cycle_edges cyc =
+            match cyc with
+            | [] | [_] -> []
+            | first :: _ ->
+                let rec go = function
+                    | x :: (y :: _ as rest) -> norm (x, y) :: go rest
+                    | [last] -> [ norm (last, first) ]
+                    | []     -> []
+                in go cyc
+        ;;
+
+        (* normalized edges of a path (no closing edge) *)
+        let rec path_edges = function
+            | x :: (y :: _ as rest) -> norm (x, y) :: path_edges rest
+            | _ -> []
+        ;;
+
+        (* drop the last element of a list *)
+        let rec drop_last = function
+            | [] | [_] -> []
+            | x :: xs  -> x :: drop_last xs
+        ;;
+
+        (* DMP on one biconnected block given as its (normalized) edge list.
+           Returns the face list of a planar embedding, or None if non-planar. *)
+        let dmp_faces edges =
+            let adj   = adj_of_edges edges in
+            let verts = NodeMap.fold (fun k _ a -> k :: a) adj [] in
+            match verts with
+            | [] | [_] -> Some []                          (* nothing to embed *)
+            | _ when List.length verts = 2 ->
+                (match edges with (a, b) :: _ -> Some [[a; b]] | [] -> Some [])
+            | _ ->
+                let nbr x = match NodeMap.find_opt x adj with
+                    | Some s -> AdjSet.to_list s | None -> [] in
+                (* initial cycle: an edge (u0,v0) plus a u0->v0 path avoiding it *)
+                let (u0, v0) = List.hd edges in
+                let cyc =
+                    bfs_path
+                        (fun x -> List.filter (fun y ->
+                            not ((equal x u0 && equal y v0)
+                              || (equal x v0 && equal y u0))) (nbr x))
+                        u0 (fun x -> equal x v0)
+                in
+                let faces = ref [ cyc; List.rev cyc ] in
+                let emb_v = ref (AdjSet.of_list cyc) in
+                let emb_e = ref (List.fold_left (fun s e -> EdgeSet.add e s)
+                                     EdgeSet.empty (cycle_edges cyc)) in
+                let bad   = ref false in
+                let embv x = AdjSet.mem x !emb_v in
+                let embe e = EdgeSet.mem (norm e) !emb_e in
+                let continue = ref true in
+                while !continue do
+                    match List.filter (fun e -> not (embe e)) edges with
+                    | [] -> continue := false
+                    | ne ->
+                        (* union-find over non-embedded vertices (both-internal
+                           edges only) groups each fragment's interior. *)
+                        let uf = Hashtbl.create 16 in
+                        let rec find x = match Hashtbl.find_opt uf x with
+                            | Some p when not (equal p x) ->
+                                let r = find p in Hashtbl.replace uf x r; r
+                            | _ -> x
+                        in
+                        let union x y =
+                            let rx = find x and ry = find y in
+                            if not (equal rx ry) then Hashtbl.replace uf rx ry
+                        in
+                        List.iter (fun (a, b) ->
+                            if not (embv a) && not (embv b) then union a b) ne;
+                        (* vertex fragments (by interior root) + chords *)
+                        let vtbl   = Hashtbl.create 16 in    (* root -> edge list *)
+                        let atbl   = Hashtbl.create 16 in    (* root -> attach set *)
+                        let chords = ref [] in
+                        List.iter (fun (a, b) ->
+                            let ea = embv a and eb = embv b in
+                            if ea && eb then chords := (a, b) :: !chords
+                            else begin
+                                let r = find (if not ea then a else b) in
+                                Hashtbl.replace vtbl r
+                                    ((a, b) :: (try Hashtbl.find vtbl r
+                                                with Not_found -> []));
+                                let att = try Hashtbl.find atbl r
+                                          with Not_found -> AdjSet.empty in
+                                let att = if ea then AdjSet.add a att else att in
+                                let att = if eb then AdjSet.add b att else att in
+                                Hashtbl.replace atbl r att
+                            end) ne;
+                        let frags =
+                            List.map (fun (a, b) ->
+                                (AdjSet.of_list [a; b], [ (a, b) ])) !chords
+                            @ Hashtbl.fold (fun r es acc ->
+                                let att = try Hashtbl.find atbl r
+                                          with Not_found -> AdjSet.empty in
+                                (att, es) :: acc) vtbl []
+                        in
+                        (* faces admitting a fragment: those containing ALL its
+                           attachment vertices *)
+                        let admissible att =
+                            List.filter (fun f ->
+                                AdjSet.for_all (fun a -> mem_v a f) att) !faces
+                        in
+                        (* choose the fragment with the fewest admissible faces *)
+                        let best = List.fold_left (fun acc (att, es) ->
+                            let fs = admissible att in
+                            let n  = List.length fs in
+                            match acc with
+                            | Some (_, _, bn) when n >= bn -> acc
+                            | _ -> Some ((att, es), fs, n)
+                        ) None frags in
+                        (match best with
+                         | None -> continue := false
+                         | Some (_, _, 0) -> bad := true; continue := false
+                         | Some ((att, es), fs, _) ->
+                             let face = List.hd fs in
+                             (* a path between two attachments through the
+                                fragment's interior *)
+                             let fadj = adj_of_edges es in
+                             let fnbr x = match NodeMap.find_opt x fadj with
+                                 | Some s -> AdjSet.to_list s | None -> [] in
+                             let start = AdjSet.choose att in
+                             let alpha =
+                                 bfs_path
+                                     (fun x -> if equal x start
+                                                  || not (AdjSet.mem x att)
+                                               then fnbr x else [])
+                                     start
+                                     (fun x -> (not (equal x start))
+                                               && AdjSet.mem x att)
+                             in
+                             let a = List.hd alpha in
+                             let b = List.nth alpha (List.length alpha - 1) in
+                             let (arc_ab, arc_ba) = arcs face a b in
+                             let interior = match alpha with
+                                 | _ :: rest -> drop_last rest
+                                 | []        -> [] in
+                             let f1 = arc_ab @ List.rev interior in
+                             let f2 = arc_ba @ interior in
+                             faces := f1 :: f2 ::
+                                 List.filter (fun f -> f != face) !faces;
+                             emb_v := List.fold_left (fun s x -> AdjSet.add x s)
+                                 !emb_v alpha;
+                             emb_e := List.fold_left (fun s e -> EdgeSet.add e s)
+                                 !emb_e (path_edges alpha))
+                done;
+                if !bad then None else Some !faces
+        ;;
+
+        let dmp_planar edges = Option.is_some (dmp_faces edges)
+        ;;
+
+        (* recover a rotation system from a consistently oriented face set:
+           for every corner (prev, v, next) of a face, [next] follows [prev] in
+           v's cyclic neighbour order. Chaining that successor relation from any
+           neighbour yields the rotation at v. *)
+        let rotation_of_faces faces =
+            let succ = Hashtbl.create 64 in       (* v -> (prev -> next) NodeMap *)
+            let corner v p s =
+                let m = try Hashtbl.find succ v with Not_found -> NodeMap.empty in
+                Hashtbl.replace succ v (NodeMap.add p s m)
+            in
+            List.iter (fun f ->
+                let n = List.length f in
+                if n >= 2 then begin
+                    let arr = Array.of_list f in
+                    for i = 0 to n - 1 do
+                        corner arr.(i)
+                            arr.((i + n - 1) mod n)
+                            arr.((i + 1) mod n)
+                    done
+                end
+            ) faces;
+            Hashtbl.fold (fun v m acc ->
+                match NodeMap.choose_opt m with
+                | None -> acc
+                | Some (start, _) ->
+                    let rec chain cur seen =
+                        let seen = cur :: seen in
+                        match NodeMap.find_opt cur m with
+                        | Some nx when not (equal nx start) -> chain nx seen
+                        | _ -> List.rev seen
+                    in
+                    NodeMap.add v (chain start []) acc
+            ) succ NodeMap.empty
+        ;;
+
+        (* per-component embeddings merged; a cut vertex's rotations from the
+           blocks it lies in are concatenated (still a valid planar rotation). *)
+        let build_embedding graph =
+            List.fold_left (fun emb es ->
+                match dmp_faces (EdgeSet.to_list es) with
+                | None -> emb
+                | Some faces ->
+                    NodeMap.fold (fun v rot acc ->
+                        NodeMap.update v (function
+                            | Some prev -> Some (prev @ rot)
+                            | None      -> Some rot) acc
+                    ) (rotation_of_faces faces) emb
+            ) NodeMap.empty (biconnected_components graph)
+        ;;
+
+        (* graph is planar iff every biconnected block is *)
+        let is_planar_core graph =
+            List.for_all (fun es -> dmp_planar (EdgeSet.to_list es))
+                (biconnected_components graph)
+        ;;
+
+        (* add_edge2 does not resolve missing endpoints, so ensure both first *)
+        let graph_of_edges edges =
+            List.fold_left (fun g (a, b) ->
+                add_edge2 a b (ensure a (ensure b g))) empty edges
+        ;;
+
+        let subgraph_planar edges = is_planar_core (graph_of_edges edges)
+        ;;
+
+        (* Kuratowski certificate: take a non-planar block and greedily discard
+           every edge whose removal keeps it non-planar. What remains is an
+           edge-minimal non-planar subgraph - by Kuratowski's theorem a
+           subdivision of K5 or K3,3. *)
+        let extract_kuratowski graph =
+            let comps = biconnected_components graph in
+            match List.find_opt
+                    (fun es -> not (dmp_planar (EdgeSet.to_list es))) comps with
+            | None    -> EdgeSet.empty                     (* planar: no witness *)
+            | Some es ->
+                let edges     = EdgeSet.to_list es in
+                let essential = ref edges in
+                List.iter (fun e ->
+                    let candidate =
+                        List.filter (fun x -> not (edgeq x e)) !essential in
+                    if not (subgraph_planar candidate) then essential := candidate
+                ) edges;
+                List.fold_left (fun s e -> EdgeSet.add (norm e) s)
+                    EdgeSet.empty !essential
+        ;;
+
+        let planarity graph =
+            if is_planar_core graph
+            then Planar    (build_embedding graph)
+            else Nonplanar (extract_kuratowski graph)
+        ;;
+
+        let is_planar graph = is_planar_core graph
         ;;
 
     end

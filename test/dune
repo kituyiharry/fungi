@@ -29,6 +29,11 @@
  (modules serialize_tests))
 
 (test
+ (name planar_tests)
+ (libraries fungi alcotest)
+ (modules planar_tests))
+
+(test
  (name treebench)
  (modes byte exe)
  (libraries fungi core_bench core_unix.command_unix core)
@@ -41,3 +46,4 @@
  (libraries fungi core_bench core_unix.command_unix core)
  (preprocess no_preprocessing)
  (modules graphbench))
+
