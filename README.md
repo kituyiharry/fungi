@@ -5,6 +5,10 @@ a functional style. It supports various path, flow, matching and scc algorithms
 with more to be added in the future. Some data structures will also be added to
 support the graph (Heap (done), LC-tree, UnionFind...etc).
 
+> Authors note: AI (claude specifically) was used to generate unit and some 
+> property tests in the test directory. The library originally itself is 90% 
+> organic human development. :-)
+
 ### Usage
 
 to use the ocaml implementation
